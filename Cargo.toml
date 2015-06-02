@@ -1,0 +1,7 @@
+[package]
+name = "sudoku"
+description = "A sudoku solver library"
+license = "MIT"
+repository = "https://github.com/aochagavia/sudoku"
+version = "0.1.1"
+authors = ["Adolfo Ochagavía <aochagavia92@gmail.com>"]

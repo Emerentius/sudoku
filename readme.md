@@ -1,10 +1,13 @@
 Sudoku
 ======
 
-`sudoku` is a Rust library with the only goal of solving sudokus.
-You can use it as shown in the following example:
+[![Crates.io Status](http://meritbadge.herokuapp.com/sudoku)](https://crates.io/crates/sudoku)
 
-```
+> A Rust library with the only goal of solving sudokus
+
+# Usage Example
+
+```rust
 extern crate sudoku;
 
 use sudoku::Sudoku;
@@ -27,4 +30,7 @@ _263__5__
 }
 ```
 
-# To d
+# To do list
+
+- [ ] C bindings
+- [ ] Replace usages of `HashSet` by a special struct based on a `u16` (we can use each bit as a boolean flag to indicate if the number at the given index is present)

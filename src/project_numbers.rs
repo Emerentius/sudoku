@@ -31,32 +31,25 @@ will become
 
 use super::Sudoku;
 
-pub trait ProjectNumbers {
-    fn project_numbers(&mut self) -> bool;
-    fn project_number(&mut self, x: u8, y: u8) -> bool;
-}
+// Projects all fields that are not empty and haven't yet been projected
+pub fn project_numbers(sudoku: &mut Sudoku) -> bool {
+    let mut progress = false;
 
-impl ProjectNumbers for Sudoku {
-    // Projects all fields that are not empty and haven't yet been projected
-    fn project_numbers(&mut self) -> bool {
-        let mut progress = false;
-
-        for x in 0..9 {
-            for y in 0..9 {
-                if !self.get(x, y).projected && self.get(x, y).number_found() {
-                    progress = self.project_number(x, y) || progress;
-                }
+    for x in 0..9 {
+        for y in 0..9 {
+            if !sudoku.get(x, y).projected && sudoku.get(x, y).number_found() {
+                progress = project_number(sudoku, x, y) || progress;
             }
         }
-
-        progress
     }
 
-    // Will return true if we make progress so we can know if we are stuck
-    fn project_number(&mut self, x: u8, y: u8) -> bool {
-        self.get_mut(x, y).projected = true;
-        project_h(self, x, y) | project_v(self, x, y) | project_square(self, x, y)
-    }
+    progress
+}
+
+// Will return true if we make progress so we can know if we are stuck
+pub fn project_number(sudoku: &mut Sudoku, x: u8, y: u8) -> bool {
+    sudoku.get_mut(x, y).projected = true;
+    project_h(sudoku, x, y) | project_v(sudoku, x, y) | project_square(sudoku, x, y)
 }
 
 // Project the number in its horizontal line

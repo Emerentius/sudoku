@@ -22,23 +22,17 @@ will become
 use super::Sudoku;
 use std::collections::HashSet;
 
-pub trait ProjectLines {
-    fn project_lines(&mut self) -> bool;
-}
+// Checks each square to see if it contains any lines that can be projected
+pub fn project_lines(sudoku: &mut Sudoku) -> bool {
+    let mut progress = false;
 
-impl ProjectLines for Sudoku {
-    // Checks each square to see if it contains any lines that can be projected
-    fn project_lines(&mut self) -> bool {
-        let mut progress = false;
-
-        for x in 0..3 {
-            for y in 0..3 {
-                progress = check_square(self, x * 3, y * 3) || progress;
-            }
+    for x in 0..3 {
+        for y in 0..3 {
+            progress = check_square(sudoku, x * 3, y * 3) || progress;
         }
-
-        progress
     }
+
+    progress
 }
 
 // Check a single square to see if it contains any lines that can be projected

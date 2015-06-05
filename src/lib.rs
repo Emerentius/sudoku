@@ -1,14 +1,32 @@
-/*
+#![warn(missing_docs)]
 
-Implements the Sudoku struct, with the functionality to solve a sudoku.
-
-There is a fast_solve method used to solve the sudoku without brute forcing it. If
-it fails, you can use the brute_force method defined in brute_force.rs
-
-For details about how the algorithm works, take a look at project_numbers.rs,
-detect_uniques.rs, project_lines.rs and brute_force.rs
-
-*/
+//! The Sudoku library
+//!
+//! ## Overview
+//!
+//! Sudoku is a library that aims to provide a simple API to solve sudokus
+//! without having to deal with too much details.
+//!
+//! ## Example
+//!
+//! ```no_run
+//! use sudoku::Sudoku;
+//!
+//! let sudoku_str =
+//! "___2___63
+//! 3____54_1
+//! __1__398_
+//! _______9_
+//! ___538___
+//! _3_______
+//! _263__5__
+//! 5_37____8
+//! 47___1___";
+//!
+//! let mut sudoku = Sudoku::from_str(sudoku_str).unwrap();
+//! sudoku.solve();
+//! println!("{}", sudoku);
+//! ```
 
 mod field;
 mod brute_force;
@@ -18,35 +36,40 @@ mod project_lines;
 mod project_numbers;
 
 use self::field::Field;
-use self::brute_force::BruteForce;
-use self::detect_uniques::DetectUniques;
+use brute_force::brute_force;
+use detect_uniques::detect_uniques;
 pub use self::parse_error::ParseError;
-use self::project_lines::ProjectLines;
-use self::project_numbers::ProjectNumbers;
+use project_lines::project_lines;
+use project_numbers::project_numbers;
 
 use std::fmt::{self, Display};
 use std::io::BufRead;
 use std::iter;
 
-// Sudoku
-#[derive(Clone)]
+/// The main structure exposing all the functionality of the library
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Sudoku {
     fields: Vec<Vec<Field>>
 }
 
 impl Sudoku {
+    /// Creates a new sudoku based on a `&str`. See the crate documentation
+    /// for an example of the expected format
     pub fn from_str(s: &str) -> Result<Sudoku, ParseError> {
         Sudoku::from_reader(s.as_bytes())
     }
 
+    /// Creates a new sudoku based on a reader. See the crate documentation
+    /// for an example of the expected format
     pub fn from_reader<T: BufRead>(reader: T) -> Result<Sudoku, ParseError> {
         // Use one column of 9 fields to fill 9 rows
         let column = vec![Field::new(); 9];
         let mut rows = vec![column; 9];
 
         // Read a row per line
-        for (y, line) in reader.lines().take(9).enumerate() {
-            let line_nr = y as u8 + 1;
+        let mut line_nr = 0;
+        for line in reader.lines().take(9) {
+            line_nr += 1;
             let line = line.ok().unwrap_or("".to_string());
             let numbers: Vec<char> = line.trim_right().chars().collect();
 
@@ -57,46 +80,55 @@ impl Sudoku {
             // Values that cannot be parsed are interpreted as empty fields
             for x in 0..9 {;
                 match numbers[x].to_digit(10) {
-                    Some(i) if i != 0 => rows[x][y].set_number(i as u8),
+                    Some(i) if i != 0 => rows[x][line_nr as usize - 1].set_number(i as u8),
+                    None if numbers[x] == '_' => (),
                     _ => return Err(ParseError::InvalidNumber(line_nr, numbers[x]))
                 }
             }
         }
 
-        Ok(Sudoku { fields: rows })
+        if line_nr < 9 {
+            Err(ParseError::NotEnoughRows)
+        } else {
+            Ok(Sudoku { fields: rows })
+        }
     }
 
     /// Attempts to solve the sudoku
     ///
-    /// If the fast technique doesn't work, we fall back to brute forcing
+    /// The `fast_solve` method is attempted first, and `brute_force_solve`
+    /// is used as a fallback in case the sudoku is still unsolved
     pub fn solve(&mut self) {
         self.fast_solve();
 
         if !self.is_solved() {
-            self.brute_force();
+            self.brute_force_solve();
         }
     }
 
-    // Attempts to solve the sudoku without brute forcing it
+    /// Attempts to solve the sudoku without brute forcing it
+    ///
+    /// This doesn't always succeed. You can use the `is_solved` method
+    /// to check if the sudoku was successfuly solved
     pub fn fast_solve(&mut self) {
         let mut progress = true;
 
         // If the functions cannot discover new numbers, they will return false
         while progress {
-            progress = self.project_numbers()
-                    || self.detect_uniques()
-                    || self.project_lines();
+            progress = project_numbers(self)
+                    || detect_uniques(self)
+                    || project_lines(self);
         }
     }
 
     /// Attempts to solve the sudoku by brute forcing it
     ///
-    /// The numbers that have already been found are keeped
+    /// The numbers that have already been found are not changed
     pub fn brute_force_solve(&mut self) {
-        self.brute_force();
+        brute_force(self);
     }
 
-    // Returns true if the sudoku is completed
+    /// Returns true if the sudoku is solved
     pub fn is_solved(&self) -> bool {
         self.fields.iter().all(|column| column.iter().all(|field|
             field.number_found())
@@ -104,16 +136,16 @@ impl Sudoku {
     }
 
     // Returns the top-left corner of the square in which the given point is
-    pub fn get_corner(x: u8, y: u8) -> (u8, u8) {
+    fn get_corner(x: u8, y: u8) -> (u8, u8) {
         assert!(x < 9 && y < 9);
         ((x / 3) * 3, (y / 3) * 3)
     }
 
-    pub fn get(&self, x: u8, y: u8) -> &Field {
+    fn get(&self, x: u8, y: u8) -> &Field {
         &self.fields[x as usize][y as usize]
     }
 
-    pub fn get_mut(&mut self, x: u8, y: u8) -> &mut Field {
+    fn get_mut(&mut self, x: u8, y: u8) -> &mut Field {
         &mut self.fields[x as usize][y as usize]
     }
 
@@ -180,4 +212,38 @@ impl Display for Sudoku {
 
         Ok(())
     }
+}
+
+#[test]
+fn solve_1() {
+    let sudoku_str =
+"___2___63
+3____54_1
+__1__398_
+_______9_
+___538___
+_3_______
+_263__5__
+5_37____8
+47___1___";
+    
+    let mut sudoku = Sudoku::from_str(sudoku_str).unwrap();
+    sudoku.solve();
+    println!("{}", sudoku);
+}
+
+#[test]
+#[should_panic]
+fn wrong_format_1() {
+    let sudoku_str =
+"___2___63
+3____54_1
+__1__398_
+_______9_
+___538___
+_3_______
+_263__5__
+5_37____8";
+    
+    let mut sudoku = Sudoku::from_str(sudoku_str).unwrap();
 }

@@ -18,18 +18,11 @@ use super::Sudoku;
 
 struct Point(u8, u8);
 
-pub trait BruteForce {
-    fn brute_force(&mut self) -> bool;
-}
-
-impl BruteForce for Sudoku {
-    // Attempts to brute force the sudoku.
-    // Returns true if it works.
-    fn brute_force(&mut self) -> bool {
-        // Assign numbers to the empty fields recursively
-        let e_fields = get_empty_fields(self);
-        assign_field(self, e_fields.iter())
-    }
+/// Attemts to brute_force the sudoku and returns true if it works
+pub fn brute_force(sudoku: &mut Sudoku) -> bool {
+    // Assign numbers to the empty fields recursively
+    let e_fields = get_empty_fields(sudoku);
+    assign_field(sudoku, e_fields.iter())
 }
 
 // Recursive function to brute force the empty fields

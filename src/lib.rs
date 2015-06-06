@@ -12,16 +12,17 @@
 //! ```no_run
 //! use sudoku::Sudoku;
 //!
-//! let sudoku_str =
-//! "___2___63
-//! 3____54_1
-//! __1__398_
-//! _______9_
-//! ___538___
-//! _3_______
-//! _263__5__
-//! 5_37____8
-//! 47___1___";
+//! // Pipes are ignored, you can also omit them
+//! let sudoku_str = "\
+//! ___|2__|_63
+//! 3__|__5|4_1
+//! __1|__3|98_
+//! ___|___|_9_
+//! ___|538|___
+//! _3_|___|___
+//! _26|3__|5__
+//! 5_3|7__|__8
+//! 47_|__1|___";
 //!
 //! let mut sudoku = Sudoku::from_str(sudoku_str).unwrap();
 //! sudoku.solve();
@@ -71,7 +72,7 @@ impl Sudoku {
         for line in reader.lines().take(9) {
             line_nr += 1;
             let line = line.ok().unwrap_or("".to_string());
-            let numbers: Vec<char> = line.trim_right().chars().collect();
+            let numbers: Vec<char> = line.trim_right().chars().filter(|&c| c != '|').collect();
 
             if numbers.len() != 9 {
                 return Err(ParseError::InvalidLineLength(line_nr));
@@ -233,6 +234,24 @@ _263__5__
 }
 
 #[test]
+fn solve_2() {
+    let sudoku_str = "\
+7__|4__|__2
+21_|3_5|46_
+__9|_28|__1
+___|542|3__
+___|___|___
+__5|817|___
+5__|73_|9__
+_63|2_4|_17
+8__|__9|__3";
+    
+    let mut sudoku = Sudoku::from_str(sudoku_str).unwrap();
+    sudoku.solve();
+    println!("{}", sudoku);
+}
+
+#[test]
 #[should_panic]
 fn wrong_format_1() {
     let sudoku_str =
@@ -245,5 +264,5 @@ _3_______
 _263__5__
 5_37____8";
     
-    let mut sudoku = Sudoku::from_str(sudoku_str).unwrap();
+    Sudoku::from_str(sudoku_str).unwrap();
 }

@@ -1,6 +1,20 @@
 extern crate sudoku;
 use sudoku::Sudoku;
 
+fn read_sudokus(sudokus_str: &str) -> Vec<Sudoku> {
+    let sudokus_str = sudokus_str.replace("\r\n", "\n");
+    let mut sudokus = vec![];
+    for i in 0.. {
+        // 9 lines with 9 cells each + 1 linefeed character per line
+        // + 1 LF char between each sudoku
+        // 9*(9+1) + 1
+        let rg = 0+i*91..90+i*91;
+        if rg.end > sudokus_str.len() { break }
+        sudokus.push( Sudoku::from_str( &sudokus_str[rg] ).expect("Benchmark sudokus file contains sudoku in incorrect format") )
+    }
+    sudokus
+}
+
 #[test]
 fn solve_1() {
     let sudoku_str =
@@ -51,4 +65,16 @@ _263__5__
 5_37____8";
 
     Sudoku::from_str(sudoku_str).unwrap();
+}
+
+#[test]
+fn correct_solution() {
+    // testing easy sudokus which all have unique solutions
+    let mut easy_sudokus = read_sudokus( include_str!("../sudokus/easy_sudokus.txt") );
+    let solved_easy_sudokus = read_sudokus( include_str!("../sudokus/solved_easy_sudokus.txt") );
+    for sudoku in easy_sudokus.iter_mut() {
+        assert!( sudoku.solve() ); // .solve() returns true, if it could solve the sudoku
+    }
+
+    assert_eq!( easy_sudokus, solved_easy_sudokus );
 }

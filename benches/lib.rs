@@ -18,7 +18,7 @@ fn read_sudokus(sudokus_str: &str) -> Vec<Sudoku> {
 }
 
 #[bench]
-fn easy_sudokus(b: &mut test::Bencher) {
+fn easy_sudokus_solve(b: &mut test::Bencher) {
     let sudokus = read_sudokus( &include_str!("easy_sudokus.txt") );
     let sudokus_1000 = sudokus.iter().cycle().cloned().take(100).collect::<Vec<_>>();;
 	b.iter(|| {
@@ -26,9 +26,35 @@ fn easy_sudokus(b: &mut test::Bencher) {
 	})
 }
 
+#[bench]
+fn easy_sudokus_solve_unique(b: &mut test::Bencher) {
+    let sudokus = read_sudokus( &include_str!("easy_sudokus.txt") );
+    let sudokus_1000 = sudokus.iter().cycle().cloned().take(100).collect::<Vec<_>>();;
+	b.iter(|| {
+		for sudoku in sudokus_1000.iter().cloned() { sudoku.solve_unique(); }
+	})
+}
 
 #[bench]
-fn medium_sudokus(b: &mut test::Bencher) {
+fn easy_sudokus_solve_one(b: &mut test::Bencher) {
+    let sudokus = read_sudokus( &include_str!("easy_sudokus.txt") );
+    let sudokus_1000 = sudokus.iter().cycle().cloned().take(100).collect::<Vec<_>>();;
+	b.iter(|| {
+		for sudoku in sudokus_1000.iter().cloned() { sudoku.solve_one(); }
+	})
+}
+
+#[bench]
+fn easy_sudokus_solve_at_most_100(b: &mut test::Bencher) {
+    let sudokus = read_sudokus( &include_str!("easy_sudokus.txt") );
+    let sudokus_1000 = sudokus.iter().cycle().cloned().take(100).collect::<Vec<_>>();;
+	b.iter(|| {
+		for sudoku in sudokus_1000.iter().cloned() { sudoku.solve_at_most(100); }
+	})
+}
+
+#[bench]
+fn medium_sudokus_solve(b: &mut test::Bencher) {
     let sudokus = read_sudokus( &include_str!("medium_sudokus.txt") );
     let sudokus_1000 = sudokus.iter().cycle().cloned().take(100).collect::<Vec<_>>();;
 	b.iter(|| {
@@ -37,10 +63,64 @@ fn medium_sudokus(b: &mut test::Bencher) {
 }
 
 #[bench]
-fn hard_sudokus(b: &mut test::Bencher) {
+fn medium_sudokus_solve_unique(b: &mut test::Bencher) {
+    let sudokus = read_sudokus( &include_str!("medium_sudokus.txt") );
+    let sudokus_1000 = sudokus.iter().cycle().cloned().take(100).collect::<Vec<_>>();;
+	b.iter(|| {
+		for sudoku in sudokus_1000.iter().cloned() { sudoku.solve_unique(); }
+	})
+}
+
+#[bench]
+fn medium_sudokus_solve_one(b: &mut test::Bencher) {
+    let sudokus = read_sudokus( &include_str!("medium_sudokus.txt") );
+    let sudokus_1000 = sudokus.iter().cycle().cloned().take(100).collect::<Vec<_>>();;
+	b.iter(|| {
+		for sudoku in sudokus_1000.iter().cloned() { sudoku.solve_one(); }
+	})
+}
+
+#[bench]
+fn medium_sudokus_solve_at_most_100(b: &mut test::Bencher) {
+    let sudokus = read_sudokus( &include_str!("medium_sudokus.txt") );
+    let sudokus_1000 = sudokus.iter().cycle().cloned().take(100).collect::<Vec<_>>();;
+	b.iter(|| {
+		for sudoku in sudokus_1000.iter().cloned() { sudoku.solve_at_most(100); }
+	})
+}
+
+#[bench]
+fn hard_sudokus_solve(b: &mut test::Bencher) {
     let sudokus = read_sudokus( &include_str!("hard_sudokus.txt") );
     let sudokus_1000 = sudokus.iter().cycle().cloned().take(100).collect::<Vec<_>>();;
 	b.iter(|| {
 		for mut sudoku in sudokus_1000.iter().cloned() { sudoku.solve(); }
+	})
+}
+
+#[bench]
+fn hard_sudokus_solve_unique(b: &mut test::Bencher) {
+    let sudokus = read_sudokus( &include_str!("hard_sudokus.txt") );
+    let sudokus_1000 = sudokus.iter().cycle().cloned().take(100).collect::<Vec<_>>();;
+	b.iter(|| {
+		for sudoku in sudokus_1000.iter().cloned() { sudoku.solve_unique(); }
+	})
+}
+
+#[bench]
+fn hard_sudokus_solve_one(b: &mut test::Bencher) {
+    let sudokus = read_sudokus( &include_str!("hard_sudokus.txt") );
+    let sudokus_1000 = sudokus.iter().cycle().cloned().take(100).collect::<Vec<_>>();;
+	b.iter(|| {
+		for sudoku in sudokus_1000.iter().cloned() { sudoku.solve_one(); }
+	})
+}
+
+#[bench]
+fn hard_sudokus_solve_at_most_100(b: &mut test::Bencher) {
+    let sudokus = read_sudokus( &include_str!("hard_sudokus.txt") );
+    let sudokus_1000 = sudokus.iter().cycle().cloned().take(100).collect::<Vec<_>>();;
+	b.iter(|| {
+		for sudoku in sudokus_1000.iter().cloned() { sudoku.solve_at_most(100); }
 	})
 }

@@ -3,14 +3,14 @@ use entry::Entry;
 use parse_error::ParseError;
 use solver::SudokuSolver;
 
-use std::{fmt, ops, slice};
+use std::{fmt, ops, slice, iter};
 use std::io::BufRead;
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 /// The main structure exposing all the functionality of the library
 pub struct Sudoku(Vec<u8>);
 
-pub type Iter<'a> = slice::Iter<'a, u8>; // Iter over Sudoku cells
+pub type Iter<'a> = iter::Map<slice::Iter<'a, u8>, fn(&u8)->Option<u8>>; // Iter over Sudoku cells
 
 impl Sudoku {
 	/// Creates a new sudoku based on a `&str`. See the crate documentation
@@ -93,13 +93,17 @@ impl Sudoku {
 
     /// Returns an Iterator over sudoku, going from left to right, top to bottom
     pub fn iter(&self) -> Iter {
-        self.0.iter()
+        self.0.iter().map(num_to_opt)
     }
+}
+
+fn num_to_opt(num: &u8) -> Option<u8> {
+	if *num == 0 { None } else { Some(*num) }
 }
 
 impl fmt::Display for Sudoku {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		for entry in self.iter().enumerate().map(|(cell, &num)| Entry { cell: cell, num: num} ) {
+		for entry in self.iter().enumerate().map(|(cell, num)| Entry { cell: cell, num: num.unwrap()} ) {
 			try!( match (entry.row(), entry.col()) {
 				(_, 3) | (_, 6) => write!(f, " "),    // seperate fields in columns
 				(3, 0) | (6, 0) => write!(f, "\n\n"), // separate fields in rows

@@ -23,7 +23,8 @@ impl Covers {
 
 	pub fn from_sudoku(sudoku: &Sudoku) -> Covers {
 		let mut covers = Covers::new();
-		for (cell, &num) in sudoku.iter().enumerate().filter(|&(_, &num)| num != 0) {
+		for (cell, num) in sudoku.iter().enumerate().filter(|&(_, num)| num.is_some()) { // is_some() == "num.unwrap() != 0"
+			let num = num.unwrap();
 			covers.remove_impossible( Entry { cell: cell, num: num } );
 		}
 		covers

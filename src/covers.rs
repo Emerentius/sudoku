@@ -2,11 +2,15 @@ use entry::Entry;
 use sudoku::Sudoku;
 use std::mem;
 
+// contains all the information to represent the sparse exact cover matrix
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Covers {
-	pub entries: Vec<Entry>,
-    pub possibilities_count: Vec<u8>,
-	pub covered: Vec<bool>, // could be a BitVec, improvements are miniscule but measurable
+	pub entries: Vec<Entry>, // list of entries that could still be entered
+    pub possibilities_count: Vec<u8>, // count of how many entries are still able to satisfy a certain constraint
+	pub covered: Vec<bool>, // storage for whether a constraint has been met already
+							// a possibility count of 0 would otherwise be ambiguous
+							// it could mean 'impossible' or 'already set'
+							// could be a BitVec, improvements are miniscule but measurable
 }
 
 impl Covers {

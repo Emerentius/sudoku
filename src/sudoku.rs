@@ -6,8 +6,8 @@ use std::{fmt, slice, iter};
 use std::io::BufRead;
 use covers::Covers;
 
-#[derive(PartialEq, Eq, Debug, Clone)]
 /// The main structure exposing all the functionality of the library
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct Sudoku(Vec<u8>);
 
 pub type Iter<'a> = iter::Map<slice::Iter<'a, u8>, fn(&u8)->Option<u8>>; // Iter over Sudoku cells
@@ -125,16 +125,16 @@ impl fmt::Display for Sudoku {
 
 // Solving happens by an exact cover algorithm
 // There are a total of 729 (81 cells * 9 numbers) sudoku entry possibilities
-
-// every entry (cell-number-combination) satisfies 4 constraints
+//
+// Every entry (cell-number-combination) satisfies 4 constraints
 // 1. a row    needs to have 1 of each number (9 rows, 9 numbers each)
 // 2. a column needs to have 1 of each number (9 cols, 9 numbers each)
 // 3. a field  needs to have 1 of each number (9 fields, 9 numbers each)
 // 4. a cell needs to be filled               (81 cells, 1 number each)
 //
-// for a total of 81*4 = 324 constraints
+// For a total of 81*4 = 324 constraints
 //
-// the covers property in SudokuSolver contains the information what entries can
+// The covers property in SudokuSolver contains the information what entries can
 // be added at a certain point in the solving process, which constraints are
 // already satisfied and how many possibilities still exist for a given constraint.
 // See also the covers module.
@@ -145,7 +145,7 @@ impl fmt::Display for Sudoku {
 // If no entry can be deduced, a constraint with the least amount of possibilites
 // is chosen and all possibilites tried out.
 
-// helper struct for recursive solving
+// Helper struct for recursive solving
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SudokuSolver {
 	pub grid: Sudoku,

@@ -2,15 +2,19 @@ use entry::Entry;
 use sudoku::Sudoku;
 use std::mem;
 
-// contains all the information to represent the sparse exact cover matrix
+/// Contains all the information to represent the sparse exact cover matrix
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Covers {
-	pub entries: Vec<Entry>, // list of entries that could still be entered
-    pub possibilities_count: Vec<u8>, // count of how many entries are still able to satisfy a certain constraint
-	pub covered: Vec<bool>, // storage for whether a constraint has been met already
-							// a possibility count of 0 would otherwise be ambiguous
-							// it could mean 'impossible' or 'already set'
-							// could be a BitVec, improvements are miniscule but measurable
+	/// List of entries that could still be entered
+	pub entries: Vec<Entry>,
+	/// Count of how many entries are still able to satisfy a certain constraint
+    pub possibilities_count: Vec<u8>,
+	/// Storage for whether a constraint has been met already
+	///
+	/// A possibility count of 0 would otherwise be ambiguous
+	/// (it could mean 'impossible' or 'already set')
+	/// Note: could be a BitVec, improvements are miniscule but measurable
+	pub covered: Vec<bool>,
 }
 
 impl Covers {
@@ -27,10 +31,16 @@ impl Covers {
 
 	pub fn from_sudoku(sudoku: &Sudoku) -> Covers {
 		let mut covers = Covers::new();
-		for (cell, num) in sudoku.iter().enumerate().filter(|&(_, num)| num.is_some()) { // is_some() == "num.unwrap() != 0"
-			let num = num.unwrap();
-			covers.remove_impossible( Entry { cell: cell, num: num } );
+
+		// Note: entries containing 0 are ignored
+		let entries = sudoku.iter()
+							.enumerate()
+							.flat_map(|(i, num)| num.map(|n| Entry { cell: i, num: n }));
+
+		for entry in entries {
+			covers.remove_impossible(entry);
 		}
+
 		covers
 	}
 

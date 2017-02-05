@@ -246,9 +246,7 @@ impl SudokuSolver {
 		// impossible to insert another number
 		// either solved or unsolvable
 		if self.covers.is_empty() && self.is_solved() {
-			if self.is_solved() {
-				solutions.push(self.grid);
-			}
+			solutions.push(self.grid);
 			return
 		}
 

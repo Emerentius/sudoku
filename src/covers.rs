@@ -48,6 +48,11 @@ impl Covers {
 	pub fn is_empty(&self) -> bool { self.entries.is_empty() }
 
 	pub fn remove_impossible(&mut self, new_entry: Entry) {
+		// don't override a cell
+		if self.covered[new_entry.cell_constraint()] {
+			return
+		}
+
 		self.covered[new_entry.row_constraint()] = true;
 		self.covered[new_entry.col_constraint()]  = true;
 		self.covered[new_entry.field_constraint()] = true;

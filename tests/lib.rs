@@ -68,13 +68,40 @@ _263__5__
 }
 
 #[test]
-fn correct_solution() {
-    // testing easy sudokus which all have unique solutions
-    let mut easy_sudokus = read_sudokus( include_str!("../sudokus/easy_sudokus.txt") );
-    let solved_easy_sudokus = read_sudokus( include_str!("../sudokus/solved_easy_sudokus.txt") );
-    for sudoku in easy_sudokus.iter_mut() {
-        assert!( sudoku.solve() ); // .solve() returns true, if it could solve the sudoku
+fn correct_solution_easy_sudokus() {
+    let sudokus = read_sudokus( include_str!("../sudokus/easy_sudokus.txt") );
+    let solved_sudokus = read_sudokus( include_str!("../sudokus/solved_easy_sudokus.txt") );
+    for (i, (sudoku, solved_sudoku)) in sudokus.into_iter().zip(solved_sudokus).enumerate() {
+        if let Some(solution) = sudoku.clone().solve_unique() {
+            assert_eq!( solved_sudoku, solution);
+        } else {
+            panic!("Found multiple solutions to sudoku with unique solution or none at all for {}th sudoku:\n{}", i, sudoku);
+        }
     }
+}
 
-    assert_eq!( easy_sudokus, solved_easy_sudokus );
+#[test]
+fn correct_solution_medium_sudokus() {
+    let sudokus = read_sudokus( include_str!("../sudokus/medium_sudokus.txt") );
+    let solved_sudokus = read_sudokus( include_str!("../sudokus/solved_medium_sudokus.txt") );
+    for (i, (sudoku, solved_sudoku)) in sudokus.into_iter().zip(solved_sudokus).enumerate() {
+        if let Some(solution) = sudoku.clone().solve_unique() {
+            assert_eq!( solved_sudoku, solution);
+        } else {
+            panic!("Found multiple solutions to sudoku with unique solution or none at all for {}th sudoku:\n{}", i, sudoku);
+        }
+    }
+}
+
+#[test]
+fn correct_solution_hard_sudokus() {
+    let sudokus = read_sudokus( include_str!("../sudokus/hard_sudokus.txt") );
+    let solved_sudokus = read_sudokus( include_str!("../sudokus/solved_hard_sudokus.txt") );
+    for (i, (sudoku, solved_sudoku)) in sudokus.into_iter().zip(solved_sudokus).enumerate() {
+        if let Some(solution) = sudoku.clone().solve_unique() {
+            assert_eq!( solved_sudoku, solution);
+        } else {
+            panic!("Found multiple solutions to sudoku with unique solution or none at all for {}th sudoku:\n{}", i, sudoku);
+        }
+    }
 }

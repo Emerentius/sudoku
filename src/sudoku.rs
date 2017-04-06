@@ -250,13 +250,17 @@ impl SudokuSolver {
 			return
 		}
 
-		let (idx, _) = self.covers.possibilities_count.iter()
-			.enumerate()
+		// find cell with minimum amount of possibilities
+		// this is faster (for some unknown reason) than searching rows, cols
+		// and fields for minimum amount of possibilities for some number
+		let (idx, _) = Iterator::zip(243.., (&self.covers.possibilities_count[243..]).iter())
 			.filter(|&(_, &n_poss)| n_poss != 0)
 			.min_by_key(|&(_, n_poss)| n_poss)
 			.unwrap();
+		let cell = idx - CELL_OFFSET;
 		for trial_sudoku in self.covers.entries.iter()
-			.filter(|e| e.constrains(idx))
+			.skip_while(|e| e.cell() != cell)
+			.take_while(|e| e.cell() == cell)
 			.map(|&new_entry| self.with_entry(new_entry))
 		{
 			trial_sudoku._solve_at_most(limit, solutions);

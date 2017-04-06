@@ -2,12 +2,12 @@ use consts::*;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Entry {
-	pub cell: usize,
+	pub cell: u8,
 	pub num: u8,
 }
 
 impl Entry {
-	#[inline] pub fn cell(self) -> usize { self.cell }
+	#[inline] pub fn cell(self) -> usize { self.cell as usize }
 	#[inline] pub fn row(self) -> u8 { self.cell as u8 / 9 }
 	#[inline] pub fn col(self) -> u8 { self.cell as u8 % 9 }
 	#[inline] pub fn field(self) -> u8 { self.row() / 3 * 3 + self.col() / 3 }

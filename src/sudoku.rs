@@ -103,7 +103,7 @@ fn num_to_opt(num: &u8) -> Option<u8> {
 
 impl fmt::Display for Sudoku {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		for entry in self.0.iter().enumerate().map(|(cell, &num)| Entry { cell: cell, num: num } ) {
+		for entry in self.0.iter().enumerate().map(|(cell, &num)| Entry { cell: cell as u8, num: num } ) {
 			try!( match (entry.row(), entry.col()) {
 				(_, 3) | (_, 6) => write!(f, " "),    // seperate fields in columns
 				(3, 0) | (6, 0) => write!(f, "\n\n"), // separate fields in rows

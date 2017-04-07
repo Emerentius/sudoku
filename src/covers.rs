@@ -21,7 +21,7 @@ impl Covers {
 	pub fn new() -> Covers {
 		Covers {
 			entries: (0..9*9*9)
-				.map(|i| Entry { cell: (i / 9), num: (i % 9) as u8 + 1 } )
+				.map(|i| Entry { cell: (i / 9) as u8, num: (i % 9) as u8 + 1 } )
 				.collect::<Vec<Entry>>(),
 			// idx = row/col/field/cell * 9 + (num - 1) + offset, offset = 81 for col, 162 for field, 243 for cells
 			possibilities_count: vec![9; 324],
@@ -35,7 +35,7 @@ impl Covers {
 		// Note: entries containing 0 are ignored
 		let entries = sudoku.iter()
 							.enumerate()
-							.flat_map(|(i, num)| num.map(|n| Entry { cell: i, num: n }));
+							.flat_map(|(i, num)| num.map(|n| Entry { cell: i as u8, num: n }));
 
 		for entry in entries {
 			covers.remove_impossible(entry);
@@ -48,6 +48,11 @@ impl Covers {
 	pub fn is_empty(&self) -> bool { self.entries.is_empty() }
 
 	pub fn remove_impossible(&mut self, new_entry: Entry) {
+		// don't override a cell
+		if self.covered[new_entry.cell_constraint()] {
+			return
+		}
+
 		self.covered[new_entry.row_constraint()] = true;
 		self.covered[new_entry.col_constraint()]  = true;
 		self.covered[new_entry.field_constraint()] = true;

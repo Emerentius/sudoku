@@ -4,5 +4,5 @@ description = "A sudoku solver library"
 license = "MIT"
 repository = "https://github.com/aochagavia/sudoku"
 documentation = "http://aochagavia.github.io/sudoku/sudoku/"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Adolfo Ochagavía <aochagavia92@gmail.com>", "Emerentius"]

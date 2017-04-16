@@ -2,7 +2,7 @@ use consts::*;
 use entry::Entry;
 use parse_error::ParseError;
 
-use std::{fmt, slice, iter};
+use std::{fmt, slice, iter, mem};
 use std::io::BufRead;
 use covers::Covers;
 
@@ -48,14 +48,14 @@ impl Sudoku {
 		}
 	}
 
-    fn into_solver(self) -> SudokuSolver {
+    fn into_solver(self) -> Result<SudokuSolver, Unsolvable> {
         SudokuSolver::from_sudoku(self)
     }
 
 	/// Try to find a solution to the sudoku and fill it in. Return true if a solution was found.
 	/// This is a convenience interface. Use one of the other solver methods for better error handling
 	pub fn solve(&mut self) -> bool {
-		match self.clone().into_solver().solve_one() {
+		match self.clone().into_solver().map(|solver| solver.solve_one()).unwrap_or(None) {
 			Some(solution) => {
 				*self = solution;
 				true
@@ -67,18 +67,19 @@ impl Sudoku {
 	/// Find a solution to the sudoku. If multiple solutions exist, it will not find them and just stop at the first.
 	/// Return `None` if no solution exists.
     pub fn solve_one(self) -> Option<Sudoku> {
-        self.into_solver().solve_one()
+        self.into_solver().map(SudokuSolver::solve_one).unwrap_or(None)
     }
 
     /// Solve sudoku and return solution if solution is unique.
 	pub fn solve_unique(self) -> Option<Sudoku> {
-		self.into_solver().solve_unique()
+		self.into_solver().map(SudokuSolver::solve_unique).unwrap_or(None)
 	}
 
 	/// Solve sudoku and return the first `limit` solutions it finds. If less solutions exist, return only those. Return `None` if no solution exists.
 	/// No specific ordering of solutions is promised. It can change across versions.
     pub fn solve_at_most(self, limit: usize) -> Option<Vec<Sudoku>> {
-        let results = self.into_solver().solve_at_most(limit);
+        let results = self.into_solver().map(|solver| solver.solve_at_most(limit))
+			.unwrap_or(vec![]);
 		if results.len() == 0 {
 			None
 		} else {
@@ -88,7 +89,7 @@ impl Sudoku {
 
 	/// Check whether the sudoku is solved.
 	pub fn is_solved(&self) -> bool {
-		self.clone().into_solver().is_solved()
+		self.clone().into_solver().map(|solver| solver.is_solved()).unwrap_or(false)
 	}
 
     /// Returns an Iterator over sudoku, going from left to right, top to bottom
@@ -153,38 +154,101 @@ pub struct SudokuSolver {
 }
 
 impl SudokuSolver {
-	pub fn from_sudoku(sudoku: Sudoku) -> SudokuSolver {
+	fn new() -> SudokuSolver {
 		SudokuSolver {
-			covers: Covers::from_sudoku(&sudoku),
-			grid: sudoku,
+			grid: Sudoku(vec![0; 81]),
+			covers: Covers::new(),
 		}
 	}
 
-	fn _insert_entry(&mut self, entry: Entry) {
-		self.grid.0[entry.cell()] = entry.num()
+	pub fn from_sudoku(sudoku: Sudoku) -> Result<SudokuSolver, Unsolvable> {
+		let mut solver = Self::new();
+		let entries = sudoku.iter()
+			.enumerate()
+			.flat_map(|(i, num)| num.map(|n| Entry { cell: i as u8, num: n }));
+		solver.insert_entries(entries)?;
+		Ok(solver)
 	}
 
-	fn insert_entry(&mut self, entry: Entry) {
-		self._insert_entry(entry);
-		self.covers.insert_entry(entry);
-	}
-
-	fn insert_entries(&mut self, entries: Vec<Entry>) {
-		for &entry in &entries {
-			self._insert_entry(entry);
+	fn _insert_entry(&mut self, entry: Entry) -> Result<(), Unsolvable> {
+		// duplicate entry, skip
+		if self.grid.0[entry.cell()] == entry.num() {
+			return Ok(())
 		}
-		self.covers.insert_entries(entries);
+		// cell already filled with different number
+		if self.covers.covered[entry.cell_constraint()]
+			|| self.covers.covered[entry.row_constraint()]
+			|| self.covers.covered[entry.col_constraint()]
+			|| self.covers.covered[entry.field_constraint()]
+		{
+			return Err(Unsolvable)
+		}
+		self.grid.0[entry.cell()] = entry.num();
+		self.covers.covered[entry.row_constraint()] = true;
+		self.covers.covered[entry.col_constraint()]  = true;
+		self.covers.covered[entry.field_constraint()] = true;
+		self.covers.covered[entry.cell_constraint()] = true;
+		Ok(())
 	}
 
-	fn with_entry(&self, entry: Entry) -> Self {
+	fn decrement_possibilities_count(&mut self, impossible_entry: Entry) {
+		self.covers.possibilities_count[impossible_entry.row_constraint()] -= 1;
+		self.covers.possibilities_count[impossible_entry.col_constraint()] -= 1;
+		self.covers.possibilities_count[impossible_entry.field_constraint()] -= 1;
+		self.covers.possibilities_count[impossible_entry.cell_constraint()] -= 1;
+	}
+
+	fn insert_entry(&mut self, entry: Entry) -> Result<(), Unsolvable> {
+		self._insert_entry(entry)?;
+
+		// remove impossible entries, keep possibilities counter accurate
+		let mut entries = mem::replace(&mut self.covers.entries, vec![] );
+		entries.retain(|&old_entry| {
+			if old_entry.conflicts_with(entry) { // remove old_entry
+				self.decrement_possibilities_count(old_entry);
+				false
+			} else {
+				true
+			}
+		});
+		self.covers.entries = entries;
+		Ok(())
+	}
+
+	fn insert_entries<I>(&mut self, entries: I) -> Result<(), Unsolvable>
+		where I: IntoIterator<Item=Entry>
+	{
+		for entry in entries {
+			self._insert_entry(entry)?;
+		}
+
+		// remove impossible entries, keep possibilities counter accurate
+		let mut entries = mem::replace(&mut self.covers.entries, vec![] );
+		entries.retain(|&old_entry| {
+			if self.covers.covered[old_entry.cell_constraint()]
+				|| self.covers.covered[old_entry.row_constraint()]
+				|| self.covers.covered[old_entry.col_constraint()]
+				|| self.covers.covered[old_entry.field_constraint()]
+			{
+				self.decrement_possibilities_count(old_entry);
+				false
+			} else {
+				true
+			}
+		});
+		self.covers.entries = entries;
+		Ok(())
+	}
+
+	fn with_entry(&self, entry: Entry) -> Result<Self, Unsolvable> {
 		let mut sudoku = self.clone();
-		sudoku.insert_entry(entry);
-		sudoku
+		sudoku.insert_entry(entry)?;
+		Ok(sudoku)
 	}
 
 	#[inline]
 	pub fn is_solved(&self) -> bool {
-		&self.covers.covered[..] == &[true; 324][..]
+		self.covers.entries.is_empty() && &self.covers.covered[..] == &[true; 324][..]
 	}
 
 	#[inline]
@@ -194,18 +258,16 @@ impl SudokuSolver {
 	}
 
 	// return true if new entries were found
-	fn insert_deduced_entries(&mut self) -> bool {
+	fn insert_deduced_entries(&mut self) -> Result<bool, Unsolvable> {
 		let entries = self.covers.possibilities_count.iter()
 			.enumerate()
 			.filter(|&(_, &n_poss)| n_poss == 1)
-			.map(|(idx, _)| self.matching_entry(idx) )//	self.covers.entries.iter().cloned().find(|e| e.constrains(idx))
+			.map(|(idx, _)| self.matching_entry(idx) )
 			.collect::<Vec<_>>();
 
 		let entries_added = entries.len() != 0;
-		for &entry in &entries {
-			self.insert_entry(entry);
-		}
-		entries_added
+		self.insert_entries(entries)?;
+		Ok(entries_added)
 	}
 
 	// may fail, but only if used incorrectly
@@ -218,12 +280,9 @@ impl SudokuSolver {
 	}
 
 	pub fn solve_one(self) -> Option<Sudoku> {
-		let result = self.solve_at_most(1);
-		if result.len() == 0 {
-			None
-		} else {
-			result.into_iter().next() // just take one
-		}
+		self.solve_at_most(1)
+			.into_iter()
+			.next()
 	}
 
 	pub fn solve_unique(self) -> Option<Sudoku> {
@@ -237,21 +296,23 @@ impl SudokuSolver {
 
 	pub fn solve_at_most(self, limit: usize) -> Vec<Sudoku> {
 		let mut solutions = vec![];
-		self._solve_at_most(limit, &mut solutions);
+		let _ = self._solve_at_most(limit, &mut solutions);
 		solutions
 	}
 
 	fn _solve_at_most(mut self, limit: usize, solutions: &mut Vec<Sudoku>) {
 		if solutions.len() == limit { return }
 
-		// deduce entries, but check in between deductions if the sudoku is still possible
-		while self.insert_deduced_entries() {
-			if self.is_impossible() { return }
+		loop {
+			match self.insert_deduced_entries() {
+				Err(Unsolvable) => return,
+				Ok(true) if self.is_impossible() => return,
+				Ok(false) => break,
+				_ => (), // deduce more
+			}
 		}
 
-		// impossible to insert another number
-		// either solved or unsolvable
-		if self.covers.is_empty() && self.is_solved() {
+		if self.is_solved() {
 			solutions.push(self.grid);
 			return
 		}
@@ -267,9 +328,11 @@ impl SudokuSolver {
 		for trial_sudoku in self.covers.entries.iter()
 			.skip_while(|e| e.cell() != cell)
 			.take_while(|e| e.cell() == cell)
-			.map(|&new_entry| self.with_entry(new_entry))
+			.flat_map(|&new_entry| self.with_entry(new_entry))
 		{
 			trial_sudoku._solve_at_most(limit, solutions);
 		}
 	}
 }
+
+pub struct Unsolvable;

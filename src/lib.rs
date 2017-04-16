@@ -34,6 +34,7 @@ mod covers;
 mod entry;
 mod parse_error;
 mod sudoku;
+mod positions;
 
 pub use sudoku::Sudoku;
 pub use parse_error::ParseError;

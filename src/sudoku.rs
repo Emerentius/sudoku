@@ -22,7 +22,7 @@ impl Sudoku {
 	/// Creates a new sudoku based on a reader. See the crate documentation
 	/// for an example of the expected format
 	pub fn from_reader<T: BufRead>(reader: T) -> Result<Sudoku, ParseError> {
-		let mut grid = Vec::with_capacity(N_SUDOKU_CELLS);
+		let mut grid = Vec::with_capacity(N_CELLS);
 
 		// Read a row per line
 		for (line_nr, line) in Iterator::zip(1..9+1, reader.lines().take(9)) {
@@ -41,7 +41,7 @@ impl Sudoku {
 			}
 		}
 
-		if grid.len() < N_SUDOKU_CELLS {
+		if grid.len() < N_CELLS {
 			Err(ParseError::NotEnoughRows)
 		} else {
 			Ok(Sudoku(grid))

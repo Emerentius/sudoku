@@ -1,4 +1,5 @@
 use consts::*;
+use positions::{FIELD, ROW};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Entry {
@@ -8,9 +9,9 @@ pub struct Entry {
 
 impl Entry {
 	#[inline] pub fn cell(self) -> usize { self.cell as usize }
-	#[inline] pub fn row(self) -> u8 { self.cell as u8 / 9 }
-	#[inline] pub fn col(self) -> u8 { self.cell as u8 % 9 }
-	#[inline] pub fn field(self) -> u8 { self.row() / 3 * 3 + self.col() / 3 }
+	#[inline] pub fn row(self) -> u8 { self.cell / 9 }
+	#[inline] pub fn col(self) -> u8 { self.cell % 9 }
+	#[inline] pub fn field(self) -> u8 { FIELD[self.cell()] }
 	#[inline] pub fn num(self) -> u8 { self.num }
 
 	#[inline]

@@ -160,14 +160,20 @@ impl SudokuSolver {
 		}
 	}
 
-	#[inline]
-	fn remove_impossible(&mut self, new_entry: Entry) {
-		self.covers.remove_impossible(new_entry);
+	fn _insert_entry(&mut self, entry: Entry) {
+		self.grid.0[entry.cell()] = entry.num()
 	}
 
 	fn insert_entry(&mut self, entry: Entry) {
-		self.grid.0[entry.cell()] = entry.num();
-		self.remove_impossible(entry);
+		self._insert_entry(entry);
+		self.covers.insert_entry(entry);
+	}
+
+	fn insert_entries(&mut self, entries: Vec<Entry>) {
+		for &entry in &entries {
+			self._insert_entry(entry);
+		}
+		self.covers.insert_entries(entries);
 	}
 
 	fn with_entry(&self, entry: Entry) -> Self {
@@ -196,7 +202,7 @@ impl SudokuSolver {
 			.collect::<Vec<_>>();
 
 		let entries_added = entries.len() != 0;
-		for entry in entries {
+		for &entry in &entries {
 			self.insert_entry(entry);
 		}
 		entries_added

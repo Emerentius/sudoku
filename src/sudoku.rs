@@ -145,28 +145,6 @@ impl fmt::Display for Sudoku {
 	}
 }
 
-// Solving happens by an exact cover algorithm
-// There are a total of 729 (81 cells * 9 numbers) sudoku entry possibilities
-//
-// Every entry (cell-number-combination) satisfies 4 constraints
-// 1. a row    needs to have 1 of each number (9 rows, 9 numbers each)
-// 2. a column needs to have 1 of each number (9 cols, 9 numbers each)
-// 3. a field  needs to have 1 of each number (9 fields, 9 numbers each)
-// 4. a cell needs to be filled               (81 cells, 1 number each)
-//
-// For a total of 81*4 = 324 constraints
-//
-// The covers property in SudokuSolver contains the information what entries can
-// be added at a certain point in the solving process, which constraints are
-// already satisfied and how many possibilities still exist for a given constraint.
-// See also the covers module.
-//
-// Solving happens by recursively walking the tree of possible sudokus
-// If some constraint can only be satisfied by 1 entry, it will be entered immediately
-// This is equivalent to finding naked singles and hidden singles
-// If no entry can be deduced, a constraint with the least amount of possibilites
-// is chosen and all possibilites tried out.
-
 // Helper struct for recursive solving
 #[derive(Clone, Debug)]
 pub struct SudokuSolver {
@@ -206,32 +184,7 @@ impl SudokuSolver {
 		self.zone_solved_digits[entry.col() as usize +COL_OFFSET] |= entry.mask();
 		self.zone_solved_digits[entry.field() as usize +FIELD_OFFSET] |= entry.mask();
 	}
-/*
-	fn decrement_possibilities_count(&mut self, impossible_entry: Entry) {
-		self.covers.possibilities_count[impossible_entry.row_constraint()] -= 1;
-		self.covers.possibilities_count[impossible_entry.col_constraint()] -= 1;
-		self.covers.possibilities_count[impossible_entry.field_constraint()] -= 1;
-		self.covers.possibilities_count[impossible_entry.cell_constraint()] -= 1;
-	}
-*/
-/*
-	fn insert_entry(&mut self, entry: Entry) -> Result<(), Unsolvable> {
-		self._insert_entry(entry)?;
 
-		// remove impossible entries, keep possibilities counter accurate
-		let mut entries = mem::replace(&mut self.covers.entries, vec![] );
-		entries.retain(|&old_entry| {
-			if old_entry.conflicts_with(entry) { // remove old_entry
-				self.decrement_possibilities_count(old_entry);
-				false
-			} else {
-				true
-			}
-		});
-		self.covers.entries = entries;
-		Ok(())
-	}
-*/
 	fn insert_entries(&mut self, stack: &mut Vec<Entry>) -> Result<(), Unsolvable> {
 		match stack.len() {
 			0...4 => self.insert_entries_singly(stack),
@@ -305,13 +258,6 @@ impl SudokuSolver {
 	pub fn is_solved(&self) -> bool {
 		self.n_solved_cells == 81
 	}
-/*
-	#[inline]
-	fn is_impossible(&self) -> bool {
-		Iterator::zip( self.covers.possibilities_count.iter(), self.covers.covered.iter() )
-			.any(|(&poss, &covered)| !covered && poss == 0)
-	}
-*/
 
 	fn find_hidden_singles(&mut self, stack: &mut Vec<Entry>) -> Result<(), Unsolvable> {
 		for zone in 0..27 {
@@ -388,16 +334,6 @@ impl SudokuSolver {
 		Ok(())
 	}
 
-	/*
-	// may fail, but only if used incorrectly
-	#[inline]
-	fn matching_entry(&self, constraint_nr: usize) -> Entry {
-		self.covers.entries.iter()
-			.cloned()
-			.find(|e| e.constrains(constraint_nr))
-			.unwrap()
-	}
-	*/
 	pub fn solve_one(self) -> Option<Sudoku> {
 		self.solve_at_most(1)
 			.into_iter()

@@ -1,8 +1,8 @@
 [package]
 name = "sudoku"
 description = "A sudoku solver library"
-license = "MIT"
-repository = "https://github.com/aochagavia/sudoku"
-documentation = "http://aochagavia.github.io/sudoku/sudoku/"
-version = "0.2.1"
-authors = ["Adolfo Ochagavía <aochagavia92@gmail.com>", "Emerentius"]
+license = "AGPL-3.0"
+repository = "https://github.com/emerentius/sudoku"
+documentation = "https://docs.rs/sudoku"
+version = "0.3.0"
+authors = ["Emerentius", "Adolfo Ochagavía <aochagavia92@gmail.com>"]

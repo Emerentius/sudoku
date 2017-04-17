@@ -1,10 +1,8 @@
 use consts::*;
-use entry::Entry;
-use parse_error::ParseError;
+use types::{Entry, Covers, ParseError};
 
 use std::{fmt, slice, iter, mem};
 use std::io::BufRead;
-use covers::Covers;
 
 /// The main structure exposing all the functionality of the library
 #[derive(Copy)]

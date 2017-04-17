@@ -30,11 +30,9 @@
 //! ```
 
 mod consts;
-mod covers;
-mod entry;
-mod parse_error;
+mod types;
 mod sudoku;
 mod positions;
 
 pub use sudoku::Sudoku;
-pub use parse_error::ParseError;
+pub use types::ParseError;

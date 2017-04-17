@@ -1,7 +1,8 @@
 use consts::*;
-use types::{Entry, Covers, ParseError};
+use positions::*;
+use types::{Mask, Digit, Array81, Entry, ParseError, Unsolvable};
 
-use std::{fmt, slice, iter, mem};
+use std::{fmt, slice, iter};
 use std::io::BufRead;
 
 /// The main structure exposing all the functionality of the library
@@ -170,14 +171,18 @@ impl fmt::Display for Sudoku {
 #[derive(Clone, Debug)]
 pub struct SudokuSolver {
 	pub grid: Sudoku,
-	pub covers: Covers,
+	pub n_solved_cells: u8,
+	pub cell_poss_digits: Array81<Mask<Digit>>,
+	pub zone_solved_digits: [Mask<Digit>; 27],
 }
 
 impl SudokuSolver {
 	fn new() -> SudokuSolver {
 		SudokuSolver {
 			grid: Sudoku([0; 81]),
-			covers: Covers::new(),
+			n_solved_cells: 0,
+			cell_poss_digits: Array81([Mask::all(); 81]),
+			zone_solved_digits: [Mask::none(); 27],
 		}
 	}
 
@@ -191,34 +196,23 @@ impl SudokuSolver {
 		Ok(solver)
 	}
 
-	fn _insert_entry(&mut self, entry: Entry) -> Result<(), Unsolvable> {
-		// duplicate entry, skip
-		if self.grid.0[entry.cell()] == entry.num() {
-			return Ok(())
-		}
-		// cell already filled with different number
-		if self.covers.covered[entry.cell_constraint()]
-			|| self.covers.covered[entry.row_constraint()]
-			|| self.covers.covered[entry.col_constraint()]
-			|| self.covers.covered[entry.field_constraint()]
-		{
-			return Err(Unsolvable)
-		}
-		self.grid.0[entry.cell()] = entry.num();
-		self.covers.covered[entry.row_constraint()] = true;
-		self.covers.covered[entry.col_constraint()]  = true;
-		self.covers.covered[entry.field_constraint()] = true;
-		self.covers.covered[entry.cell_constraint()] = true;
-		Ok(())
+	fn _insert_entry(&mut self, entry: Entry) {
+		self.n_solved_cells += 1;
+		self.grid.0[entry.cell()] = entry.num;
+		self.cell_poss_digits[entry.cell()] = Mask::none();
+		self.zone_solved_digits[entry.row() as usize +ROW_OFFSET] |= entry.mask();
+		self.zone_solved_digits[entry.col() as usize +COL_OFFSET] |= entry.mask();
+		self.zone_solved_digits[entry.field() as usize +FIELD_OFFSET] |= entry.mask();
 	}
-
+/*
 	fn decrement_possibilities_count(&mut self, impossible_entry: Entry) {
 		self.covers.possibilities_count[impossible_entry.row_constraint()] -= 1;
 		self.covers.possibilities_count[impossible_entry.col_constraint()] -= 1;
 		self.covers.possibilities_count[impossible_entry.field_constraint()] -= 1;
 		self.covers.possibilities_count[impossible_entry.cell_constraint()] -= 1;
 	}
-
+*/
+/*
 	fn insert_entry(&mut self, entry: Entry) -> Result<(), Unsolvable> {
 		self._insert_entry(entry)?;
 
@@ -235,60 +229,120 @@ impl SudokuSolver {
 		self.covers.entries = entries;
 		Ok(())
 	}
-
+*/
 	fn insert_entries(&mut self, stack: &mut Vec<Entry>) -> Result<(), Unsolvable> {
 		for entry in stack.drain(..) {
-			self._insert_entry(entry)?;
+			// cell already solved from previous entry in stack, skip
+			if self.cell_poss_digits[entry.cell()] == Mask::none() { continue }
+
+			// is entry still possible?
+			// have to check zone possibilities, because cell possibility
+			// is temporarily out of date
+			if self.zone_solved_digits[entry.row() as usize + ROW_OFFSET] & entry.mask() != Mask::none()
+			|| self.zone_solved_digits[entry.col() as usize + COL_OFFSET] & entry.mask() != Mask::none()
+			|| self.zone_solved_digits[entry.field() as usize +FIELD_OFFSET] & entry.mask() != Mask::none()
+			{
+				return Err(Unsolvable);
+			}
+
+			self._insert_entry(entry);
 		}
 
-		// remove impossible entries, keep possibilities counter accurate
-		let mut entries = mem::replace(&mut self.covers.entries, vec![] );
-		entries.retain(|&old_entry| {
-			if self.covers.covered[old_entry.cell_constraint()]
-				|| self.covers.covered[old_entry.row_constraint()]
-				|| self.covers.covered[old_entry.col_constraint()]
-				|| self.covers.covered[old_entry.field_constraint()]
-			{
-				self.decrement_possibilities_count(old_entry);
-				false
-			} else {
-				true
-			}
-		});
-		self.covers.entries = entries;
-		Ok(())
-	}
+		// update cell possibilities from zone masks
+		for cell in 0..81 {
+			let cell_mask = &mut self.cell_poss_digits[cell as usize];
+			if *cell_mask == Mask::none() { continue }
+			let zones_mask = self.zone_solved_digits[row_zone(cell)]
+				| self.zone_solved_digits[col_zone(cell)]
+				| self.zone_solved_digits[field_zone(cell)];
 
-	fn with_entry(&self, entry: Entry) -> Result<Self, Unsolvable> {
-		let mut sudoku = self.clone();
-		sudoku.insert_entry(entry)?;
-		Ok(sudoku)
+			*cell_mask &= !zones_mask;
+			if let Some(num) = cell_mask.unique_num()? {
+				stack.push(Entry{ cell: cell as u8, num });
+			}
+		}
+		Ok(())
 	}
 
 	#[inline]
 	pub fn is_solved(&self) -> bool {
-		self.covers.entries.is_empty() && &self.covers.covered[..] == &[true; 324][..]
+		self.n_solved_cells == 81
 	}
-
+/*
 	#[inline]
 	fn is_impossible(&self) -> bool {
 		Iterator::zip( self.covers.possibilities_count.iter(), self.covers.covered.iter() )
 			.any(|(&poss, &covered)| !covered && poss == 0)
 	}
+*/
 
-	// return true if new entries were found
-	fn insert_deduced_entries(&mut self, stack: &mut Vec<Entry>) -> Result<bool, Unsolvable> {
-		stack.extend(self.covers.possibilities_count.iter()
-			.enumerate()
-			.filter(|&(_, &n_poss)| n_poss == 1)
-			.map(|(idx, _)| self.matching_entry(idx) )
-		);
+	fn find_hidden_singles(&mut self, stack: &mut Vec<Entry>) -> Result<(), Unsolvable> {
+		if let Some(res) = (0..27).map(|zone| {
+				let mut unsolved = Mask::none();
+				let mut multiple_unsolved = Mask::none();
 
-		let entries_added = stack.len() != 0;
-		self.insert_entries(stack)?;
-		Ok(entries_added)
+				let cells = cells_of_zone(zone);
+				for &cell in cells.iter() {
+					let poss_digits = self.cell_poss_digits[cell as usize];
+					multiple_unsolved |= unsolved & poss_digits;
+					unsolved |= poss_digits;
+				}
+				if unsolved | self.zone_solved_digits[zone as usize] != Mask::all() {
+					return Err(Unsolvable);
+				}
+
+				Ok((unsolved & !multiple_unsolved, cells))
+			})
+			.find(|res| res.as_ref()
+				.map(|&(m, _)| m != Mask::none())
+				.unwrap_or(true)
+			)
+		{
+			let (singles, cells) = res?;
+			for &cell in cells.iter() {
+				let mask = self.cell_poss_digits[cell as usize];
+				if mask & singles != Mask::none() {
+					let num = (mask & singles).unique_num().expect("unexpected empty mask").ok_or(Unsolvable)?;
+					stack.push(Entry{cell, num} );
+				}
+			}
+		}
+		Ok(())
 	}
 
+	fn find_good_guess(&mut self) -> Entry {
+		let mut min_possibilities = 10;
+		let mut best_cell = 100;
+
+		for cell in 0..81 {
+			let cell_mask = self.cell_poss_digits[cell as usize];
+			let n_possibilities = cell_mask.n_possibilities();
+			// 0 means cell was already processed or its impossible in which case,
+			// it should have been caught elsewhere
+			// 1 shouldn't happen for the same reason, should have been processed
+			if n_possibilities > 0 && n_possibilities < min_possibilities {
+				best_cell = cell;
+				min_possibilities = n_possibilities;
+				if n_possibilities == 2 { break }
+			}
+		}
+
+		let num = self.cell_poss_digits[best_cell as usize].one_possibility();
+		Entry{ num, cell: best_cell }
+	}
+
+	// remove impossible digits from masks for given cell
+	// also check for naked singles and impossibility of sudoku
+	fn remove_impossibilities(&mut self, cell: u8, impossible: Mask<Digit>, stack: &mut Vec<Entry>) -> Result<(), Unsolvable> {
+		let cell_mask = &mut self.cell_poss_digits[cell as usize];
+		*cell_mask &= !impossible;
+		if let Some(num) = cell_mask.unique_num()? {
+			stack.push(Entry{ cell, num });
+		}
+		Ok(())
+	}
+
+	/*
 	// may fail, but only if used incorrectly
 	#[inline]
 	fn matching_entry(&self, constraint_nr: usize) -> Entry {
@@ -297,7 +351,7 @@ impl SudokuSolver {
 			.find(|e| e.constrains(constraint_nr))
 			.unwrap()
 	}
-
+	*/
 	pub fn solve_one(self) -> Option<Sudoku> {
 		self.solve_at_most(1)
 			.into_iter()
@@ -320,39 +374,25 @@ impl SudokuSolver {
 		solutions
 	}
 
-	fn _solve_at_most(mut self, limit: usize, stack: &mut Vec<Entry>, solutions: &mut Vec<Sudoku>) {
-		if solutions.len() == limit { return }
-
-		loop {
-			match self.insert_deduced_entries(stack) {
-				Err(Unsolvable) => return,
-				Ok(true) if self.is_impossible() => return,
-				Ok(false) => break,
-				_ => (), // deduce more
-			}
-		}
-
+	fn _solve_at_most(mut self, limit: usize, stack: &mut Vec<Entry>, solutions: &mut Vec<Sudoku>) -> Result<(), Unsolvable> {
+		self.insert_entries(stack)?;
 		if self.is_solved() {
-			solutions.push(self.grid);
-			return
+			solutions.push(self.grid.clone());
+			return Ok(())
 		}
 
-		// find cell with minimum amount of possibilities
-		// this is faster (for some unknown reason) than searching rows, cols
-		// and fields for minimum amount of possibilities for some number
-		let (idx, _) = Iterator::zip(243.., (&self.covers.possibilities_count[243..]).iter())
-			.filter(|&(_, &n_poss)| n_poss != 0)
-			.min_by_key(|&(_, n_poss)| n_poss)
-			.unwrap();
-		let cell = idx - CELL_OFFSET;
-		for trial_sudoku in self.covers.entries.iter()
-			.skip_while(|e| e.cell() != cell)
-			.take_while(|e| e.cell() == cell)
-			.flat_map(|&new_entry| self.with_entry(new_entry))
-		{
-			trial_sudoku._solve_at_most(limit, stack, solutions);
+		self.find_hidden_singles(stack)?;
+		if !stack.is_empty() {
+			return self._solve_at_most(limit, stack, solutions);
 		}
+
+		let entry = self.find_good_guess();
+		stack.push(entry);
+		let _ = self.clone()._solve_at_most(limit, stack, solutions);
+		stack.clear();
+		if solutions.len() == limit { return Ok(()) }
+
+		self.remove_impossibilities(entry.cell, entry.mask(), stack)?;
+		self._solve_at_most(limit, stack, solutions)
 	}
 }
-
-pub struct Unsolvable;

@@ -283,7 +283,7 @@ impl SudokuSolver {
 				let mask = self.cell_poss_digits[cell as usize];
 				if mask & singles != Mask::none() {
 					let num = (mask & singles).unique_num().expect("unexpected empty mask").ok_or(Unsolvable)?;
-					stack.push(Entry{cell, num} );
+					stack.push(Entry{ cell: cell, num: num } );
 
 					// remove single from mask
 					singles &= !Mask::from_num(num);
@@ -322,7 +322,7 @@ impl SudokuSolver {
 		}
 
 		let num = self.cell_poss_digits[best_cell as usize].one_possibility();
-		Entry{ num, cell: best_cell }
+		Entry{ num: num, cell: best_cell }
 	}
 
 	// remove impossible digits from masks for given cell
@@ -331,7 +331,7 @@ impl SudokuSolver {
 		let cell_mask = &mut self.cell_poss_digits[cell as usize];
 		*cell_mask &= !impossible;
 		if let Some(num) = cell_mask.unique_num()? {
-			stack.push(Entry{ cell, num });
+			stack.push(Entry{ cell: cell, num: num });
 		}
 		Ok(())
 	}

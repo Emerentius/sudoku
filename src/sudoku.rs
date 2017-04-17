@@ -152,7 +152,7 @@ pub struct SudokuSolver {
 	pub n_solved_cells: u8,
 	pub cell_poss_digits: Array81<Mask<Digit>>,
 	pub zone_solved_digits: [Mask<Digit>; 27],
-	pub last_cell_guess: u8, // last cell checked in guess routine
+	pub last_cell: u8, // last cell checked in guess routine
 }
 
 impl SudokuSolver {
@@ -162,7 +162,7 @@ impl SudokuSolver {
 			n_solved_cells: 0,
 			cell_poss_digits: Array81([Mask::all(); 81]),
 			zone_solved_digits: [Mask::none(); 27],
-			last_cell_guess: 0,
+			last_cell: 0,
 		}
 	}
 
@@ -226,12 +226,14 @@ impl SudokuSolver {
 			// cell already solved from previous entry in stack, skip
 			if self.cell_poss_digits[entry.cell()] == Mask::none() { continue }
 
+			let entry_mask = entry.mask();
+
 			// is entry still possible?
 			// have to check zone possibilities, because cell possibility
 			// is temporarily out of date
-			if self.zone_solved_digits[entry.row() as usize + ROW_OFFSET] & entry.mask() != Mask::none()
-			|| self.zone_solved_digits[entry.col() as usize + COL_OFFSET] & entry.mask() != Mask::none()
-			|| self.zone_solved_digits[entry.field() as usize +FIELD_OFFSET] & entry.mask() != Mask::none()
+			if self.zone_solved_digits[entry.row() as usize + ROW_OFFSET] & entry_mask != Mask::none()
+			|| self.zone_solved_digits[entry.col() as usize + COL_OFFSET] & entry_mask != Mask::none()
+			|| self.zone_solved_digits[entry.field() as usize +FIELD_OFFSET] & entry_mask != Mask::none()
 			{
 				return Err(Unsolvable);
 			}
@@ -301,7 +303,7 @@ impl SudokuSolver {
 		let mut best_cell = 100;
 
 		{
-			let mut cell = (self.last_cell_guess + 1) % 81;
+			let mut cell = (self.last_cell + 1) % 81;
 			loop {
 				let cell_mask = self.cell_poss_digits[cell as usize];
 				let n_possibilities = cell_mask.n_possibilities();
@@ -313,10 +315,10 @@ impl SudokuSolver {
 					min_possibilities = n_possibilities;
 					if n_possibilities == 2 { break }
 				}
-				if cell == self.last_cell_guess { break }
+				if cell == self.last_cell { break }
 				cell = if cell == 80 { 0 } else { cell + 1 }
 			}
-			self.last_cell_guess = cell;
+			self.last_cell = cell;
 		}
 
 		let num = self.cell_poss_digits[best_cell as usize].one_possibility();

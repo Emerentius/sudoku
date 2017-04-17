@@ -231,6 +231,39 @@ impl SudokuSolver {
 	}
 */
 	fn insert_entries(&mut self, stack: &mut Vec<Entry>) -> Result<(), Unsolvable> {
+		match stack.len() {
+			0...4 => self.insert_entries_singly(stack),
+			_ => self.batch_insert_entries(stack),
+		}
+	}
+
+	// for each entry in the stack, insert it (if cell is unsolved)
+	// and then remove possibility from each cell neighbouring it in all
+	// zones (rows, cols, fields) eagerly
+	// check for naked singles and impossible cells during this check
+	fn insert_entries_singly(&mut self, stack: &mut Vec<Entry>) -> Result<(), Unsolvable> {
+		while let Some(entry) = stack.pop() {
+			let entry_mask = entry.mask();
+			// cell already solved from previous entry in stack, skip
+			if self.cell_poss_digits[entry.cell()] == Mask::none() { continue }
+
+			// is entry still possible?
+			if self.cell_poss_digits[entry.cell()] & entry_mask == Mask::none() {
+				return Err(Unsolvable);
+			}
+
+			self._insert_entry(entry);
+			for &cell in neighbours(entry.cell) {
+				if entry_mask & self.cell_poss_digits[cell as usize] == Mask::none() {
+					continue
+				};
+				self.remove_impossibilities(cell, entry_mask, stack)?;
+			}
+		}
+		Ok(())
+	}
+
+	fn batch_insert_entries(&mut self, stack: &mut Vec<Entry>) -> Result<(), Unsolvable> {
 		for entry in stack.drain(..) {
 			// cell already solved from previous entry in stack, skip
 			if self.cell_poss_digits[entry.cell()] == Mask::none() { continue }

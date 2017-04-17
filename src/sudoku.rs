@@ -259,6 +259,9 @@ impl SudokuSolver {
 				};
 				self.remove_impossibilities(cell, entry_mask, stack)?;
 			}
+
+			// found a lot of naked singles, switch to batch insertion
+			if stack.len() > 4 { return self.batch_insert_entries(stack) }
 		}
 		Ok(())
 	}
@@ -293,6 +296,9 @@ impl SudokuSolver {
 			if let Some(num) = cell_mask.unique_num()? {
 				stack.push(Entry{ cell: cell as u8, num });
 			}
+		}
+		if !stack.is_empty() {
+			self.insert_entries(stack)?;
 		}
 		Ok(())
 	}

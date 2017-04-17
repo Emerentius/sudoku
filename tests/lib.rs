@@ -105,3 +105,31 @@ fn correct_solution_hard_sudokus() {
         }
     }
 }
+
+#[test]
+#[ignore]
+fn correct_solution_top50k() {
+    let sudokus = read_sudokus( include_str!("../sudokus/top50k.txt") );
+    let solved_sudokus = read_sudokus( include_str!("../sudokus/solved_top50k.txt") );
+    for (i, (sudoku, solved_sudoku)) in sudokus.into_iter().zip(solved_sudokus).enumerate() {
+        if let Some(solution) = sudoku.clone().solve_unique() {
+            assert_eq!( solved_sudoku, solution);
+        } else {
+            panic!("Found multiple solutions to sudoku with unique solution or none at all for {}th sudoku:\n{}", i, sudoku);
+        }
+    }
+}
+
+#[test]
+#[ignore]
+fn correct_solution_sudoku17() {
+    let sudokus = read_sudokus( include_str!("../sudokus/sudoku17.txt") );
+    let solved_sudokus = read_sudokus( include_str!("../sudokus/solved_sudoku17.txt") );
+    for (i, (sudoku, solved_sudoku)) in sudokus.into_iter().zip(solved_sudokus).enumerate() {
+        if let Some(solution) = sudoku.clone().solve_unique() {
+            assert_eq!( solved_sudoku, solution);
+        } else {
+            panic!("Found multiple solutions to sudoku with unique solution or none at all for {}th sudoku:\n{}", i, sudoku);
+        }
+    }
+}

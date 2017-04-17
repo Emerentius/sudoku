@@ -4,5 +4,5 @@ description = "A sudoku solver library"
 license = "AGPL-3.0"
 repository = "https://github.com/emerentius/sudoku"
 documentation = "https://docs.rs/sudoku"
-version = "0.3.0"
+version = "0.3.1"
 authors = ["Emerentius", "Adolfo Ochagavía <aochagavia92@gmail.com>"]

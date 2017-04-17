@@ -7,8 +7,28 @@ use std::io::BufRead;
 use covers::Covers;
 
 /// The main structure exposing all the functionality of the library
-#[derive(PartialEq, Eq, Debug, Clone)]
-pub struct Sudoku(Vec<u8>);
+#[derive(Copy)]
+pub struct Sudoku([u8; 81]);
+
+impl PartialEq for Sudoku {
+	fn eq(&self, other: &Sudoku) -> bool {
+		&self.0[..] == &other.0[..]
+	}
+}
+
+impl Eq for Sudoku {}
+
+impl fmt::Debug for Sudoku {
+	fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+		self.0.fmt(fmt)
+	}
+}
+
+impl Clone for Sudoku {
+	fn clone(&self) -> Self {
+		*self
+	}
+}
 
 pub type Iter<'a> = iter::Map<slice::Iter<'a, u8>, fn(&u8)->Option<u8>>; // Iter over Sudoku cells
 
@@ -22,26 +42,28 @@ impl Sudoku {
 	/// Creates a new sudoku based on a reader. See the crate documentation
 	/// for an example of the expected format
 	pub fn from_reader<T: BufRead>(reader: T) -> Result<Sudoku, ParseError> {
-		let mut grid = Vec::with_capacity(N_CELLS);
+		let mut grid = [0; N_CELLS];
 
 		// Read a row per line
+		let mut line_count = 0;
 		for (line_nr, line) in Iterator::zip(1..9+1, reader.lines().take(9)) {
+			line_count += 1;
 			let line = line.ok().unwrap_or("".to_string());
 			let trimmed_line = line.trim_right();
 			if trimmed_line.chars().filter(|&c| c!= '|').count() != 9 {
 				return Err(ParseError::InvalidLineLength(line_nr));
 			}
 
-			for ch in trimmed_line.chars().filter(|&c| c != '|') {
+			for (col, ch) in trimmed_line.chars().filter(|&c| c != '|').enumerate() {
 				match ch {
-					'1'...'9' => grid.push( ch.to_digit(10).unwrap() as u8 ),
-					'_'       => grid.push(0),
+					'1'...'9' => grid[(line_nr-1) as usize *9 + col] = ch.to_digit(10).unwrap() as u8,
+					'_'       => grid[(line_nr-1) as usize *9 + col] = 0,
 					_         => return Err(ParseError::InvalidNumber(line_nr, ch)),
 				}
 			}
 		}
 
-		if grid.len() < N_CELLS {
+		if line_count < 9 {
 			Err(ParseError::NotEnoughRows)
 		} else {
 			Ok(Sudoku(grid))
@@ -147,7 +169,7 @@ impl fmt::Display for Sudoku {
 // is chosen and all possibilites tried out.
 
 // Helper struct for recursive solving
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct SudokuSolver {
 	pub grid: Sudoku,
 	pub covers: Covers,
@@ -156,17 +178,18 @@ pub struct SudokuSolver {
 impl SudokuSolver {
 	fn new() -> SudokuSolver {
 		SudokuSolver {
-			grid: Sudoku(vec![0; 81]),
+			grid: Sudoku([0; 81]),
 			covers: Covers::new(),
 		}
 	}
 
 	pub fn from_sudoku(sudoku: Sudoku) -> Result<SudokuSolver, Unsolvable> {
 		let mut solver = Self::new();
-		let entries = sudoku.iter()
+		let mut stack = sudoku.iter()
 			.enumerate()
-			.flat_map(|(i, num)| num.map(|n| Entry { cell: i as u8, num: n }));
-		solver.insert_entries(entries)?;
+			.flat_map(|(i, num)| num.map(|n| Entry { cell: i as u8, num: n }))
+			.collect();
+		solver.insert_entries(&mut stack)?;
 		Ok(solver)
 	}
 
@@ -215,10 +238,8 @@ impl SudokuSolver {
 		Ok(())
 	}
 
-	fn insert_entries<I>(&mut self, entries: I) -> Result<(), Unsolvable>
-		where I: IntoIterator<Item=Entry>
-	{
-		for entry in entries {
+	fn insert_entries(&mut self, stack: &mut Vec<Entry>) -> Result<(), Unsolvable> {
+		for entry in stack.drain(..) {
 			self._insert_entry(entry)?;
 		}
 
@@ -258,15 +279,15 @@ impl SudokuSolver {
 	}
 
 	// return true if new entries were found
-	fn insert_deduced_entries(&mut self) -> Result<bool, Unsolvable> {
-		let entries = self.covers.possibilities_count.iter()
+	fn insert_deduced_entries(&mut self, stack: &mut Vec<Entry>) -> Result<bool, Unsolvable> {
+		stack.extend(self.covers.possibilities_count.iter()
 			.enumerate()
 			.filter(|&(_, &n_poss)| n_poss == 1)
 			.map(|(idx, _)| self.matching_entry(idx) )
-			.collect::<Vec<_>>();
+		);
 
-		let entries_added = entries.len() != 0;
-		self.insert_entries(entries)?;
+		let entries_added = stack.len() != 0;
+		self.insert_entries(stack)?;
 		Ok(entries_added)
 	}
 
@@ -296,15 +317,16 @@ impl SudokuSolver {
 
 	pub fn solve_at_most(self, limit: usize) -> Vec<Sudoku> {
 		let mut solutions = vec![];
-		let _ = self._solve_at_most(limit, &mut solutions);
+		let mut stack = Vec::with_capacity(81);
+		let _ = self._solve_at_most(limit, &mut stack, &mut solutions);
 		solutions
 	}
 
-	fn _solve_at_most(mut self, limit: usize, solutions: &mut Vec<Sudoku>) {
+	fn _solve_at_most(mut self, limit: usize, stack: &mut Vec<Entry>, solutions: &mut Vec<Sudoku>) {
 		if solutions.len() == limit { return }
 
 		loop {
-			match self.insert_deduced_entries() {
+			match self.insert_deduced_entries(stack) {
 				Err(Unsolvable) => return,
 				Ok(true) if self.is_impossible() => return,
 				Ok(false) => break,
@@ -330,7 +352,7 @@ impl SudokuSolver {
 			.take_while(|e| e.cell() == cell)
 			.flat_map(|&new_entry| self.with_entry(new_entry))
 		{
-			trial_sudoku._solve_at_most(limit, solutions);
+			trial_sudoku._solve_at_most(limit, stack, solutions);
 		}
 	}
 }

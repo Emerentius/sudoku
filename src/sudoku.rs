@@ -288,16 +288,12 @@ impl SudokuSolver {
 
 		// update cell possibilities from zone masks
 		for cell in 0..81 {
-			let cell_mask = &mut self.cell_poss_digits[cell as usize];
-			if *cell_mask == Mask::none() { continue }
+			if self.cell_poss_digits[cell as usize] == Mask::none() { continue }
 			let zones_mask = self.zone_solved_digits[row_zone(cell)]
 				| self.zone_solved_digits[col_zone(cell)]
 				| self.zone_solved_digits[field_zone(cell)];
 
-			*cell_mask &= !zones_mask;
-			if let Some(num) = cell_mask.unique_num()? {
-				stack.push(Entry{ cell: cell as u8, num });
-			}
+			self.remove_impossibilities(cell, zones_mask, stack)?;
 		}
 		if !stack.is_empty() {
 			self.insert_entries(stack)?;
@@ -318,35 +314,38 @@ impl SudokuSolver {
 */
 
 	fn find_hidden_singles(&mut self, stack: &mut Vec<Entry>) -> Result<(), Unsolvable> {
-		if let Some(res) = (0..27).map(|zone| {
-				let mut unsolved = Mask::none();
-				let mut multiple_unsolved = Mask::none();
+		for zone in 0..27 {
+			let mut unsolved = Mask::none();
+			let mut multiple_unsolved = Mask::none();
 
-				let cells = cells_of_zone(zone);
-				for &cell in cells.iter() {
-					let poss_digits = self.cell_poss_digits[cell as usize];
-					multiple_unsolved |= unsolved & poss_digits;
-					unsolved |= poss_digits;
-				}
-				if unsolved | self.zone_solved_digits[zone as usize] != Mask::all() {
-					return Err(Unsolvable);
-				}
+			let cells = cells_of_zone(zone);
+			for &cell in cells {
+				let poss_digits = self.cell_poss_digits[cell as usize];
+				multiple_unsolved |= unsolved & poss_digits;
+				unsolved |= poss_digits;
+			}
+			if unsolved | self.zone_solved_digits[zone as usize] != Mask::all() {
+				return Err(Unsolvable);
+			}
 
-				Ok((unsolved & !multiple_unsolved, cells))
-			})
-			.find(|res| res.as_ref()
-				.map(|&(m, _)| m != Mask::none())
-				.unwrap_or(true)
-			)
-		{
-			let (singles, cells) = res?;
-			for &cell in cells.iter() {
+			let mut singles = unsolved & !multiple_unsolved;
+			if singles == Mask::none() { continue }
+
+			for &cell in cells {
 				let mask = self.cell_poss_digits[cell as usize];
 				if mask & singles != Mask::none() {
 					let num = (mask & singles).unique_num().expect("unexpected empty mask").ok_or(Unsolvable)?;
 					stack.push(Entry{cell, num} );
+
+					// remove single from mask
+					singles &= !Mask::from_num(num);
+					// everything in this zone found
+					// return to insert numbers immediately
+					if singles == Mask::none() { return Ok(()) }
 				}
 			}
+			// can not occur but the optimizer appreciates the info
+			break
 		}
 		Ok(())
 	}
@@ -355,18 +354,23 @@ impl SudokuSolver {
 		let mut min_possibilities = 10;
 		let mut best_cell = 100;
 
-		for cell in (self.last_cell_guess+1..81).chain(0..self.last_cell_guess+1).take(81) {
-			self.last_cell_guess = cell;
-			let cell_mask = self.cell_poss_digits[cell as usize];
-			let n_possibilities = cell_mask.n_possibilities();
-			// 0 means cell was already processed or its impossible in which case,
-			// it should have been caught elsewhere
-			// 1 shouldn't happen for the same reason, should have been processed
-			if n_possibilities > 0 && n_possibilities < min_possibilities {
-				best_cell = cell;
-				min_possibilities = n_possibilities;
-				if n_possibilities == 2 { break }
+		{
+			let mut cell = (self.last_cell_guess + 1) % 81;
+			loop {
+				let cell_mask = self.cell_poss_digits[cell as usize];
+				let n_possibilities = cell_mask.n_possibilities();
+				// 0 means cell was already processed or its impossible in which case,
+				// it should have been caught elsewhere
+				// 1 shouldn't happen for the same reason, should have been processed
+				if n_possibilities > 0 && n_possibilities < min_possibilities {
+					best_cell = cell;
+					min_possibilities = n_possibilities;
+					if n_possibilities == 2 { break }
+				}
+				if cell == self.last_cell_guess { break }
+				cell = if cell == 80 { 0 } else { cell + 1 }
 			}
+			self.last_cell_guess = cell;
 		}
 
 		let num = self.cell_poss_digits[best_cell as usize].one_possibility();

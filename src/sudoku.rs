@@ -174,6 +174,7 @@ pub struct SudokuSolver {
 	pub n_solved_cells: u8,
 	pub cell_poss_digits: Array81<Mask<Digit>>,
 	pub zone_solved_digits: [Mask<Digit>; 27],
+	pub last_cell_guess: u8, // last cell checked in guess routine
 }
 
 impl SudokuSolver {
@@ -183,6 +184,7 @@ impl SudokuSolver {
 			n_solved_cells: 0,
 			cell_poss_digits: Array81([Mask::all(); 81]),
 			zone_solved_digits: [Mask::none(); 27],
+			last_cell_guess: 0,
 		}
 	}
 
@@ -353,7 +355,8 @@ impl SudokuSolver {
 		let mut min_possibilities = 10;
 		let mut best_cell = 100;
 
-		for cell in 0..81 {
+		for cell in (self.last_cell_guess+1..81).chain(0..self.last_cell_guess+1).take(81) {
+			self.last_cell_guess = cell;
 			let cell_mask = self.cell_poss_digits[cell as usize];
 			let n_possibilities = cell_mask.n_possibilities();
 			// 0 means cell was already processed or its impossible in which case,

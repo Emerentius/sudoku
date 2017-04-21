@@ -31,9 +31,8 @@ _26|3__|5__
 }
 ```
 
-# To do list
+# Planned
 
-- [ ] C bindings
-- [ ] Replace usages of `HashSet` by a special struct based on a `u16` (we can use each bit as a boolean flag to indicate if the number at the given index is present)
-- [ ] Benchmarks
-- [ ] Algorithm improvements
+- [ ] Sudoku generation
+- [ ] Step-by-step hinting & solving with pluggable strategies
+- [ ] Detailed errors for invalid sudokus

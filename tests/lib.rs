@@ -68,6 +68,22 @@ _263__5__
 }
 
 #[test]
+fn is_solved_on_unsolved() {
+    let sudokus = read_sudokus( include_str!("../sudokus/easy_sudokus.txt") );
+    for sudoku in sudokus {
+        assert!(!sudoku.is_solved());
+    }
+}
+
+#[test]
+fn is_solved_on_solved() {
+    let sudokus = read_sudokus( include_str!("../sudokus/solved_easy_sudokus.txt") );
+    for sudoku in sudokus {
+        assert!(sudoku.is_solved());
+    }
+}
+
+#[test]
 fn correct_solution_easy_sudokus() {
     let sudokus = read_sudokus( include_str!("../sudokus/easy_sudokus.txt") );
     let solved_sudokus = read_sudokus( include_str!("../sudokus/solved_easy_sudokus.txt") );

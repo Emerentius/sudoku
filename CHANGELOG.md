@@ -13,3 +13,8 @@ Version 0.3.0 (2017-04-17)
 Version 0.3.1 (2017-04-18)
 --------------------------
 * Build on stable rust again
+
+Version 0.3.2 (2017-04-18)
+--------------------------
+* Bugfix: `sudoku.is_solved()` incorrectly returned true when `sudoku` was not solved,
+  but solvable through naked single tactics alone

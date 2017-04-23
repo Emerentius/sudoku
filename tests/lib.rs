@@ -68,6 +68,14 @@ _263__5__
 }
 
 #[test]
+fn solutionless_sudokus() {
+    let sudokus = read_sudokus( include_str!("../sudokus/invalid_sudokus_reformatted.txt") );
+    for sudoku in sudokus {
+        assert!(sudoku.solve_one().is_none());
+    }
+}
+
+#[test]
 fn is_solved_on_unsolved() {
     let sudokus = read_sudokus( include_str!("../sudokus/easy_sudokus.txt") );
     for sudoku in sudokus {

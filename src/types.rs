@@ -6,10 +6,10 @@ use consts::*;
 use positions::FIELD;
 
 #[derive(Debug)]
-pub struct Unsolvable;
+pub(crate) struct Unsolvable;
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Entry {
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Entry {
 	pub cell: u8,
 	pub num: u8,
 }
@@ -24,25 +24,70 @@ impl Entry {
 	#[inline] pub fn mask(self) -> Mask<Digit> { Mask::from_num(self.num()) }
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+// Type surfaced in API for parsing errors as 'Entry'
+/// An invalid entry that was parsed
+pub struct PubEntry {
+    /// Cell number goes from 0..=80, 0..=8 for first line, 9..=17 for 2nd and so on
+	pub cell: u8,
+    /// The parsed invalid char
+	pub ch: char,
+}
+
+impl PubEntry {
+    /// Row index from 0..=8, topmost row is 0
+	#[inline] pub fn row(self) -> u8 { self.cell / 9 }
+    /// Column index from 0..=8, leftmost col is 0
+	#[inline] pub fn col(self) -> u8 { self.cell % 9 }
+    /// Field index from 0..=8, numbering from left to right, top to bottom. Example: Top-row is 0, 1, 2
+	#[inline] pub fn field(self) -> u8 { FIELD[self.cell as usize] }
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////
 
 use std::fmt;
 
+/// Error for lax block format parsing. Contains the number of rows found.
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct NotEnoughRows(pub u8);
+
 /// A structure representing an error caused when parsing the sudoku
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub enum ParseError {
-    /// Error caused when the lenght of the parsed line was not 9
+pub enum BlockFormatParseError {
+    /// Non-digit, non-placeholder encountered. Field delimiters chars in unexpected places also cause this
+    InvalidEntry(PubEntry),
+    /// Line contains (>9 valid entries) or (<9 and no invalids)
+    /// Returns index of row (0-8)
     InvalidLineLength(u8),
-    /// Error caused when a character is found which is not a number between 1
-    /// and 9 or a '_'
-    InvalidNumber(u8, char),
-    /// Error caused when the input has a number of rows lower than 9
-    NotEnoughRows
+    /// Input ends with less than 9 rows. Returns number of rows encountered.
+    NotEnoughRows(u8),
+    /// If field delimiter is in place after 3rd number in 1st row
+    /// all other horizontal and vertical field delimiters must be present or this is emitted
+    IncorrectFieldDelimiter,
+    /// More than 9 lines are supplied and the 10th line is not pure whitespace
+    TooManyRows,
+    /// Non-digit, non-placeholder after completed line encountered but without space
+    MissingCommentDelimiter(u8),
 }
 
-impl fmt::Display for ParseError {
+/// A structure representing an error caused when parsing the sudoku
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub enum LineFormatParseError {
+    /// Accepted values are numbers 1...9 and '0', '.' or '_' for empty cells
+    InvalidEntry(PubEntry),
+    /// Returns number of cells supplied
+    NotEnoughCells(u8),
+    /// Returned if >=82 valid cell positions are supplied
+    TooManyCells,
+    /// Comments must be delimited by a space or tab.
+    MissingCommentDelimiter,
+}
+
+/*
+impl fmt::Display for LineFormatParseError {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        use self::ParseError::*;
+        use self::LineFormatParseError::*;
 
         try!(write!(f, "Error parsing sudoku: "));
         match *self {
@@ -52,11 +97,11 @@ impl fmt::Display for ParseError {
         }
     }
 }
-
+*/
 ////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)] pub struct Position;
-#[derive(Clone, Copy, PartialEq, Eq, Debug)] pub struct Digit;
+#[derive(Clone, Copy, PartialEq, Eq, Debug)] pub(crate) struct Position;
+#[derive(Clone, Copy, PartialEq, Eq, Debug)] pub(crate) struct Digit;
 
 // Bitmask struct for T where T is just an information regarding intent
 // it could for example be Mask<Digit> or Mask<Position>
@@ -64,7 +109,7 @@ impl fmt::Display for ParseError {
 // Mask<T> and Mask<U>, when T != U
 // NOTE: !mask is a leaky abstraction, see comment above trait implementation
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]
-pub struct Mask<T>(u16, ::std::marker::PhantomData<T>);
+pub(crate) struct Mask<T>(u16, ::std::marker::PhantomData<T>);
 
 impl<T> Mask<T> {
     #[inline(always)]
@@ -164,7 +209,7 @@ impl_bitops_assign!(::std::ops::BitXorAssign, bitxor_assign);
 
 // Pure boilerplate. Just an array of size 81.
 #[derive(Copy)]
-pub struct Array81<T>(pub [T; N_CELLS]);
+pub(crate) struct Array81<T>(pub [T; N_CELLS]);
 
 
 impl<T: Copy> Clone for Array81<T> {

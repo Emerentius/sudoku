@@ -15,7 +15,7 @@ _26|3__|5__
 5_3|7__|__8
 47_|__1|___";
 
-    let mut sudoku = Sudoku::from_str(sudoku_str).unwrap();
+    let mut sudoku = Sudoku::from_str_block(sudoku_str).unwrap();
     sudoku.solve();
     println!("{}", sudoku);
 }

@@ -18,3 +18,11 @@ Version 0.3.2 (2017-04-18)
 --------------------------
 * Bugfix: `sudoku.is_solved()` incorrectly returned true when `sudoku` was not solved,
   but solvable through naked single tactics alone
+
+Unreleased
+--------------------------
+* Changed parser functions for `Sudoku`
+  - Added `from_str_line()` for parsing sudokus in line format. Also added `to_str_line()` for a printable representation of the same.
+  - Split `from_str()` into `from_str_block()` and `from_str_block_permissive()`. As the names suggest, the latter is much more forgiving than the former but will also fail in strange ways on malformed data.
+* Added `from_bytes()`, `from_bytes_slice()`, `into_bytes()` to `Sudoku` for construction and deconstruction for byte arrays and slices. Errors will be revisited.
+* Added new module `parser_errors` 

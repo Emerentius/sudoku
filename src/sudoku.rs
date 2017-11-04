@@ -410,8 +410,8 @@ impl SudokuSolver {
 		SudokuSolver {
 			grid: Sudoku([0; 81]),
 			n_solved_cells: 0,
-			cell_poss_digits: Array81([Mask::all(); 81]),
-			zone_solved_digits: [Mask::none(); 27],
+			cell_poss_digits: Array81([Mask::ALL; 81]),
+			zone_solved_digits: [Mask::NONE; 27],
 			last_cell: 0,
 		}
 	}
@@ -429,7 +429,7 @@ impl SudokuSolver {
 	fn _insert_entry(&mut self, entry: Entry) {
 		self.n_solved_cells += 1;
 		self.grid.0[entry.cell()] = entry.num;
-		self.cell_poss_digits[entry.cell()] = Mask::none();
+		self.cell_poss_digits[entry.cell()] = Mask::NONE;
 		self.zone_solved_digits[entry.row() as usize +ROW_OFFSET] |= entry.mask();
 		self.zone_solved_digits[entry.col() as usize +COL_OFFSET] |= entry.mask();
 		self.zone_solved_digits[entry.field() as usize +FIELD_OFFSET] |= entry.mask();
@@ -450,16 +450,16 @@ impl SudokuSolver {
 		while let Some(entry) = stack.pop() {
 			let entry_mask = entry.mask();
 			// cell already solved from previous entry in stack, skip
-			if self.cell_poss_digits[entry.cell()] == Mask::none() { continue }
+			if self.cell_poss_digits[entry.cell()].is_empty() { continue }
 
 			// is entry still possible?
-			if self.cell_poss_digits[entry.cell()] & entry_mask == Mask::none() {
+			if (self.cell_poss_digits[entry.cell()] & entry_mask).is_empty() {
 				return Err(Unsolvable);
 			}
 
 			self._insert_entry(entry);
 			for &cell in neighbours(entry.cell) {
-				if entry_mask & self.cell_poss_digits[cell as usize] == Mask::none() {
+				if (entry_mask & self.cell_poss_digits[cell as usize]).is_empty() {
 					continue
 				};
 				self.remove_impossibilities(cell, entry_mask, stack)?;
@@ -474,16 +474,16 @@ impl SudokuSolver {
 	fn batch_insert_entries<S: InsertionStrategy>(&mut self, stack: &mut Vec<Entry>) -> Result<(), Unsolvable> {
 		for entry in stack.drain(..) {
 			// cell already solved from previous entry in stack, skip
-			if self.cell_poss_digits[entry.cell()] == Mask::none() { continue }
+			if self.cell_poss_digits[entry.cell()].is_empty() { continue }
 
 			let entry_mask = entry.mask();
 
 			// is entry still possible?
 			// have to check zone possibilities, because cell possibility
 			// is temporarily out of date
-			if self.zone_solved_digits[entry.row() as usize + ROW_OFFSET] & entry_mask != Mask::none()
-			|| self.zone_solved_digits[entry.col() as usize + COL_OFFSET] & entry_mask != Mask::none()
-			|| self.zone_solved_digits[entry.field() as usize +FIELD_OFFSET] & entry_mask != Mask::none()
+			if self.zone_solved_digits[entry.row() as usize + ROW_OFFSET] & entry_mask != Mask::NONE
+			|| self.zone_solved_digits[entry.col() as usize + COL_OFFSET] & entry_mask != Mask::NONE
+			|| self.zone_solved_digits[entry.field() as usize +FIELD_OFFSET] & entry_mask != Mask::NONE
 			{
 				return Err(Unsolvable);
 			}
@@ -493,7 +493,7 @@ impl SudokuSolver {
 
 		// update cell possibilities from zone masks
 		for cell in 0..81 {
-			if self.cell_poss_digits[cell as usize] == Mask::none() { continue }
+			if self.cell_poss_digits[cell as usize].is_empty() { continue }
 			let zones_mask = self.zone_solved_digits[row_zone(cell)]
 				| self.zone_solved_digits[col_zone(cell)]
 				| self.zone_solved_digits[field_zone(cell)];
@@ -510,8 +510,8 @@ impl SudokuSolver {
 
 	fn find_hidden_singles(&mut self, stack: &mut Vec<Entry>) -> Result<(), Unsolvable> {
 		for zone in 0..27 {
-			let mut unsolved = Mask::none();
-			let mut multiple_unsolved = Mask::none();
+			let mut unsolved = Mask::NONE;
+			let mut multiple_unsolved = Mask::NONE;
 
 			let cells = cells_of_zone(zone);
 			for &cell in cells {
@@ -519,24 +519,26 @@ impl SudokuSolver {
 				multiple_unsolved |= unsolved & poss_digits;
 				unsolved |= poss_digits;
 			}
-			if unsolved | self.zone_solved_digits[zone as usize] != Mask::all() {
+			if unsolved | self.zone_solved_digits[zone as usize] != Mask::ALL {
 				return Err(Unsolvable);
 			}
 
-			let mut singles = unsolved & !multiple_unsolved;
-			if singles == Mask::none() { continue }
+			let mut singles = unsolved.without(multiple_unsolved);
+			if singles.is_empty() { continue }
 
 			for &cell in cells {
 				let mask = self.cell_poss_digits[cell as usize];
-				if mask & singles != Mask::none() {
-					let num = (mask & singles).unique_num().expect("unexpected empty mask").ok_or(Unsolvable)?;
+				
+				if let Ok(maybe_unique) = (mask & singles).unique_num() {
+					let num = maybe_unique.ok_or(Unsolvable)?;
 					stack.push(Entry{ cell: cell, num: num } );
 
-					// remove single from mask
-					singles &= !Mask::from_num(num);
+					// mark num as found
+					singles.remove(Mask::from_num(num));
+					
 					// everything in this zone found
 					// return to insert numbers immediately
-					if singles == Mask::none() { return Ok(()) }
+					if singles.is_empty() { return Ok(()) }
 				}
 			}
 			// can not occur but the optimizer appreciates the info
@@ -576,7 +578,7 @@ impl SudokuSolver {
 	// also check for naked singles and impossibility of sudoku
 	fn remove_impossibilities(&mut self, cell: u8, impossible: Mask<Digit>, stack: &mut Vec<Entry>) -> Result<(), Unsolvable> {
 		let cell_mask = &mut self.cell_poss_digits[cell as usize];
-		*cell_mask &= !impossible;
+		cell_mask.remove(impossible);
 		if let Some(num) = cell_mask.unique_num()? {
 			stack.push(Entry{ cell: cell, num: num });
 		}

@@ -108,29 +108,43 @@ impl fmt::Display for LineFormatParseError {
 // All usual bitwise operations are implemented but do not work between
 // Mask<T> and Mask<U>, when T != U
 // NOTE: !mask is a leaky abstraction, see comment above trait implementation
-#[derive(Clone, Copy, Eq, PartialEq, Debug)]
+#[derive(Clone, Copy, Eq, Debug)]
 pub(crate) struct Mask<T>(u16, ::std::marker::PhantomData<T>);
 
 impl<T> Mask<T> {
+    pub const ALL: Mask<T> = Mask(0b_1_1111_1111, ::std::marker::PhantomData);
+    pub const NONE: Mask<T> = Mask(0, ::std::marker::PhantomData);
+
     #[inline(always)]
     fn new(mask: u16) -> Self {
         Mask(mask, ::std::marker::PhantomData)
     }
 
 	#[inline(always)]
-    pub fn all() -> Self {
-		Mask::new(0b_1_1111_1111)
-	}
-
-	#[inline(always)]
-    pub fn none() -> Self {
-		Mask::new(0)
-	}
-
-	#[inline(always)]
     pub fn n_possibilities(self) -> u8 {
 		self.0.count_ones() as u8
 	}
+
+    #[inline(always)]
+    pub fn is_empty(self) -> bool {
+        self == Mask::NONE
+    }
+
+    #[inline(always)]
+    pub fn without(self, other: Self) -> Self {
+        Mask::new(self.0 & !other.0)
+    }
+
+    #[inline(always)]
+    pub fn remove(&mut self, other: Self) {
+        self.0 &= !other.0;
+    }
+}
+
+impl<T> PartialEq<Mask<T>> for Mask<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
 }
 
 impl Mask<Digit> {
@@ -160,18 +174,15 @@ impl Mask<Digit> {
     }
 }
 
-// NOTE: !Mask (bitwise negation) is a leaky abstraction
-//       The implementation for Not should really be !self.0 & 0b_1_1111_1111
-//       but because the most common operation is
+// NOTE: a common operation is 
 //       some_mask &= !mask, where some_mask doesn't have the high bits set
-//       this is a pointless operation in the most common case and costs performance
-//       a | !b == Mask::all() will always be false as a result when
-//       a and b are regular masks without the high bits set
+//       use .without() (owned) or .remove() (referenced) to avoid masking the high bits off
+//       for the negation. They won't be set anyway in `some_mask`.
 impl<T> ::std::ops::Not for Mask<T> {
 	type Output = Self;
     #[inline(always)]
 	fn not(self) -> Self {
-		Mask::new(!self.0)
+		Mask::new(!self.0 & 0b_1_1111_1111)
 	}
 }
 

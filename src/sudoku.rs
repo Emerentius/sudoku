@@ -608,25 +608,24 @@ impl SudokuSolver {
 	}
 
 	fn _solve_at_most(mut self, limit: usize, stack: &mut Vec<Entry>, solutions: &mut Vec<Sudoku>) -> Result<(), Unsolvable> {
-		self.insert_entries(stack)?;
-		if self.is_solved() {
-			solutions.push(self.grid.clone());
-			return Ok(())
+		loop {
+			self.insert_entries(stack)?;
+			if self.is_solved() {
+				solutions.push(self.grid.clone());
+				break Ok(())
+			}
+
+			self.find_hidden_singles(stack)?;
+			if !stack.is_empty() { continue }
+
+			let entry = self.find_good_guess();
+			stack.push(entry);
+			let _ = self.clone()._solve_at_most(limit, stack, solutions);
+			stack.clear();
+			if solutions.len() == limit { break Ok(()) }
+
+			self.remove_impossibilities(entry.cell, entry.mask(), stack)?;
 		}
-
-		self.find_hidden_singles(stack)?;
-		if !stack.is_empty() {
-			return self._solve_at_most(limit, stack, solutions);
-		}
-
-		let entry = self.find_good_guess();
-		stack.push(entry);
-		let _ = self.clone()._solve_at_most(limit, stack, solutions);
-		stack.clear();
-		if solutions.len() == limit { return Ok(()) }
-
-		self.remove_impossibilities(entry.cell, entry.mask(), stack)?;
-		self._solve_at_most(limit, stack, solutions)
 	}
 }
 

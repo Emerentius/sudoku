@@ -12,7 +12,7 @@
 //! ```
 //! use sudoku::Sudoku;
 //!
-//! let sudoku_block = 
+//! let sudoku_block =
 //! "___|2__|_63
 //! 3__|__5|4_1
 //! __1|__3|98_

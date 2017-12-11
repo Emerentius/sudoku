@@ -6,7 +6,7 @@ use std::{fmt, slice, iter};
 
 /// The main structure exposing all the functionality of the library
 /// Sudokus can be parsed in either the line format or the block format
-/// 
+///
 /// line format:
 ///
 /// `..3.2.6..9..3.5..1..18.64....81.29..7.......8..67.82....26.95..8..2.3..9..5.1.3.. optional comment`
@@ -79,7 +79,7 @@ impl Sudoku {
 				true => {
 					sudoku.0.copy_from_slice(bytes);
 					Ok(sudoku)
-				},	
+				},
 				false => Err(())
 			}
 	}
@@ -274,15 +274,10 @@ impl Sudoku {
 		Err(NotEnoughRows(valid_rows as u8))
 	}
 
-
-    fn into_solver(self) -> Result<SudokuSolver, Unsolvable> {
-        SudokuSolver::from_sudoku(self)
-    }
-
 	/// Try to find a solution to the sudoku and fill it in. Return true if a solution was found.
 	/// This is a convenience interface. Use one of the other solver methods for better error handling
 	pub fn solve(&mut self) -> bool {
-		match self.clone().into_solver().map(|solver| solver.solve_one()).unwrap_or(None) {
+		match self.clone().solve_one() {
 			Some(solution) => {
 				*self = solution;
 				true
@@ -294,25 +289,42 @@ impl Sudoku {
 	/// Find a solution to the sudoku. If multiple solutions exist, it will not find them and just stop at the first.
 	/// Return `None` if no solution exists.
     pub fn solve_one(self) -> Option<Sudoku> {
-        self.into_solver().map(SudokuSolver::solve_one).unwrap_or(None)
+		self.solve_at_most(1)
+			.into_iter()
+			.next()
     }
 
     /// Solve sudoku and return solution if solution is unique.
 	pub fn solve_unique(self) -> Option<Sudoku> {
-		self.into_solver().map(SudokuSolver::solve_unique).unwrap_or(None)
+		// without at least 8 digits present, sudoku has multiple solutions
+		// bitmask
+		let mut nums_contained: u16 = 0;
+		// same with less than 17 clues
+		let mut n_clues = 0;
+		self.iter()
+			.filter_map(|id| id)
+			.for_each(|num| {
+				nums_contained |= 1 << num;
+				n_clues += 1;
+			});
+		if n_clues < 17 || nums_contained.count_ones() < 8 {
+			return None
+		};
+
+		let solutions = self.solve_at_most(2);
+		match solutions.len() == 1 {
+			true => solutions.into_iter().next(),
+			false => None,
+		}
 	}
 
 	/// Solve sudoku and return the first `limit` solutions it finds. If less solutions exist, return only those. Return `None` if no solution exists.
 	/// No specific ordering of solutions is promised. It can change across versions.
-    pub fn solve_at_most(self, limit: usize) -> Option<Vec<Sudoku>> {
-        let results = self.into_solver().map(|solver| solver.solve_at_most(limit))
-			.unwrap_or(vec![]);
-		if results.len() == 0 {
-			None
-		} else {
-			Some(results)
-		}
-    }
+    pub fn solve_at_most(self, limit: usize) -> Vec<Sudoku> {
+		let solver = SudokuSolver::new();
+		let stack = SudokuSolver::stack_from_sudoku(self);
+		solver.solve_at_most(stack, limit)
+	}
 
 	/// Check whether the sudoku is solved.
 	pub fn is_solved(&self) -> bool {
@@ -324,7 +336,7 @@ impl Sudoku {
 		// if sudoku contains an error, batch_insert_entries returns Err(Unsolvable) and
 		// will not insert all 81 entries. Consequently solver.is_solved() will
 		// return false
-		let _ = solver.batch_insert_entries::<InsertGivenOnly>(&mut entries);
+		let _ = solver.batch_insert_entries(&mut entries);
 		solver.is_solved()
 	}
 
@@ -341,7 +353,7 @@ impl Sudoku {
 
 	/// Returns a representation of the sudoku in line format that can be printed
 	/// and which derefs into a &str
-	/// 
+	///
 	/// ```
 	/// use sudoku::Sudoku;
 	///
@@ -416,14 +428,13 @@ impl SudokuSolver {
 		}
 	}
 
-	pub fn from_sudoku(sudoku: Sudoku) -> Result<SudokuSolver, Unsolvable> {
-		let mut solver = Self::new();
-		let mut stack = sudoku.iter()
-			.enumerate()
-			.flat_map(|(i, num)| num.map(|n| Entry { cell: i as u8, num: n }))
-			.collect();
-		solver.insert_entries(&mut stack)?;
-		Ok(solver)
+	fn stack_from_sudoku(sudoku: Sudoku) -> Vec<Entry> {
+		let mut stack = Vec::with_capacity(81);
+		stack.extend(
+			(0..81).zip(sudoku.iter())
+			.flat_map(|(cell, num)| num.map(|n| Entry { cell, num: n }))
+		);
+		stack
 	}
 
 	fn _insert_entry(&mut self, entry: Entry) {
@@ -436,9 +447,12 @@ impl SudokuSolver {
 	}
 
 	fn insert_entries(&mut self, stack: &mut Vec<Entry>) -> Result<(), Unsolvable> {
-		match stack.len() {
-			0...4 => self.insert_entries_singly(stack),
-			_ => self.batch_insert_entries::<InsertDeducedEntries>(stack),
+		loop {
+			match stack.len() {
+				0 => break Ok(()),
+				1...4 => self.insert_entries_singly(stack)?,
+				_ => self.batch_insert_entries(stack)?,
+			}
 		}
 	}
 
@@ -450,31 +464,30 @@ impl SudokuSolver {
 		while let Some(entry) = stack.pop() {
 			let entry_mask = entry.mask();
 			// cell already solved from previous entry in stack, skip
-			if self.cell_poss_digits[entry.cell()].is_empty() { continue }
+			if self.cell_poss_digits[entry.cell()] == Mask::NONE { continue }
 
 			// is entry still possible?
-			if (self.cell_poss_digits[entry.cell()] & entry_mask).is_empty() {
+			if self.cell_poss_digits[entry.cell()] & entry_mask == Mask::NONE {
 				return Err(Unsolvable);
 			}
 
 			self._insert_entry(entry);
 			for &cell in neighbours(entry.cell) {
-				if (entry_mask & self.cell_poss_digits[cell as usize]).is_empty() {
-					continue
+				if entry_mask & self.cell_poss_digits[cell as usize] != Mask::NONE {
+					self.remove_impossibilities(cell, entry_mask, stack)?;
 				};
-				self.remove_impossibilities(cell, entry_mask, stack)?;
 			}
 
 			// found a lot of naked singles, switch to batch insertion
-			if stack.len() > 4 { return self.batch_insert_entries::<InsertDeducedEntries>(stack) }
+			if stack.len() > 4 { return Ok(()) }
 		}
 		Ok(())
 	}
 
-	fn batch_insert_entries<S: InsertionStrategy>(&mut self, stack: &mut Vec<Entry>) -> Result<(), Unsolvable> {
+	fn batch_insert_entries(&mut self, stack: &mut Vec<Entry>) -> Result<(), Unsolvable> {
 		for entry in stack.drain(..) {
 			// cell already solved from previous entry in stack, skip
-			if self.cell_poss_digits[entry.cell()].is_empty() { continue }
+			if self.cell_poss_digits[entry.cell()] == Mask::NONE { continue }
 
 			let entry_mask = entry.mask();
 
@@ -493,14 +506,14 @@ impl SudokuSolver {
 
 		// update cell possibilities from zone masks
 		for cell in 0..81 {
-			if self.cell_poss_digits[cell as usize].is_empty() { continue }
+			if self.cell_poss_digits[cell as usize] == Mask::NONE { continue }
 			let zones_mask = self.zone_solved_digits[row_zone(cell)]
 				| self.zone_solved_digits[col_zone(cell)]
 				| self.zone_solved_digits[field_zone(cell)];
 
 			self.remove_impossibilities(cell, zones_mask, stack)?;
 		}
-		S::execute_after_insertion(self, stack)
+		Ok(())
 	}
 
 	#[inline]
@@ -528,14 +541,14 @@ impl SudokuSolver {
 
 			for &cell in cells {
 				let mask = self.cell_poss_digits[cell as usize];
-				
+
 				if let Ok(maybe_unique) = (mask & singles).unique_num() {
 					let num = maybe_unique.ok_or(Unsolvable)?;
 					stack.push(Entry{ cell: cell, num: num } );
 
 					// mark num as found
 					singles.remove(Mask::from_num(num));
-					
+
 					// everything in this zone found
 					// return to insert numbers immediately
 					if singles.is_empty() { return Ok(()) }
@@ -585,29 +598,15 @@ impl SudokuSolver {
 		Ok(())
 	}
 
-	pub fn solve_one(self) -> Option<Sudoku> {
-		self.solve_at_most(1)
-			.into_iter()
-			.next()
-	}
-
-	pub fn solve_unique(self) -> Option<Sudoku> {
-		let result = self.solve_at_most(2);
-		if result.len() == 1 {
-			result.into_iter().next()
-		} else {
-			None
-		}
-	}
-
-	pub fn solve_at_most(self, limit: usize) -> Vec<Sudoku> {
+	pub fn solve_at_most(self, mut stack: Vec<Entry>, limit: usize) -> Vec<Sudoku> {
 		let mut solutions = vec![];
-		let mut stack = Vec::with_capacity(81);
 		let _ = self._solve_at_most(limit, &mut stack, &mut solutions);
 		solutions
 	}
 
 	fn _solve_at_most(mut self, limit: usize, stack: &mut Vec<Entry>, solutions: &mut Vec<Sudoku>) -> Result<(), Unsolvable> {
+		// insert and deduce in a loop
+		// backtrack via recursion when no more deductions are found
 		loop {
 			self.insert_entries(stack)?;
 			if self.is_solved() {
@@ -626,30 +625,6 @@ impl SudokuSolver {
 
 			self.remove_impossibilities(entry.cell, entry.mask(), stack)?;
 		}
-	}
-}
-
-trait InsertionStrategy {
-	fn execute_after_insertion(solver: &mut SudokuSolver, stack: &mut Vec<Entry>) -> Result<(), Unsolvable>;
-}
-
-struct InsertDeducedEntries;
-struct InsertGivenOnly;
-
-impl InsertionStrategy for InsertDeducedEntries {
-	#[inline(always)]
-	fn execute_after_insertion(solver: &mut SudokuSolver, stack: &mut Vec<Entry>) -> Result<(), Unsolvable> {
-		match stack.is_empty() {
-			true => Ok(()),
-			false => solver.insert_entries(stack),
-		}
-	}
-}
-
-impl InsertionStrategy for InsertGivenOnly {
-	#[inline(always)]
-	fn execute_after_insertion(_: &mut SudokuSolver, _: &mut Vec<Entry>) -> Result<(), Unsolvable> {
-		Ok(())
 	}
 }
 

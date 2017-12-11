@@ -25,15 +25,20 @@
 //! 5_3|7__|__8
 //! 47_|__1|___";
 //!
-//! // this parser ignores everything except '.', '_', '0' and '1'-'9' as well as non-full lines
-//! // will be able to deal with most well-formed block formats
-//! let sudoku = Sudoku::from_str_block_permissive(sudoku_block).unwrap();
+//! let sudoku_line = "...2...633....54.1..1..398........9....538....3........263..5..5.37....847...1...";
 //!
-//! // this parser enforces consistency and accepts only a few formats
-//! let sudoku = Sudoku::from_str_block(sudoku_block).unwrap();
-//! match sudoku.solve_unique() {
-//!     Some(solution) => println!("{}", solution),
-//!     None           => println!("No unique solution."),
+//! // Sudokus can be created from &str's in both block or line formats or directly from bytes.
+//! let sudoku = Sudoku::from_str_block_permissive(sudoku_block).unwrap();
+//! let sudoku = Sudoku::from_str_line(sudoku_line).unwrap();
+//! // Sudoku::from_bytes(some_bytes_arr);
+//! // Sudoku::from_bytes_slice(some_slice);
+//!
+//! // Solve, print or convert the sudoku to another format
+//! if let Some(solution) = sudoku.solve_unique() {
+//!     println!("{}", solution);
+//!     println!("{}", solution.to_str_line());
+//!
+//!     let cell_contents: [u8; 81] = solution.to_bytes();
 //! }
 //! ```
 extern crate core;

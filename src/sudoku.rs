@@ -347,7 +347,7 @@ impl Sudoku {
 
 	/// Returns a byte array for the sudoku.
 	/// Empty cells are denoted by 0, clues by the numbers 1-9.
-	pub fn into_bytes(self) -> [u8; 81] {
+	pub fn to_bytes(self) -> [u8; 81] {
 		self.0
 	}
 

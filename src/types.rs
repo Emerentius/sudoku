@@ -110,6 +110,8 @@ impl fmt::Display for LineFormatParseError {
 // NOTE: !mask is a leaky abstraction, see comment above trait implementation
 #[derive(Clone, Copy, Eq, Debug)]
 pub(crate) struct Mask<T>(u16, ::std::marker::PhantomData<T>);
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub(crate) struct MaskIter<T>(Mask<T>);
 
 impl<T> Mask<T> {
     pub const ALL: Mask<T> = Mask(0b_0001_1111_1111, ::std::marker::PhantomData);
@@ -138,6 +140,11 @@ impl<T> Mask<T> {
     #[inline(always)]
     pub fn remove(&mut self, other: Self) {
         self.0 &= !other.0;
+    }
+
+    #[inline(always)]
+    pub fn iter(self) -> MaskIter<T> {
+        MaskIter(self)
     }
 }
 
@@ -171,6 +178,29 @@ impl Mask<Digit> {
         debug_assert!(self.0 != 0);
         16 - self.0.leading_zeros() as u8
         //self.0.trailing_zeros() as u8 + 1
+    }
+}
+
+impl<T> MaskIter<T> {
+    /// Return remaining possibilities in mask form
+    #[allow(unused)]
+    pub fn to_mask(self) -> Mask<T> {
+        self.0
+    }
+}
+
+impl Iterator for MaskIter<Digit> {
+    type Item = u8;
+
+    fn next(&mut self) -> Option<u8> {
+        match (self.0).0 {
+            0 => None,
+            _ => {
+                let num = self.0.one_possibility();
+                self.0.remove(Mask::from_num(num));
+                Some(num)
+            },
+        }
     }
 }
 

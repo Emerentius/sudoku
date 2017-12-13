@@ -116,3 +116,10 @@ fn hard_sudokus_solve_at_most_100(b: &mut test::Bencher) {
 		for sudoku in sudokus_1000.iter().cloned() { sudoku.solve_at_most(100); }
 	})
 }
+
+#[bench]
+fn generate_filled_sudoku(b: &mut test::Bencher) {
+	b.iter(||
+		Sudoku::generate_filled()
+	)
+}

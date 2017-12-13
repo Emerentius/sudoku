@@ -1,3 +1,5 @@
+use rand::Rng;
+
 use consts::*;
 use positions::*;
 use types::{Mask, Digit, Array81, Entry, PubEntry, BlockFormatParseError, LineFormatParseError, Unsolvable, NotEnoughRows};
@@ -62,6 +64,25 @@ impl fmt::Debug for Sudoku {
 pub type Iter<'a> = iter::Map<slice::Iter<'a, u8>, fn(&u8)->Option<u8>>; // Iter over Sudoku cells
 
 impl Sudoku {
+	/// Generate a random, solved sudoku
+	/// Any valid sudoku can occur with equal probability
+	pub fn generate_filled() -> Self {
+		// fill first row with a permutation of 1...9
+		// not necessary, but ~15% faster
+		let mut stack = Vec::with_capacity(81);
+		let mut perm = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+		::rand::thread_rng().shuffle(&mut perm);
+
+		stack.extend(
+			(0..9).zip(perm.iter())
+				.map(|(cell, &num)| Entry { cell, num })
+		);
+
+		SudokuSolver::new()
+			._randomized_solve_one(&mut stack)
+			.unwrap()
+	}
+
 	/// Creates a sudoku from a byte slice.
 	/// All numbers must be below 10. Empty cells are denoted by 0, clues by the numbers 1-9.
 	/// The slice must be of length 81.
@@ -554,7 +575,11 @@ impl SudokuSolver {
 		Ok(())
 	}
 
-	fn find_good_guess(&mut self) -> Entry {
+	// and save where the search ended up last time
+	// to have a better chance of finding minimal cells quickly
+	// on the next round
+	#[inline(always)]
+	fn find_cell_min_poss(&mut self) -> u8 {
 		let mut min_possibilities = 10;
 		let mut best_cell = 100;
 
@@ -576,8 +601,20 @@ impl SudokuSolver {
 			}
 			self.last_cell = cell;
 		}
+		best_cell
+	}
 
+	fn find_good_guess(&mut self) -> Entry {
+		let best_cell = self.find_cell_min_poss();
 		let num = self.cell_poss_digits[best_cell as usize].one_possibility();
+		Entry{ num: num, cell: best_cell }
+	}
+
+	fn find_good_random_guess(&mut self) -> Entry {
+		let best_cell = self.find_cell_min_poss();
+		let poss_digits = self.cell_poss_digits[best_cell as usize];
+		let choice = ::rand::thread_rng().gen_range(0, poss_digits.n_possibilities());
+		let num = poss_digits.iter().nth(choice as usize).unwrap();
 		Entry{ num: num, cell: best_cell }
 	}
 
@@ -616,6 +653,31 @@ impl SudokuSolver {
 			let _ = self.clone()._solve_at_most(limit, stack, solutions);
 			stack.clear();
 			if solutions.len() == limit { break Ok(()) }
+
+			self.remove_impossibilities(entry.cell, entry.mask(), stack)?;
+		}
+	}
+
+	// for generation of random, filled sudokus
+	fn _randomized_solve_one(mut self, stack: &mut Vec<Entry>) -> Result<Sudoku, Unsolvable> {
+		// insert and deduce in a loop
+		// do a random guess when no more deductions are found
+		// backtrack on error (via recursion)
+		loop {
+			self.insert_entries(stack)?;
+			if self.is_solved() {
+				return Ok(self.grid)
+			}
+
+			self.find_hidden_singles(stack)?;
+			if !stack.is_empty() { continue }
+
+			let entry = self.find_good_random_guess();
+			stack.push(entry);
+			if let filled_sudoku @ Ok(_) = self.clone()._randomized_solve_one(stack) {
+				return filled_sudoku;
+			}
+			stack.clear();
 
 			self.remove_impossibilities(entry.cell, entry.mask(), stack)?;
 		}

@@ -42,6 +42,7 @@
 //! }
 //! ```
 extern crate core;
+extern crate rand;
 
 mod consts;
 mod types;

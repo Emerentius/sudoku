@@ -112,7 +112,7 @@ impl fmt::Display for LineFormatParseError {
 pub(crate) struct Mask<T>(u16, ::std::marker::PhantomData<T>);
 
 impl<T> Mask<T> {
-    pub const ALL: Mask<T> = Mask(0b_1_1111_1111, ::std::marker::PhantomData);
+    pub const ALL: Mask<T> = Mask(0b_0001_1111_1111, ::std::marker::PhantomData);
     pub const NONE: Mask<T> = Mask(0, ::std::marker::PhantomData);
 
     #[inline(always)]
@@ -174,7 +174,7 @@ impl Mask<Digit> {
     }
 }
 
-// NOTE: a common operation is 
+// NOTE: a common operation is
 //       some_mask &= !mask, where some_mask doesn't have the high bits set
 //       use .without() (owned) or .remove() (referenced) to avoid masking the high bits off
 //       for the negation. They won't be set anyway in `some_mask`.
@@ -182,7 +182,7 @@ impl<T> ::std::ops::Not for Mask<T> {
 	type Output = Self;
     #[inline(always)]
 	fn not(self) -> Self {
-		Mask::new(!self.0 & 0b_1_1111_1111)
+		Mask::new(!self.0 & 0b_0001_1111_1111)
 	}
 }
 
@@ -219,14 +219,14 @@ impl_bitops_assign!(::std::ops::BitXorAssign, bitxor_assign);
 ////////////////////////////////////////////////////////////////////////////////
 
 // Pure boilerplate. Just an array of size 81.
-#[derive(Copy)]
+#[derive(Copy, Clone)]
 pub(crate) struct Array81<T>(pub [T; N_CELLS]);
 
-
+/*
 impl<T: Copy> Clone for Array81<T> {
     fn clone(&self) -> Self { *self }
 }
-
+*/
 impl<T: fmt::Debug> fmt::Debug for Array81<T> {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> Result<(), ::std::fmt::Error> {
         (&self.0[..]).fmt(f)

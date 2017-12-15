@@ -116,7 +116,7 @@ fn correct_solution_easy_sudokus() {
     let sudokus = read_sudokus( include_str!("../sudokus/Lines/easy_sudokus.txt") );
     let solved_sudokus = read_sudokus( include_str!("../sudokus/Lines/solved_easy_sudokus.txt") );
     for (i, (sudoku, solved_sudoku)) in sudokus.into_iter().zip(solved_sudokus).enumerate() {
-        if let Some(solution) = sudoku.clone().solve_unique() {
+        if let Some(solution) = sudoku.solve_unique() {
             assert_eq!( solved_sudoku, solution);
         } else {
             panic!("Found multiple solutions to sudoku with unique solution or none at all for {}th sudoku:\n{}", i, sudoku);
@@ -129,7 +129,7 @@ fn correct_solution_medium_sudokus() {
     let sudokus = read_sudokus( include_str!("../sudokus/Lines/medium_sudokus.txt") );
     let solved_sudokus = read_sudokus( include_str!("../sudokus/Lines/solved_medium_sudokus.txt") );
     for (i, (sudoku, solved_sudoku)) in sudokus.into_iter().zip(solved_sudokus).enumerate() {
-        if let Some(solution) = sudoku.clone().solve_unique() {
+        if let Some(solution) = sudoku.solve_unique() {
             assert_eq!( solved_sudoku, solution);
         } else {
             panic!("Found multiple solutions to sudoku with unique solution or none at all for {}th sudoku:\n{}", i, sudoku);
@@ -142,7 +142,7 @@ fn correct_solution_hard_sudokus() {
     let sudokus = read_sudokus( include_str!("../sudokus/Lines/hard_sudokus.txt") );
     let solved_sudokus = read_sudokus( include_str!("../sudokus/Lines/solved_hard_sudokus.txt") );
     for (i, (sudoku, solved_sudoku)) in sudokus.into_iter().zip(solved_sudokus).enumerate() {
-        if let Some(solution) = sudoku.clone().solve_unique() {
+        if let Some(solution) = sudoku.solve_unique() {
             assert_eq!( solved_sudoku, solution);
         } else {
             panic!("Found multiple solutions to sudoku with unique solution or none at all for {}th sudoku:\n{}", i, sudoku);

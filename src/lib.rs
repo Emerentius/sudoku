@@ -1,5 +1,5 @@
 #![warn(missing_docs)]
-
+#![cfg_attr(feature = "cargo-clippy", allow(inline_always, match_bool, needless_pass_by_value, wrong_self_convention))]
 //! The Sudoku library
 //!
 //! ## Overview

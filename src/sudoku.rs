@@ -42,12 +42,12 @@ use std::{fmt, slice, iter};
 /// ```
 ///
 /// `'_'`, `'.'` and `'0'` are accepted interchangeably as unfilled cells
-#[derive(Copy)]
+#[derive(Copy, Clone)]
 pub struct Sudoku(pub(crate) [u8; 81]);
 
 impl PartialEq for Sudoku {
 	fn eq(&self, other: &Sudoku) -> bool {
-		&self.0[..] == &other.0[..]
+		self.0[..] == other.0[..]
 	}
 }
 
@@ -56,12 +56,6 @@ impl Eq for Sudoku {}
 impl fmt::Debug for Sudoku {
 	fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
 		self.0.fmt(fmt)
-	}
-}
-
-impl Clone for Sudoku {
-	fn clone(&self) -> Self {
-		*self
 	}
 }
 
@@ -610,7 +604,7 @@ impl SudokuSolver {
 		loop {
 			self.insert_entries(stack)?;
 			if self.is_solved() {
-				solutions.push(self.grid.clone());
+				solutions.push(self.grid);
 				break Ok(())
 			}
 
@@ -630,12 +624,12 @@ impl SudokuSolver {
 
 /// Container for the &str representation of a sudoku
 // MUST ALWAYS contain valid utf8
-#[derive(Copy)]
+#[derive(Copy, Clone)]
 pub struct SudokuLine([u8; 81]);
 
 impl PartialEq for SudokuLine {
 	fn eq(&self, other: &SudokuLine) -> bool {
-		&self.0[..] == &other.0[..]
+		self.0[..] == other.0[..]
 	}
 }
 
@@ -644,12 +638,6 @@ impl Eq for SudokuLine {}
 impl fmt::Debug for SudokuLine {
 	fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
 		self.0.fmt(fmt)
-	}
-}
-
-impl Clone for SudokuLine {
-	fn clone(&self) -> Self {
-		*self
 	}
 }
 

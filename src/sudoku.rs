@@ -433,6 +433,7 @@ pub(crate) struct SudokuSolver {
 }
 
 impl SudokuSolver {
+	#[inline]
 	fn new() -> SudokuSolver {
 		SudokuSolver {
 			grid: Sudoku([0; 81]),
@@ -452,6 +453,7 @@ impl SudokuSolver {
 		stack
 	}
 
+	#[inline]
 	fn _insert_entry(&mut self, entry: Entry) {
 		self.n_solved_cells += 1;
 		self.grid.0[entry.cell()] = entry.num;
@@ -461,6 +463,7 @@ impl SudokuSolver {
 		self.zone_solved_digits[entry.field() as usize +FIELD_OFFSET] |= entry.mask();
 	}
 
+	#[inline(always)]
 	fn insert_entries(&mut self, stack: &mut Vec<Entry>) -> Result<(), Unsolvable> {
 		loop {
 			match stack.len() {
@@ -536,6 +539,7 @@ impl SudokuSolver {
 		self.n_solved_cells == 81
 	}
 
+	#[inline(always)]
 	fn find_hidden_singles(&mut self, stack: &mut Vec<Entry>) -> Result<(), Unsolvable> {
 		for zone in 0..27 {
 			let mut unsolved = Mask::NONE;
@@ -578,7 +582,7 @@ impl SudokuSolver {
 	// and save where the search ended up last time
 	// to have a better chance of finding minimal cells quickly
 	// on the next round
-	#[inline(always)]
+	#[inline]
 	fn find_cell_min_poss(&mut self) -> u8 {
 		let mut min_possibilities = 10;
 		let mut best_cell = 100;
@@ -604,12 +608,14 @@ impl SudokuSolver {
 		best_cell
 	}
 
+	#[inline(always)]
 	fn find_good_guess(&mut self) -> Entry {
 		let best_cell = self.find_cell_min_poss();
 		let num = self.cell_poss_digits[best_cell as usize].one_possibility();
 		Entry{ num: num, cell: best_cell }
 	}
 
+	#[inline(always)]
 	fn find_good_random_guess(&mut self) -> Entry {
 		let best_cell = self.find_cell_min_poss();
 		let poss_digits = self.cell_poss_digits[best_cell as usize];

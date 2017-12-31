@@ -4,7 +4,7 @@ use consts::*;
 use positions::*;
 use types::{Mask, Digit, Array81, Entry, PubEntry, BlockFormatParseError, LineFormatParseError, Unsolvable, NotEnoughRows};
 
-use std::{fmt, slice, iter};
+use std::{fmt, slice, iter, hash, cmp};
 
 /// The main structure exposing all the functionality of the library
 /// Sudokus can be parsed in either the line format or the block format
@@ -50,6 +50,30 @@ pub struct Sudoku(pub(crate) [u8; 81]);
 impl PartialEq for Sudoku {
 	fn eq(&self, other: &Sudoku) -> bool {
 		self.0[..] == other.0[..]
+	}
+}
+
+/// test
+impl PartialOrd for Sudoku {
+	fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+		// deref into &str and cmp
+		self.0.partial_cmp(&other.0)
+	}
+}
+
+impl Ord for Sudoku {
+	fn cmp(&self, other: &Self) -> cmp::Ordering {
+		// deref into &str and cmp
+		self.0.cmp(&other.0)
+	}
+}
+
+impl hash::Hash for Sudoku {
+    fn hash<H>(&self, state: &mut H)
+    where
+        H: hash::Hasher
+	{
+		self.0.hash(state)
 	}
 }
 
@@ -725,6 +749,29 @@ impl SudokuSolver {
 // MUST ALWAYS contain valid utf8
 #[derive(Copy, Clone)]
 pub struct SudokuLine([u8; 81]);
+
+impl PartialOrd for SudokuLine {
+	fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+		// deref into &str and cmp
+		(**self).partial_cmp(other)
+	}
+}
+
+impl Ord for SudokuLine {
+	fn cmp(&self, other: &Self) -> cmp::Ordering {
+		// deref into &str and cmp
+		(**self).cmp(other)
+	}
+}
+
+impl hash::Hash for SudokuLine {
+    fn hash<H>(&self, state: &mut H)
+    where
+        H: hash::Hasher
+	{
+		(**self).hash(state)
+	}
+}
 
 impl PartialEq for SudokuLine {
 	fn eq(&self, other: &SudokuLine) -> bool {

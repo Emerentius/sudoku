@@ -252,11 +252,6 @@ impl_bitops_assign!(::std::ops::BitXorAssign, bitxor_assign);
 #[derive(Copy, Clone)]
 pub(crate) struct Array81<T>(pub [T; N_CELLS]);
 
-/*
-impl<T: Copy> Clone for Array81<T> {
-    fn clone(&self) -> Self { *self }
-}
-*/
 impl<T: fmt::Debug> fmt::Debug for Array81<T> {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> Result<(), ::std::fmt::Error> {
         (&self.0[..]).fmt(f)

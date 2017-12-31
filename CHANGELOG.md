@@ -20,9 +20,15 @@ Version 0.3.2 (2017-04-18)
   but solvable through naked single tactics alone
 
 Version 0.4.0 (2017-12-11)
---------------------------
+==========================
 * Changed parser functions for `Sudoku`
   - Added `from_str_line()` for parsing sudokus in line format. Also added `to_str_line()` for a printable representation of the same.
   - Split `from_str()` into `from_str_block()` and `from_str_block_permissive()`. As the names suggest, the latter is much more forgiving than the former but will also fail in strange ways on malformed data.
 * Added `from_bytes()`, `from_bytes_slice()`, `into_bytes()` to `Sudoku` for construction and deconstruction for byte arrays and slices. Errors will be revisited.
 * Added new module `parser_errors`
+
+Version 0.4.1 (2018-01-01)
+--------------------------
+* Add functions for generation of random sudokus: `generate_filled()` and `generate_unique()`
+  for random solved and unsolved but uniquely solvable sudokus respectively.
+* Implement `Hash`, `PartialOrd`, `Ord` for `Sudoku` and `SudokuLine`.

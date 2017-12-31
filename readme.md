@@ -48,5 +48,7 @@ _26|3__|5__
 # Planned
 
 - [ ] Sudoku generation
+    - [X] generate uniquely solvable sudokus
+    - [ ] grade difficulty
 - [ ] Step-by-step hinting & solving with pluggable strategies
 - [ ] Detailed errors for invalid sudokus

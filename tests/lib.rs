@@ -150,6 +150,32 @@ fn correct_solution_hard_sudokus() {
     }
 }
 
+// this test is probabilistic in nature
+// if an error occurs, note down the sudoku that it generated
+#[test]
+fn generate_filled_sudoku_correctness() {
+    for _ in 0..1000 {
+        let sudoku = Sudoku::generate_filled();
+        let solved_sudoku = sudoku.solve_one();
+        if solved_sudoku.is_none() {
+            panic!("Randomly generated an invalid sudoku. Please save the sudoku for debugging: {}", sudoku.to_str_line());
+        }
+    }
+}
+
+// this test is probabilistic in nature
+// if an error occurs, note down the sudoku that it generated
+#[test]
+fn generate_unique_sudoku_uniqueness() {
+    for _ in 0..100 {
+        let sudoku = Sudoku::generate_unique();
+        let solved_sudoku = sudoku.solve_unique();
+        if solved_sudoku.is_none() {
+            panic!("Randomly generated a non-proper sudoku. Please save the sudoku for debugging: {}", sudoku.to_str_line());
+        }
+    }
+}
+
 #[test]
 fn parse_permissive() {
     let sudokus = [

@@ -119,7 +119,10 @@ fn hard_sudokus_solve_at_most_100(b: &mut test::Bencher) {
 
 #[bench]
 fn generate_filled_sudoku(b: &mut test::Bencher) {
-	b.iter(||
-		Sudoku::generate_filled()
-	)
+	b.iter(Sudoku::generate_filled)
+}
+
+#[bench]
+fn generate_unique_sudoku(b: &mut test::Bencher) {
+	b.iter(Sudoku::generate_unique)
 }

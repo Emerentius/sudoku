@@ -112,6 +112,15 @@ fn is_solved_on_solved() {
 }
 
 #[test]
+#[should_panic]
+fn solve_unique_multiple_solutions() {
+    // an empty grid
+    // the ultimate sudoku with multiple solutions
+    let sudoku = Sudoku::from_bytes([0; 81]).unwrap();
+    sudoku.solve_unique().unwrap();
+}
+
+#[test]
 fn correct_solution_easy_sudokus() {
     let sudokus = read_sudokus( include_str!("../sudokus/Lines/easy_sudokus.txt") );
     let solved_sudokus = read_sudokus( include_str!("../sudokus/Lines/solved_easy_sudokus.txt") );

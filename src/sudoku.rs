@@ -53,7 +53,8 @@ impl PartialEq for Sudoku {
 	}
 }
 
-/// test
+/// The ordering is lexicographical in the cells of the sudoku
+/// going from left to right, top to bottom
 impl PartialOrd for Sudoku {
 	fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
 		// deref into &str and cmp
@@ -750,6 +751,8 @@ impl SudokuSolver {
 #[derive(Copy, Clone)]
 pub struct SudokuLine([u8; 81]);
 
+/// The ordering is lexicographical in the cells of the sudoku
+/// going from left to right, top to bottom
 impl PartialOrd for SudokuLine {
 	fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
 		// deref into &str and cmp

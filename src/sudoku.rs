@@ -5,6 +5,7 @@ use positions::*;
 use types::{Mask, Digit, Array81, Entry, PubEntry, BlockFormatParseError, LineFormatParseError, Unsolvable, NotEnoughRows};
 
 use std::{fmt, slice, iter, hash, cmp};
+#[cfg(feature="serde")] use ::serde::{de, Serialize, Serializer, Deserialize, Deserializer};
 
 /// The main structure exposing all the functionality of the library
 /// Sudokus can be parsed in either the line format or the block format
@@ -46,6 +47,71 @@ use std::{fmt, slice, iter, hash, cmp};
 /// `'_'`, `'.'` and `'0'` are accepted interchangeably as unfilled cells
 #[derive(Copy, Clone)]
 pub struct Sudoku(pub(crate) [u8; 81]);
+
+#[cfg(feature="serde")]
+impl Serialize for Sudoku {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer
+	{
+		if serializer.is_human_readable() {
+			serializer.serialize_str(&self.to_str_line())
+		} else {
+			serializer.serialize_bytes(&self.0)
+		}
+	}
+}
+
+// Visitors for serde
+#[cfg(feature="serde")] struct ByteSudoku; // 81 byte format
+#[cfg(feature="serde")] struct StrSudoku;  // 81 char format (line sudoku)
+
+#[cfg(feature="serde")]
+impl<'de> de::Visitor<'de> for ByteSudoku {
+	type Value = Sudoku;
+	fn expecting(&self, formatter: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+		write!(formatter, "81 numbers from 0 to 9 inclusive")
+	}
+
+	fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
+	where
+    	E: de::Error,
+	{
+		// FIXME: return proper error
+		Sudoku::from_bytes_slice(v).map_err(|_| {
+			E::custom("byte array has incorrect length or contains numbers not from 0 to 9")
+		})
+	}
+}
+
+#[cfg(feature="serde")]
+impl<'de> de::Visitor<'de> for StrSudoku {
+	type Value = Sudoku;
+	fn expecting(&self, formatter: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+		write!(formatter, "81 numbers from 0 to 9 inclusive")
+	}
+
+	fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+	where
+    	E: de::Error,
+	{
+		Sudoku::from_str_line(v).map_err(E::custom)
+	}
+}
+
+#[cfg(feature="serde")]
+impl<'de> Deserialize<'de> for Sudoku {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>
+	{
+		if deserializer.is_human_readable() {
+			deserializer.deserialize_str(StrSudoku)
+		} else {
+			deserializer.deserialize_bytes(ByteSudoku)
+		}
+	}
+}
 
 impl PartialEq for Sudoku {
 	fn eq(&self, other: &Sudoku) -> bool {

@@ -32,3 +32,7 @@ Version 0.4.1 (2018-01-01)
 * Add functions for generation of random sudokus: `generate_filled()` and `generate_unique()`
   for random solved and unsolved but uniquely solvable sudokus respectively.
 * Implement `Hash`, `PartialOrd`, `Ord` for `Sudoku` and `SudokuLine`.
+
+Unreleased
+----------
+* Optional `serde` support

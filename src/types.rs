@@ -84,20 +84,18 @@ pub enum LineFormatParseError {
     MissingCommentDelimiter,
 }
 
-/*
 impl fmt::Display for LineFormatParseError {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         use self::LineFormatParseError::*;
 
-        try!(write!(f, "Error parsing sudoku: "));
         match *self {
-            InvalidLineLength(line_nr) => write!(f, "line number {} should contain exactly 9 characters", line_nr),
-            InvalidNumber(line_nr, chr) => write!(f, "line number {} contains the invalid character `{}`", line_nr, chr),
-            NotEnoughRows => write!(f, "the input should contain exactly 9 rows")
+            InvalidEntry(PubEntry { cell, ch }) => write!(f, "cell {} contains invalid character '{}'", cell, ch),
+            NotEnoughCells(cells) => write!(f, "sudoku contains {} cells instead of required 81", cells),
+            TooManyCells => write!(f, "sudoku contains more than 81 cells or is missing comment delimiter"),
+            MissingCommentDelimiter => write!(f, "missing comment delimiter"),
         }
     }
 }
-*/
 ////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)] pub(crate) struct Position;

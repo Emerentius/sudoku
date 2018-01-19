@@ -10,3 +10,10 @@ authors = ["Emerentius"]
 [dependencies]
 rand = "0.3.18"
 serde = { version = "1.0.27", optional = true }
+
+[dev-dependencies]
+criterion = "0.1.2"
+
+[[bench]]
+name = "criterion"
+harness = false

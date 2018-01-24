@@ -887,7 +887,7 @@ struct SudokuSolver2 {
 	bands: [u32; 27], // 9 digits, 3 rows each
 	prev_bands: [u32; 27],
 	unsolved_cells: [u32; 3], // 81 bits used
-	unsolved_rows: [u32; 3], // 3 bits used per band
+	unsolved_rows: [u32; 3], // 27 slices, 3 bits per slice
 	pairs: [u32; 3], // cells with only 2 possibilites, 81 bits used
 }
 
@@ -989,7 +989,7 @@ impl SudokuSolver2 {
 			let mut r1 = 0; // exists
 			let mut r2 = 0; // exists twice
 			let mut r3 = 0; // exists thrice or more
-
+			////////////// loop
 			let mut slice = band;
 
 			while slice < 27 {
@@ -1001,7 +1001,45 @@ impl SudokuSolver2 {
 
 				slice += 3;
 			}
+			///////////// unrolled loop
+			// seems to be harmful
+			/*
+			let mut band_mask = self.bands[band as usize];
+			r1 |= band_mask;
+			band_mask = self.bands[3 + band as usize];
+			r2 |= r1 & band_mask;
+			r1 |= band_mask;
+			band_mask = self.bands[6 + band as usize];
+			r3 |= r2 & band_mask;
+			r2 |= r1 & band_mask;
+			r1 |= band_mask;
+			band_mask = self.bands[9 + band as usize];
+			r3 |= r2 & band_mask;
+			r2 |= r1 & band_mask;
+			r1 |= band_mask;
+			band_mask = self.bands[12 + band as usize];
+			r3 |= r2 & band_mask;
+			r2 |= r1 & band_mask;
+			r1 |= band_mask;
+			band_mask = self.bands[15 + band as usize];
+			r3 |= r2 & band_mask;
+			r2 |= r1 & band_mask;
+			r1 |= band_mask;
+			band_mask = self.bands[18 + band as usize];
+			r3 |= r2 & band_mask;
+			r2 |= r1 & band_mask;
+			r1 |= band_mask;
+			band_mask = self.bands[21 + band as usize];
+			r3 |= r2 & band_mask;
+			r2 |= r1 & band_mask;
+			r1 |= band_mask;
+			band_mask = self.bands[24 + band as usize];
+			r3 |= r2 & band_mask;
+			r2 |= r1 & band_mask;
+			r1 |= band_mask;
+			*/
 
+			///////////////////
 			if r1 != ALL {
 				return Err(Unsolvable);
 			}
@@ -1020,7 +1058,7 @@ impl SudokuSolver2 {
 				r1 ^= lowest_bit;
 				for digit in 0..9u32 {
 					if self.bands[(digit*3 + band) as usize] & lowest_bit != 0 {
-						self._set_solved_mask(digit*3 + band, lowest_bit)?; // ORIGBUG: no early return?
+						self._set_solved_mask(digit*3 + band, lowest_bit); // ORIGBUG: no early return? 2 other places
 						continue 'r1;
 					}
 				}
@@ -1076,11 +1114,175 @@ impl SudokuSolver2 {
 		self.bands[x as usize] &= *cl;
 	}
 
+	// seems correct
+	#[inline(always)]
+	fn upwcl_slice(&mut self, cl: &mut u32, a: u32, s: u32, args: [u32; 9]) {
+		*cl = !(a & ROW_MASK[s as usize]);
+		self.unsolved_cells[args[0] as usize] &= *cl;
+		/*
+		self.bands[args[1] as usize] &= *cl;
+		self.bands[args[2] as usize] &= *cl;
+		self.bands[args[3] as usize] &= *cl;
+		self.bands[args[4] as usize] &= *cl;
+		self.bands[args[5] as usize] &= *cl;
+		self.bands[args[6] as usize] &= *cl;
+		self.bands[args[7] as usize] &= *cl;
+		self.bands[args[8] as usize] &= *cl;
+		*/
+		for &idx in &args[1..] {
+			self.bands[idx as usize] &= *cl;
+		}
+	}
+
 	fn update(&mut self) -> Result<(), Unsolvable> {
 		let mut shrink: u32 = 1;
 		let (mut s, mut a, mut b, mut c, mut cl) = (0, 0, 0, 0, 0);
 		while shrink != 0 {
 			shrink = 0;
+			// -------------------- loop --------------------------
+			// part is band? maybe, the real bands not's called band elsewhere (as of when the terms band, slice are still used)
+			/*
+			for part in 0..3u32 {
+				if self.unsolved_rows[part as usize] == 0 { continue }
+				let mut ar = self.unsolved_rows[part as usize];
+				for digit_offset in 0..3u32 {
+					let digit = part*3 + digit_offset;
+					if (ar >> (part*3)) & LOW9 == 0 { continue }
+					for slice_offset in 0..3u32 {
+						let idx = (digit * 3 + slice_offset) as usize;
+						if self.bands[idx] != self.prev_bands[idx] {
+							self.updn(&mut shrink, &mut a, &mut b, &mut c, &mut s, digit,
+								slice_offset, (slice_offset + 1) % 3, (slice_offset + 2) % 3)?;
+
+							let ar_offset = (digit_offset * 3 + slice_offset)*3;
+							if (ar >> ar_offset) & 0b111 != s {
+								ar &= (ALL ^ (0b111 << ar_offset)) | s;
+
+								// actually, first argument (left out here) is not that special
+								let mut args = [
+									slice_offset,
+									slice_offset + 3,
+									slice_offset + 6,
+									slice_offset + 9,
+									slice_offset + 12,
+									slice_offset + 15,
+									slice_offset + 18,
+									slice_offset + 21,
+								];
+								args[digit as usize..].iter_mut()
+									.for_each(|num| {
+										*num += 3;
+									});
+								self.upwcl(&mut cl, a, s,
+									slice_offset,
+									args[0],
+									args[1],
+									args[2],
+									args[3],
+									args[4],
+									args[5],
+									args[6],
+									args[7],
+								);
+							}
+						}
+					}
+				}
+				self.unsolved_rows[part as usize] = ar;
+			}
+			*/
+			/*
+			for part in 0..3 {
+				if self.unsolved_rows[part as usize] == 0 { continue }
+				let mut ar = self.unsolved_rows[part as usize];
+				////////////////// DIGIT 0
+				if ar & LOW9 != 0 {
+					let digit = 0 + part*3;
+					if self.bands[digit as usize * 3+0] != self.prev_bands[digit as usize * 3+0] {
+						self.updn(&mut shrink, &mut a, &mut b, &mut c, &mut s, digit, 0, 1, 2)?;
+						if ar & 0b111 != s {
+							ar &= 0o777_777_770 | s;
+							self.upwcl_slice(&mut cl, a, s, UPWCL_ARGS[3*digit as usize + 0]);
+						}
+					}
+
+					if self.bands[digit as usize * 3+1] != self.prev_bands[digit as usize * 3+1] {
+						self.updn(&mut shrink, &mut a, &mut b, &mut c, &mut s, digit, 1, 0, 2)?;
+						if (ar >> 3) & 0b111 != s {
+							ar &= 0o777_777_707 | (s << 3);
+							self.upwcl_slice(&mut cl, a, s, UPWCL_ARGS[3*digit as usize + 1]);
+						}
+					}
+
+					if self.bands[digit as usize * 3+2] != self.prev_bands[digit as usize * 3+2] {
+						self.updn(&mut shrink, &mut a, &mut b, &mut c, &mut s, digit, 2, 0, 1)?;
+						if (ar >> 6) & 0b111 != s {
+							ar &= 0o777_777_077 | (s << 6);
+							self.upwcl_slice(&mut cl, a, s, UPWCL_ARGS[3*digit as usize + 2]);
+						}
+					}
+				}
+
+				////////////////// DIGIT 1
+				if (ar >> 9) & LOW9 != 0 {
+					let digit = 1 + part*3;
+					if self.bands[digit as usize * 3+0] != self.prev_bands[digit as usize * 3+0] {
+						self.updn(&mut shrink, &mut a, &mut b, &mut c, &mut s, digit, 0, 1, 2)?;
+						if (ar >> 9) & 0b111 != s {
+							ar &= 0o777_770_777 | (s << 9);
+							self.upwcl_slice(&mut cl, a, s, UPWCL_ARGS[3*digit as usize + 0]);
+						}
+					}
+
+					if self.bands[digit as usize * 3+1] != self.prev_bands[digit as usize * 3+1] {
+						self.updn(&mut shrink, &mut a, &mut b, &mut c, &mut s, digit, 1, 0, 2)?;
+						if (ar >> 12) & 0b111 != s {
+							ar &= 0o777_707_777 | (s << 12);
+							self.upwcl_slice(&mut cl, a, s, UPWCL_ARGS[3*digit as usize + 1]);
+						}
+					}
+
+					if self.bands[digit as usize * 3+2] != self.prev_bands[digit as usize * 3+2] {
+						self.updn(&mut shrink, &mut a, &mut b, &mut c, &mut s, digit, 2, 0, 1)?;
+						if (ar >> 15) & 0b111 != s {
+							ar &= 0o777_077_777 | (s << 15);
+							self.upwcl_slice(&mut cl, a, s, UPWCL_ARGS[3*digit as usize + 2]);
+						}
+					}
+				}
+
+				////////////////// DIGIT 2
+				if (ar >> 18) & LOW9 != 0 {
+					let digit = 2 + part*3;
+					if self.bands[digit as usize * 3+0] != self.prev_bands[digit as usize * 3+0] {
+						self.updn(&mut shrink, &mut a, &mut b, &mut c, &mut s, digit, 0, 1, 2)?;
+						if (ar >> 18) & 0b111 != s {
+							ar &= 0o770_777_777 | (s << 18);
+							self.upwcl_slice(&mut cl, a, s, UPWCL_ARGS[3*digit as usize + 0]);
+						}
+					}
+
+					if self.bands[digit as usize * 3+1] != self.prev_bands[digit as usize * 3+1] {
+						self.updn(&mut shrink, &mut a, &mut b, &mut c, &mut s, digit, 1, 0, 2)?;
+						if (ar >> 21) & 0b111 != s {
+							ar &= 0o707_777_777 | (s << 21);
+							self.upwcl_slice(&mut cl, a, s, UPWCL_ARGS[3*digit as usize + 1]);
+						}
+					}
+
+					if self.bands[digit as usize * 3+2] != self.prev_bands[digit as usize * 3+2] {
+						self.updn(&mut shrink, &mut a, &mut b, &mut c, &mut s, digit, 2, 0, 1)?;
+						if (ar >> 24) & 0b111 != s {
+							ar &= 0o077_777_777 | (s << 24);
+							self.upwcl_slice(&mut cl, a, s, UPWCL_ARGS[3*digit as usize + 2]);
+						}
+					}
+				}
+
+				self.unsolved_rows[part as usize] = ar;
+			}
+			*/
+			// ------------------ unrolled ------------------------
 
 			if self.unsolved_rows[0] != 0 {
 				let mut ar = self.unsolved_rows[0];
@@ -1348,6 +1550,8 @@ impl SudokuSolver2 {
 
 				self.unsolved_rows[2] = ar;
 			}
+
+		// ----------------------------------------------------
 		}
 		Ok(())
 	}
@@ -1438,7 +1642,6 @@ impl SudokuSolver2 {
 			for digit in 0..9 {
 				if self.bands[slice] & one_unsolved_cell != 0 {
 					let mut solver = self.clone();
-					// remove possibility for number about to be guessed
 					solver._set_solved_mask(slice as u32, one_unsolved_cell);
 					if solver.full_update(limit, solutions).is_ok() {
 						solver.guess(solver_stack, limit, solutions);
@@ -1733,4 +1936,34 @@ static COLUMN_SINGLE: [u32; 512] = [	// single in column applied to shrinked blo
 
 static ROW_MASK: [u32; 8] = [	// rows where single  found _000 to 111
 	0o777777777, 0o777777000, 0o777000777, 0o777000000, 0o777777, 0o777000, 0o777, 0o0,
+];
+
+static UPWCL_ARGS: [[u32; 9]; 27] = [
+    [0, 3, 6, 9, 12, 15, 18, 21, 24],
+    [1, 4, 7, 10, 13, 16, 19, 22, 25],
+    [2, 5, 8, 11, 14, 17, 20, 23, 26],
+    [0, 0, 6, 9, 12, 15, 18, 21, 24],
+    [1, 1, 7, 10, 13, 16, 19, 22, 25],
+    [2, 2, 8, 11, 14, 17, 20, 23, 26],
+    [0, 0, 3, 9, 12, 15, 18, 21, 24],
+    [1, 1, 4, 10, 13, 16, 19, 22, 25],
+    [2, 2, 5, 11, 14, 17, 20, 23, 26],
+    [0, 0, 3, 6, 12, 15, 18, 21, 24],
+    [1, 1, 4, 7, 13, 16, 19, 22, 25],
+    [2, 2, 5, 8, 14, 17, 20, 23, 26],
+    [0, 0, 3, 6, 9, 15, 18, 21, 24],
+    [1, 1, 4, 7, 10, 16, 19, 22, 25],
+    [2, 2, 5, 8, 11, 17, 20, 23, 26],
+    [0, 0, 3, 6, 9, 12, 18, 21, 24],
+    [1, 1, 4, 7, 10, 13, 19, 22, 25],
+    [2, 2, 5, 8, 11, 14, 20, 23, 26],
+    [0, 0, 3, 6, 9, 12, 15, 21, 24],
+    [1, 1, 4, 7, 10, 13, 16, 22, 25],
+    [2, 2, 5, 8, 11, 14, 17, 23, 26],
+    [0, 0, 3, 6, 9, 12, 15, 18, 24],
+    [1, 1, 4, 7, 10, 13, 16, 19, 25],
+    [2, 2, 5, 8, 11, 14, 17, 20, 26],
+    [0, 0, 3, 6, 9, 12, 15, 18, 21],
+    [1, 1, 4, 7, 10, 13, 16, 19, 22],
+    [2, 2, 5, 8, 11, 14, 17, 20, 23],
 ];

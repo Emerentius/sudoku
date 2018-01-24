@@ -914,9 +914,9 @@ impl SudokuSolver2 {
 	// SetSolvedDigit equivalent
 	fn _insert_entry(&mut self, entry: Entry) -> Result<(), Unsolvable> {
 		//self.grid.0[entry.cell() as usize] = entry.num();
-		let band = entry.cell / 27;
-		let slice = (entry.num() - 1) * 3 + band;
-		let cell_mask = 1 << (entry.cell % 27);
+		let band = BAND_OF_CELL[entry.cell()]; //entry.cell / 27; // BENCHME
+		let slice = DIGIT_TO_BASE[(entry.num() - 1) as usize] + band; //(entry.num() - 1) * 3 + band; // BENCHME
+		let cell_mask = MASK_OF_CELL[entry.cell as usize]; //1 << (entry.cell % 27); // BENCHME
 
 		if self.bands[slice as usize] & cell_mask == 0 {
 			//panic!("{}, {}", entry.cell(), entry.num());
@@ -931,7 +931,7 @@ impl SudokuSolver2 {
 		let mask = !cell_mask;
 		self.unsolved_cells[band as usize] &= mask;
 		let row_bit = (entry.num()-1)*9 + entry.row();
-		self.unsolved_rows[row_bit as usize /27] &= !(1 << (row_bit % 27) );
+		self.unsolved_rows[row_bit as usize /27] &= !(1 << MOD27[row_bit as usize]); // !(1 << (row_bit % 27) ); // BENCHME
 
 		let mut band = band as usize;
 		for _ in 0..9 {
@@ -948,8 +948,8 @@ impl SudokuSolver2 {
 	fn extract_solution(&self) -> Sudoku {
 		let mut sudoku = [0; 81];
 		for cell in 0..81 {
-			let cell_mask = 1 << (cell % 27);
-			let offset = cell / 27;
+			let cell_mask = MASK_OF_CELL[cell as usize]; // 1 << (cell % 27); // BENCHME
+			let offset = BAND_OF_CELL[cell as usize] as usize; //cell / 27; // BENCHME
 			for digit in 0..9 {
 				let idx = digit * 3 + offset;
 				if self.bands[idx] & cell_mask != 0 {
@@ -973,7 +973,7 @@ impl SudokuSolver2 {
 		if self.bands[slice as usize] & mask == 0 {
 			return Err(Unsolvable);
 		}
-		let band = slice % 3;
+		let band = MOD3[slice as usize]; //slice % 3; // BENCHME
 		let cell = band*27 + bit_pos(mask);
 
 		self.bands[slice as usize] &= SELF_MASK[cell as usize];
@@ -989,55 +989,55 @@ impl SudokuSolver2 {
 			let mut r1 = 0; // exists
 			let mut r2 = 0; // exists twice
 			let mut r3 = 0; // exists thrice or more
-			////////////// loop
 			let mut slice = band;
+			if false {
+				////////////// loop
+				while slice < 27 {
+					let band_mask = self.bands[slice as usize];
 
-			while slice < 27 {
-				let band_mask = self.bands[slice as usize];
+					r3 |= r2 & band_mask;
+					r2 |= r1 & band_mask;
+					r1 |= band_mask;
 
+					slice += 3;
+				}
+			} else {
+				///////////// unrolled loop
+				// seems to be harmful
+				let mut band_mask = self.bands[band as usize];
+				r1 |= band_mask;
+				band_mask = self.bands[3 + band as usize];
+				r2 |= r1 & band_mask;
+				r1 |= band_mask;
+				band_mask = self.bands[6 + band as usize];
 				r3 |= r2 & band_mask;
 				r2 |= r1 & band_mask;
 				r1 |= band_mask;
-
-				slice += 3;
+				band_mask = self.bands[9 + band as usize];
+				r3 |= r2 & band_mask;
+				r2 |= r1 & band_mask;
+				r1 |= band_mask;
+				band_mask = self.bands[12 + band as usize];
+				r3 |= r2 & band_mask;
+				r2 |= r1 & band_mask;
+				r1 |= band_mask;
+				band_mask = self.bands[15 + band as usize];
+				r3 |= r2 & band_mask;
+				r2 |= r1 & band_mask;
+				r1 |= band_mask;
+				band_mask = self.bands[18 + band as usize];
+				r3 |= r2 & band_mask;
+				r2 |= r1 & band_mask;
+				r1 |= band_mask;
+				band_mask = self.bands[21 + band as usize];
+				r3 |= r2 & band_mask;
+				r2 |= r1 & band_mask;
+				r1 |= band_mask;
+				band_mask = self.bands[24 + band as usize];
+				r3 |= r2 & band_mask;
+				r2 |= r1 & band_mask;
+				r1 |= band_mask;
 			}
-			///////////// unrolled loop
-			// seems to be harmful
-			/*
-			let mut band_mask = self.bands[band as usize];
-			r1 |= band_mask;
-			band_mask = self.bands[3 + band as usize];
-			r2 |= r1 & band_mask;
-			r1 |= band_mask;
-			band_mask = self.bands[6 + band as usize];
-			r3 |= r2 & band_mask;
-			r2 |= r1 & band_mask;
-			r1 |= band_mask;
-			band_mask = self.bands[9 + band as usize];
-			r3 |= r2 & band_mask;
-			r2 |= r1 & band_mask;
-			r1 |= band_mask;
-			band_mask = self.bands[12 + band as usize];
-			r3 |= r2 & band_mask;
-			r2 |= r1 & band_mask;
-			r1 |= band_mask;
-			band_mask = self.bands[15 + band as usize];
-			r3 |= r2 & band_mask;
-			r2 |= r1 & band_mask;
-			r1 |= band_mask;
-			band_mask = self.bands[18 + band as usize];
-			r3 |= r2 & band_mask;
-			r2 |= r1 & band_mask;
-			r1 |= band_mask;
-			band_mask = self.bands[21 + band as usize];
-			r3 |= r2 & band_mask;
-			r2 |= r1 & band_mask;
-			r1 |= band_mask;
-			band_mask = self.bands[24 + band as usize];
-			r3 |= r2 & band_mask;
-			r2 |= r1 & band_mask;
-			r1 |= band_mask;
-			*/
 
 			///////////////////
 			if r1 != ALL {
@@ -1966,4 +1966,62 @@ static UPWCL_ARGS: [[u32; 9]; 27] = [
     [0, 0, 3, 6, 9, 12, 15, 18, 21],
     [1, 1, 4, 7, 10, 13, 16, 19, 22],
     [2, 2, 5, 8, 11, 14, 17, 20, 23],
+];
+
+static BAND_OF_CELL: [u8; 81] = [
+	0,	0,	0,	0,	0,	0,	0,	0,	0,
+	0,	0,	0,	0,	0,	0,	0,	0,	0,
+	0,	0,	0,	0,	0,	0,	0,	0,	0,
+	1,	1,	1,	1,	1,	1,	1,	1,	1,
+	1,	1,	1,	1,	1,	1,	1,	1,	1,
+	1,	1,	1,	1,	1,	1,	1,	1,	1,
+	2,	2,	2,	2,	2,	2,	2,	2,	2,
+	2,	2,	2,	2,	2,	2,	2,	2,	2,
+	2,	2,	2,	2,	2,	2,	2,	2,	2,
+];
+
+static MASK_OF_CELL: [u32; 81] = [
+	0x1,	0x2,	0x4,	0x8,	0x10,	0x20,	0x40,	0x80,	0x100,
+	0x200,	0x400,	0x800,	0x1000,	0x2000,	0x4000,	0x8000,	0x10000,	0x20000,
+	0x40000,	0x80000,	0x100000,	0x200000,	0x400000,	0x800000,	0x1000000,	0x2000000,	0x4000000,
+	0x1,	0x2,	0x4,	0x8,	0x10,	0x20,	0x40,	0x80,	0x100,
+	0x200,	0x400,	0x800,	0x1000,	0x2000,	0x4000,	0x8000,	0x10000,	0x20000,
+	0x40000,	0x80000,	0x100000,	0x200000,	0x400000,	0x800000,	0x1000000,	0x2000000,	0x4000000,
+	0x1,	0x2,	0x4,	0x8,	0x10,	0x20,	0x40,	0x80,	0x100,
+	0x200,	0x400,	0x800,	0x1000,	0x2000,	0x4000,	0x8000,	0x10000,	0x20000,
+	0x40000,	0x80000,	0x100000,	0x200000,	0x400000,	0x800000,	0x1000000,	0x2000000,	0x4000000,
+];
+
+static DIGIT_TO_BASE: [u8; 9] = [
+	0,	3,	6,	9,	12,	15,	18,	21,	24,
+];
+
+static ROW_OF_CELL: [u32; 81] = [
+	0,	0,	0,	0,	0,	0,	0,	0,	0,
+	1,	1,	1,	1,	1,	1,	1,	1,	1,
+	2,	2,	2,	2,	2,	2,	2,	2,	2,
+	3,	3,	3,	3,	3,	3,	3,	3,	3,
+	4,	4,	4,	4,	4,	4,	4,	4,	4,
+	5,	5,	5,	5,	5,	5,	5,	5,	5,
+	6,	6,	6,	6,	6,	6,	6,	6,	6,
+	7,	7,	7,	7,	7,	7,	7,	7,	7,
+	8,	8,	8,	8,	8,	8,	8,	8,	8,
+];
+
+static MOD3: [u32; 27] = [
+	0,	1,	2,	0,	1,	2,	0,	1,	2,
+	0,	1,	2,	0,	1,	2,	0,	1,	2,
+	0,	1,	2,	0,	1,	2,	0,	1,	2,
+];
+
+static MOD27: [u32; 81] = [
+	0,	1,	2,	3,	4,	5,	6,	7,	8,
+	9,	10,	11,	12,	13,	14,	15,	16,	17,
+	18,	19,	20,	21,	22,	23,	24,	25,	26,
+	0,	1,	2,	3,	4,	5,	6,	7,	8,
+	9,	10,	11,	12,	13,	14,	15,	16,	17,
+	18,	19,	20,	21,	22,	23,	24,	25,	26,
+	0,	1,	2,	3,	4,	5,	6,	7,	8,
+	9,	10,	11,	12,	13,	14,	15,	16,	17,
+	18,	19,	20,	21,	22,	23,	24,	25,	26,
 ];

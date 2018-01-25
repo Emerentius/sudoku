@@ -947,15 +947,18 @@ impl SudokuSolver2 {
 	// unlikely to be a problem
 	fn extract_solution(&self) -> Sudoku {
 		let mut sudoku = [0; 81];
-		for cell in 0..81 {
-			let cell_mask = MASK_OF_CELL[cell as usize]; // 1 << (cell % 27); // BENCHME
-			let offset = BAND_OF_CELL[cell as usize] as usize; //cell / 27; // BENCHME
-			for digit in 0..9 {
-				let idx = digit * 3 + offset;
-				if self.bands[idx] & cell_mask != 0 {
-					sudoku[cell] = digit as u8 + 1;
-					break
+		for (slice, &mask) in (0u8..27).zip(self.bands.iter()) {
+			let mut mask = mask;
+			let digit = slice / 3;
+			let base_cell_in_band = (slice % 3)*27;
+			while mask != 0 {
+				// lowest bit == cell mask == 1 << (cell % 27)
+				let lowest_bit = mask & (!mask + 1);
+				let cell_in_band = lowest_bit.trailing_zeros() as u8;
+				unsafe {
+					*sudoku.get_unchecked_mut( (cell_in_band + base_cell_in_band) as usize ) = digit + 1;
 				}
+				mask ^= lowest_bit;
 			}
 		}
 		Sudoku(sudoku)

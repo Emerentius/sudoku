@@ -233,34 +233,34 @@ const ALL: u32 = 0o777_777_777;
 const LOW9: u32 = 0o000_000_777;
 
 #[derive(Clone, Copy)]
-struct UncheckedArray3([u32; 3]);
+struct UnsafeArray3([u32; 3]);
 
-impl ::std::ops::Index<usize> for UncheckedArray3 {
+impl ::std::ops::Index<usize> for UnsafeArray3 {
 	type Output = u32;
 	fn index(&self, idx: usize) -> &Self::Output {
-		unsafe { self.0.get_unchecked(idx) }
+		index(&self.0, idx)
 	}
 }
 
-impl ::std::ops::IndexMut<usize> for UncheckedArray3 {
+impl ::std::ops::IndexMut<usize> for UnsafeArray3 {
 	fn index_mut(&mut self, idx: usize) -> &mut Self::Output {
-		unsafe { self.0.get_unchecked_mut(idx) }
+		index_mut(&mut self.0, idx)
 	}
 }
 
 #[derive(Clone, Copy)]
-struct UncheckedArray27([u32; 27]);
+struct UnsafeArray27([u32; 27]);
 
-impl ::std::ops::Index<usize> for UncheckedArray27 {
+impl ::std::ops::Index<usize> for UnsafeArray27 {
 	type Output = u32;
 	fn index(&self, idx: usize) -> &Self::Output {
-		unsafe { self.0.get_unchecked(idx) }
+		index(&self.0, idx)
 	}
 }
 
-impl ::std::ops::IndexMut<usize> for UncheckedArray27 {
+impl ::std::ops::IndexMut<usize> for UnsafeArray27 {
 	fn index_mut(&mut self, idx: usize) -> &mut Self::Output {
-		unsafe { self.0.get_unchecked_mut(idx) }
+		index_mut(&mut self.0, idx)
 	}
 }
 
@@ -288,11 +288,11 @@ impl Solutions {
 
 #[derive(Clone, Copy)]
 pub(crate) struct SudokuSolver2 {
-	bands: UncheckedArray27, // 9 digits, 3 rows each
-	prev_bands: UncheckedArray27,
-	unsolved_cells: UncheckedArray3, // 81 bits used
-	unsolved_rows: UncheckedArray3, // 27 slices, 3 bits per slice
-	pairs: UncheckedArray3, // cells with only 2 possibilites, 81 bits used
+	bands: UnsafeArray27, // 9 digits, 3 rows each
+	prev_bands: UnsafeArray27,
+	unsolved_cells: UnsafeArray3, // 81 bits used
+	unsolved_rows: UnsafeArray3, // 27 slices, 3 bits per slice
+	pairs: UnsafeArray3, // cells with only 2 possibilites, 81 bits used
 }
 
 type SolvStack = Vec<SudokuSolver2>;
@@ -301,11 +301,11 @@ impl SudokuSolver2 {
 	// InitSudoku equivalent
 	pub fn from_sudoku(sudoku: Sudoku) -> Result<Self, Unsolvable> {
 		let mut solver = SudokuSolver2 {
-			bands: UncheckedArray27([ALL; 27]),
-			prev_bands: UncheckedArray27([0; 27]),
-			unsolved_cells: UncheckedArray3([ALL; 3]),
-			unsolved_rows: UncheckedArray3([ALL; 3]),
-			pairs: UncheckedArray3([0; 3]),
+			bands: UnsafeArray27([ALL; 27]),
+			prev_bands: UnsafeArray27([0; 27]),
+			unsolved_cells: UnsafeArray3([ALL; 3]),
+			unsolved_rows: UnsafeArray3([ALL; 3]),
+			pairs: UnsafeArray3([0; 3]),
 		};
 		for (cell, num) in (0..81).zip(sudoku.iter()) {
 			if let Some(num) = num {
@@ -354,12 +354,10 @@ impl SudokuSolver2 {
 			let digit = slice / 3;
 			let base_cell_in_band = mod3(slice)*27;
 			while mask != 0 {
-				// lowest bit == cell mask == 1 << (cell % 27)
 				let lowest_bit = mask & (!mask + 1);
+				// lowest bit == cell mask == 1 << (cell % 27)
 				let cell_in_band = bit_pos(lowest_bit) as u8;
-				unsafe {
-					*sudoku.get_unchecked_mut( (cell_in_band + base_cell_in_band) as usize ) = digit + 1;
-				}
+				*index_mut(&mut sudoku, (cell_in_band + base_cell_in_band) as usize) = digit + 1;
 
 				// guaranteed no overlap between mask and lowest_bit
 				mask ^= lowest_bit;
@@ -521,7 +519,7 @@ impl SudokuSolver2 {
 	/*
 	#[inline(always)]
 	fn upwcl_slice(&mut self, cl: &mut u32, a: u32, s: u32, args: [u32; 9]) {
-		*cl = !(a & unsafe { *ROW_MASK.get_unchecked(s as usize) });
+		*cl = !(a & *index(&ROW_MASK, s as usize));
 		self.unsolved_cells[args[0] as usize] &= *cl;
 		for &idx in &args[1..] {
 			self.bands[idx as usize] &= *cl;
@@ -1111,8 +1109,7 @@ fn mask_of_cell(cell: u8) -> u32 {
 		0x200,	0x400,	0x800,	0x1000,	0x2000,	0x4000,	0x8000,	0x10000,	0x20000,
 		0x40000,	0x80000,	0x100000,	0x200000,	0x400000,	0x800000,	0x1000000,	0x2000000,	0x4000000,
 	];
-	debug_assert!(cell < 81);
-	unsafe { *MASK_OF_CELL.get_unchecked(cell as usize) }
+	*index(&MASK_OF_CELL, cell as usize)
 	*/
 	1 << mod27(cell)
 }
@@ -1123,8 +1120,7 @@ fn digit_to_base(digit: u8) -> u8 {
 	static DIGIT_TO_BASE: [u8; 9] = [
 		0,	3,	6,	9,	12,	15,	18,	21,	24,
 	];
-	debug_assert!(digit < 9);
-	unsafe { *DIGIT_TO_BASE.get_unchecked((digit - 1) as usize) }
+	*index(&DIGIT_TO_BASE, (digit - 1) as usize)
 	*/
 	(digit - 1) * 3
 }
@@ -1163,8 +1159,7 @@ fn band_of_cell(cell: u8) -> u8 {
 		2,	2,	2,	2,	2,	2,	2,	2,	2,
 		2,	2,	2,	2,	2,	2,	2,	2,	2,
 	];
-	debug_assert!(cell < 81);
-	unsafe { *BAND_OF_CELL.get_unchecked(cell as usize) }
+	*index(&BAND_OF_CELL, cell as usize)
 	*/
 	cell / 27
 }
@@ -1185,9 +1180,38 @@ fn self_mask(cell: u8) -> u32 {
 		0x1807F1F8,	0x180BF1F8,	0x1813F1F8,	0x18238FC7,	0x18438FC7,	0x18838FC7,	0x19007E3F,	0x1A007E3F,
 		0x1C007E3F,
 	];
-	debug_assert!(cell < 81);
-	unsafe { *SELF_MASK.get_unchecked(cell as usize) }
+	*index(&SELF_MASK, cell as usize)
 }
+
+// ----------------------------------------------------------------
+//  					solver indexing
+// ----------------------------------------------------------------
+// These functions are only for use in the solver to conditionally
+// compile bounds checks in array accesses
+// the value space for indexes is limited enough that any error
+// is likely to immediately show up in tests
+// ----------------------------------------------------------------
+
+#[inline(always)]
+fn index<T>(slice: &[T], idx: usize) -> &T {
+	if cfg!(feature = "unchecked_indexing") {
+		debug_assert!(idx < slice.len());
+		unsafe { slice.get_unchecked(idx) }
+	} else {
+		&slice[idx]
+	}
+}
+
+#[inline(always)]
+fn index_mut<T>(slice: &mut [T], idx: usize) -> &mut T {
+	if cfg!(feature = "unchecked_indexing") {
+		debug_assert!(idx < slice.len());
+		unsafe { slice.get_unchecked_mut(idx) }
+	} else {
+		&mut slice[idx]
+	}
+}
+// ----------------------------------------------------------------
 
 #[inline]
 fn other_mask(cell: u8) -> u32 {
@@ -1205,50 +1229,46 @@ fn other_mask(cell: u8) -> u32 {
 		0x3FFBFDFE,	0x3FF7FBFD,	0x3FEFF7FB,	0x3FDFEFF7,	0x3FBFDFEF,	0x3F7FBFDF,	0x3EFF7FBF,	0x3DFEFF7F,
 		0x3BFDFEFF,
 	];
-	debug_assert!(cell < 81);
-	unsafe { *OTHER_MASK.get_unchecked(cell as usize) }
+	*index(&OTHER_MASK, cell as usize)
 }
 
 #[inline]
 fn shrink_mask(thing: u32) -> u32 {
-	debug_assert!(thing < 512);
-	unsafe { *SHRINK_MASK.get_unchecked(thing as usize) as u32 }
+	*index(&SHRINK_MASK, thing as usize) as u32
 }
 
 #[inline]
 fn complex_mask(thing: u32) -> u32 {
-	debug_assert!(thing < 512);
-	unsafe { *COMPLEX_MASK.get_unchecked(thing as usize) }
+	*index(&COMPLEX_MASK, thing as usize)
 }
 
 #[inline]
 fn mask_single(thing: u32) -> u32 {
-	debug_assert!(thing < 512);
-	unsafe { *MASK_SINGLE.get_unchecked(thing as usize) }
+	*index(&MASK_SINGLE, thing as usize)
 }
 
 #[inline]
 fn column_single(thing: u32) -> u32 {
-	debug_assert!(thing < 512);
-	unsafe { *COLUMN_SINGLE.get_unchecked(thing as usize) as u32 }
+	*index(&COLUMN_SINGLE, thing as usize) as u32
 }
 
 #[inline]
 fn shrink_single(thing: u32) -> u32 {
-	debug_assert!(thing < 512);
-	unsafe { *SHRINK_SINGLE.get_unchecked(thing as usize) }
+	*index(&SHRINK_SINGLE, thing as usize)
 }
 
 #[inline]
 fn row_uniq(thing: u32) -> u32 {
-	debug_assert!(thing < 512);
-	unsafe { *ROW_UNIQ.get_unchecked(thing as usize) as u32 }
+	*index(&ROW_UNIQ, thing as usize)  as u32
 }
 
 #[inline]
 fn row_mask(thing: u32) -> u32 {
-	debug_assert!(thing < 8);
-	unsafe { *ROW_MASK.get_unchecked(thing as usize) }
+	static ROW_MASK: [u32; 8] = [	// rows where single  found _000 to 111
+		0o777777777, 0o777777000, 0o777000777, 0o777000000, 0o777777, 0o777000, 0o777, 0o0,
+	];
+	*index(&ROW_MASK, thing as usize)
+	//(!thing & 0b1) * 511 + (!thing & 0b10) * 130816 + (!thing & 0b100) * 33488896
 }
 
 #[inline]
@@ -1296,7 +1316,7 @@ fn neighbour_slices(slice: u8) -> (u8, u8) {
 		(22, 23), (23, 21), (21, 22),
 		(25, 26), (26, 24), (24, 25),
 	];
-	unsafe { *NEIGHBOUR_SLICES.get_unchecked(slice as usize) }
+	*index(&NEIGHBOUR_SLICES, slice as usize)
 }
 
 static SHRINK_MASK: [u8; 512] = [
@@ -1517,10 +1537,6 @@ static COLUMN_SINGLE: [u32; 512] = [	// single in column applied to shrinked blo
 	0o0, 0o111, 0o111, 0o0, 0o111, 0o0, 0o0, 0o0, 0o0, 0o111, 0o111, 0o0, 0o111, 0o0, 0o0, 0o0,
 ];
 
-static ROW_MASK: [u32; 8] = [	// rows where single  found _000 to 111
-	0o777777777, 0o777777000, 0o777000777, 0o777000000, 0o777777, 0o777000, 0o777, 0o0,
-];
-
 /*
 static UPWCL_ARGS: [[u32; 9]; 27] = [
     [0, 3, 6, 9, 12, 15, 18, 21, 24],
@@ -1560,7 +1576,7 @@ fn bit_pos(mask: u32) -> u8 {
 		0, 1, 28, 2, 29, 14, 24, 3, 30, 22, 20, 15, 25, 17, 4, 8,
 		31, 27, 13, 23, 21, 19, 16, 7, 26, 12, 18, 6, 11, 5, 10, 9
 	];
-	unsafe { *DE_BRUIJN_FACTOR.get_unchecked((mask.wrapping_mul(0x077CB531)) as usize >> 27)  as u8}
+	*index(&DE_BRUIJN_FACTOR, (mask.wrapping_mul(0x077CB531)) as usize >> 27)   as u8
 	*/
 	mask.trailing_zeros() as u8
 }

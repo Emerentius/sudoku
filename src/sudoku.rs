@@ -1641,9 +1641,9 @@ impl SudokuSolver2 {
 			match *solutions {
 				Solutions::Count(ref mut count) => *count += 1,
 				Solutions::Vector(ref mut vec) => vec.push( self.extract_solution() )
-		}
+			}
 		} else if self.guess_bivalue_in_cell(solver_stack, limit, solutions).is_ok() {
-		// .is_ok() == found nothing
+			// .is_ok() == found nothing
 			self.guess_first_cell(solver_stack, limit, solutions);
 		}
 	}
@@ -1652,32 +1652,49 @@ impl SudokuSolver2 {
 		for band in 0..3 {
 			let mut pairs = self.pairs[band as usize];
 			if pairs != 0 {
-				let one_num = pairs & (!pairs + 1);
-				let mut first = true;
+				let cell_mask = pairs & (!pairs + 1);
 				let mut slice = band;
-				for digit in 0..9 {
-					if self.bands[slice as usize] & one_num != 0 {
-						// try and backtrack on the first number
-						// no need to backtrack on second, possibilities are exhausted
-						if first {
-							first = false;
-							let mut solver = self.clone();
-							solver._set_solved_mask(slice, one_num);
-							if solver.full_update(limit, solutions).is_ok() {
-								solver.guess(solver_stack, limit, solutions);
-							}
-							self.bands[slice as usize] ^= one_num;
-						} else {
-							self._set_solved_mask(slice, one_num);
-							if self.full_update(limit, solutions).is_ok() {
-								self.guess(solver_stack, limit, solutions);
-							}
-							// no possibilities left, sudoku impossible
-							return Err(Unsolvable);
+				//let mut digit = 0;
+
+				// Both of the next two loops repeat until they find
+				// a digit in the cell
+				// by construction there are guaranteed to be exactly 2 digits
+				// the first loop will try the digit on a clone of the current state
+				// the second one will try on the current state
+				// because all possibilities will be exhausted after that
+				loop {
+					if self.bands[slice as usize] & cell_mask != 0 {
+						let mut solver = self.clone();
+						solver._set_solved_mask(slice, cell_mask);
+						if solver.full_update(limit, solutions).is_ok() {
+							solver.guess(solver_stack, limit, solutions);
 						}
+						self.bands[slice as usize] ^= cell_mask;
+						break
 					}
 
+					//digit += 1;
 					slice += 3;
+					//debug_assert!(digit < 8);
+					debug_assert!(slice < 24);
+				}
+
+				// No need to backtrack on second number. Possibilities are exhausted
+				loop {
+					// increment immediately because previous loop
+					// ended without incrementation
+					//digit += 1;
+					slice += 3;
+					//debug_assert!(digit < 9);
+					debug_assert!(slice < 27);
+					if self.bands[slice as usize] & cell_mask != 0 {
+						self._set_solved_mask(slice, cell_mask);
+						if self.full_update(limit, solutions).is_ok() {
+							self.guess(solver_stack, limit, solutions);
+						}
+						// no possibilities left
+						return Err(Unsolvable);
+					}
 				}
 			}
 		}
@@ -1810,40 +1827,40 @@ fn band_of_cell(cell: u8) -> u8 {
 
 #[inline]
 fn self_mask(cell: u8) -> u32 {
-// ???
-static SELF_MASK: [u32; 81] = [
-	0x37E3F001,	0x37E3F002,	0x37E3F004,	0x371F8E08,	0x371F8E10,	0x371F8E20,	0x30FC7E40,	0x30FC7E80,
-	0x30FC7F00,	0x2FE003F8,	0x2FE005F8,	0x2FE009F8,	0x2F1C11C7,	0x2F1C21C7,	0x2F1C41C7,	0x28FC803F,
-	0x28FD003F,	0x28FE003F,	0x1807F1F8,	0x180BF1F8,	0x1813F1F8,	0x18238FC7,	0x18438FC7,	0x18838FC7,
-	0x19007E3F,	0x1A007E3F,	0x1C007E3F,	0x37E3F001,	0x37E3F002,	0x37E3F004,	0x371F8E08,	0x371F8E10,
-	0x371F8E20,	0x30FC7E40,	0x30FC7E80,	0x30FC7F00,	0x2FE003F8,	0x2FE005F8,	0x2FE009F8,	0x2F1C11C7,
-	0x2F1C21C7,	0x2F1C41C7,	0x28FC803F,	0x28FD003F,	0x28FE003F,	0x1807F1F8,	0x180BF1F8,	0x1813F1F8,
-	0x18238FC7,	0x18438FC7,	0x18838FC7,	0x19007E3F,	0x1A007E3F,	0x1C007E3F,	0x37E3F001,	0x37E3F002,
-	0x37E3F004,	0x371F8E08,	0x371F8E10,	0x371F8E20,	0x30FC7E40,	0x30FC7E80,	0x30FC7F00,	0x2FE003F8,
-	0x2FE005F8,	0x2FE009F8,	0x2F1C11C7,	0x2F1C21C7,	0x2F1C41C7,	0x28FC803F,	0x28FD003F,	0x28FE003F,
-	0x1807F1F8,	0x180BF1F8,	0x1813F1F8,	0x18238FC7,	0x18438FC7,	0x18838FC7,	0x19007E3F,	0x1A007E3F,
-	0x1C007E3F,
-];
+	// ???
+	static SELF_MASK: [u32; 81] = [
+		0x37E3F001,	0x37E3F002,	0x37E3F004,	0x371F8E08,	0x371F8E10,	0x371F8E20,	0x30FC7E40,	0x30FC7E80,
+		0x30FC7F00,	0x2FE003F8,	0x2FE005F8,	0x2FE009F8,	0x2F1C11C7,	0x2F1C21C7,	0x2F1C41C7,	0x28FC803F,
+		0x28FD003F,	0x28FE003F,	0x1807F1F8,	0x180BF1F8,	0x1813F1F8,	0x18238FC7,	0x18438FC7,	0x18838FC7,
+		0x19007E3F,	0x1A007E3F,	0x1C007E3F,	0x37E3F001,	0x37E3F002,	0x37E3F004,	0x371F8E08,	0x371F8E10,
+		0x371F8E20,	0x30FC7E40,	0x30FC7E80,	0x30FC7F00,	0x2FE003F8,	0x2FE005F8,	0x2FE009F8,	0x2F1C11C7,
+		0x2F1C21C7,	0x2F1C41C7,	0x28FC803F,	0x28FD003F,	0x28FE003F,	0x1807F1F8,	0x180BF1F8,	0x1813F1F8,
+		0x18238FC7,	0x18438FC7,	0x18838FC7,	0x19007E3F,	0x1A007E3F,	0x1C007E3F,	0x37E3F001,	0x37E3F002,
+		0x37E3F004,	0x371F8E08,	0x371F8E10,	0x371F8E20,	0x30FC7E40,	0x30FC7E80,	0x30FC7F00,	0x2FE003F8,
+		0x2FE005F8,	0x2FE009F8,	0x2F1C11C7,	0x2F1C21C7,	0x2F1C41C7,	0x28FC803F,	0x28FD003F,	0x28FE003F,
+		0x1807F1F8,	0x180BF1F8,	0x1813F1F8,	0x18238FC7,	0x18438FC7,	0x18838FC7,	0x19007E3F,	0x1A007E3F,
+		0x1C007E3F,
+	];
 	debug_assert!(cell < 81);
 	unsafe { *SELF_MASK.get_unchecked(cell as usize) }
 }
 
 #[inline]
 fn other_mask(cell: u8) -> u32 {
-// ???
-static OTHER_MASK: [u32; 81] = [
-	0x3FFBFDFE,	0x3FF7FBFD,	0x3FEFF7FB,	0x3FDFEFF7,	0x3FBFDFEF,	0x3F7FBFDF,	0x3EFF7FBF,	0x3DFEFF7F,
-	0x3BFDFEFF,	0x3FFBFDFE,	0x3FF7FBFD,	0x3FEFF7FB,	0x3FDFEFF7,	0x3FBFDFEF,	0x3F7FBFDF,	0x3EFF7FBF,
-	0x3DFEFF7F,	0x3BFDFEFF,	0x3FFBFDFE,	0x3FF7FBFD,	0x3FEFF7FB,	0x3FDFEFF7,	0x3FBFDFEF,	0x3F7FBFDF,
-	0x3EFF7FBF,	0x3DFEFF7F,	0x3BFDFEFF,	0x3FFBFDFE,	0x3FF7FBFD,	0x3FEFF7FB,	0x3FDFEFF7,	0x3FBFDFEF,
-	0x3F7FBFDF,	0x3EFF7FBF,	0x3DFEFF7F,	0x3BFDFEFF,	0x3FFBFDFE,	0x3FF7FBFD,	0x3FEFF7FB,	0x3FDFEFF7,
-	0x3FBFDFEF,	0x3F7FBFDF,	0x3EFF7FBF,	0x3DFEFF7F,	0x3BFDFEFF,	0x3FFBFDFE,	0x3FF7FBFD,	0x3FEFF7FB,
-	0x3FDFEFF7,	0x3FBFDFEF,	0x3F7FBFDF,	0x3EFF7FBF,	0x3DFEFF7F,	0x3BFDFEFF,	0x3FFBFDFE,	0x3FF7FBFD,
-	0x3FEFF7FB,	0x3FDFEFF7,	0x3FBFDFEF,	0x3F7FBFDF,	0x3EFF7FBF,	0x3DFEFF7F,	0x3BFDFEFF,	0x3FFBFDFE,
-	0x3FF7FBFD,	0x3FEFF7FB,	0x3FDFEFF7,	0x3FBFDFEF,	0x3F7FBFDF,	0x3EFF7FBF,	0x3DFEFF7F,	0x3BFDFEFF,
-	0x3FFBFDFE,	0x3FF7FBFD,	0x3FEFF7FB,	0x3FDFEFF7,	0x3FBFDFEF,	0x3F7FBFDF,	0x3EFF7FBF,	0x3DFEFF7F,
-	0x3BFDFEFF,
-];
+	// ???
+	static OTHER_MASK: [u32; 81] = [
+		0x3FFBFDFE,	0x3FF7FBFD,	0x3FEFF7FB,	0x3FDFEFF7,	0x3FBFDFEF,	0x3F7FBFDF,	0x3EFF7FBF,	0x3DFEFF7F,
+		0x3BFDFEFF,	0x3FFBFDFE,	0x3FF7FBFD,	0x3FEFF7FB,	0x3FDFEFF7,	0x3FBFDFEF,	0x3F7FBFDF,	0x3EFF7FBF,
+		0x3DFEFF7F,	0x3BFDFEFF,	0x3FFBFDFE,	0x3FF7FBFD,	0x3FEFF7FB,	0x3FDFEFF7,	0x3FBFDFEF,	0x3F7FBFDF,
+		0x3EFF7FBF,	0x3DFEFF7F,	0x3BFDFEFF,	0x3FFBFDFE,	0x3FF7FBFD,	0x3FEFF7FB,	0x3FDFEFF7,	0x3FBFDFEF,
+		0x3F7FBFDF,	0x3EFF7FBF,	0x3DFEFF7F,	0x3BFDFEFF,	0x3FFBFDFE,	0x3FF7FBFD,	0x3FEFF7FB,	0x3FDFEFF7,
+		0x3FBFDFEF,	0x3F7FBFDF,	0x3EFF7FBF,	0x3DFEFF7F,	0x3BFDFEFF,	0x3FFBFDFE,	0x3FF7FBFD,	0x3FEFF7FB,
+		0x3FDFEFF7,	0x3FBFDFEF,	0x3F7FBFDF,	0x3EFF7FBF,	0x3DFEFF7F,	0x3BFDFEFF,	0x3FFBFDFE,	0x3FF7FBFD,
+		0x3FEFF7FB,	0x3FDFEFF7,	0x3FBFDFEF,	0x3F7FBFDF,	0x3EFF7FBF,	0x3DFEFF7F,	0x3BFDFEFF,	0x3FFBFDFE,
+		0x3FF7FBFD,	0x3FEFF7FB,	0x3FDFEFF7,	0x3FBFDFEF,	0x3F7FBFDF,	0x3EFF7FBF,	0x3DFEFF7F,	0x3BFDFEFF,
+		0x3FFBFDFE,	0x3FF7FBFD,	0x3FEFF7FB,	0x3FDFEFF7,	0x3FBFDFEF,	0x3F7FBFDF,	0x3EFF7FBF,	0x3DFEFF7F,
+		0x3BFDFEFF,
+	];
 	debug_assert!(cell < 81);
 	unsafe { *OTHER_MASK.get_unchecked(cell as usize) }
 }
@@ -1897,7 +1914,7 @@ fn mod3(num: u8) -> u8 {
 		0,	1,	2,	0,	1,	2,	0,	1,	2,
 		0,	1,	2,	0,	1,	2,	0,	1,	2,
 		0,	1,	2,	0,	1,	2,	0,	1,	2,
-];
+	];
 	MOD3[num as usize]
 	*/
 	num % 3
@@ -1934,7 +1951,7 @@ fn neighbour_slices(slice: u8) -> (u8, u8) {
 		(19, 20), (20, 18), (18, 19),
 		(22, 23), (23, 21), (21, 22),
 		(25, 26), (26, 24), (24, 25),
-];
+	];
 	unsafe { *NEIGHBOUR_SLICES.get_unchecked(slice as usize) }
 }
 
@@ -2196,7 +2213,7 @@ fn bit_pos(mask: u32) -> u8 {
 	static DE_BRUIJN_FACTOR: [u32; 32] = [
 		0, 1, 28, 2, 29, 14, 24, 3, 30, 22, 20, 15, 25, 17, 4, 8,
 		31, 27, 13, 23, 21, 19, 16, 7, 26, 12, 18, 6, 11, 5, 10, 9
-];
+	];
 	unsafe { *DE_BRUIJN_FACTOR.get_unchecked((mask.wrapping_mul(0x077CB531)) as usize >> 27)  as u8}
 	*/
 	mask.trailing_zeros() as u8

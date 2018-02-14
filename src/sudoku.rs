@@ -6,6 +6,7 @@ use positions::*;
 use types::{Mask, Digit, Array81, Entry, PubEntry, BlockFormatParseError, LineFormatParseError, Unsolvable, NotEnoughRows};
 
 use std::{fmt, slice, iter, hash, cmp};
+use std::ops::{Index, IndexMut};
 #[cfg(feature="serde")] use ::serde::{de, Serialize, Serializer, Deserialize, Deserializer};
 
 /// The main structure exposing all the functionality of the library
@@ -896,6 +897,37 @@ impl ::core::fmt::Display for SudokuLine {
 const ALL: u32 = 0o777_777_777;
 const LOW9: u32 = 0o000_000_777;
 
+#[derive(Clone, Copy)]
+struct UncheckedArray3([u32; 3]);
+
+impl ::std::ops::Index<usize> for UncheckedArray3 {
+	type Output = u32;
+	fn index(&self, idx: usize) -> &Self::Output {
+		unsafe { self.0.get_unchecked(idx) }
+	}
+}
+
+impl ::std::ops::IndexMut<usize> for UncheckedArray3 {
+	fn index_mut(&mut self, idx: usize) -> &mut Self::Output {
+		unsafe { self.0.get_unchecked_mut(idx) }
+	}
+}
+
+#[derive(Clone, Copy)]
+struct UncheckedArray27([u32; 27]);
+
+impl ::std::ops::Index<usize> for UncheckedArray27 {
+	type Output = u32;
+	fn index(&self, idx: usize) -> &Self::Output {
+		unsafe { self.0.get_unchecked(idx) }
+	}
+}
+
+impl ::std::ops::IndexMut<usize> for UncheckedArray27 {
+	fn index_mut(&mut self, idx: usize) -> &mut Self::Output {
+		unsafe { self.0.get_unchecked_mut(idx) }
+	}
+}
 
 #[derive(Debug)]
 enum Solutions {
@@ -921,11 +953,11 @@ impl Solutions {
 
 #[derive(Clone, Copy)]
 struct SudokuSolver2 {
-	bands: [u32; 27], // 9 digits, 3 rows each
-	prev_bands: [u32; 27],
-	unsolved_cells: [u32; 3], // 81 bits used
-	unsolved_rows: [u32; 3], // 27 slices, 3 bits per slice
-	pairs: [u32; 3], // cells with only 2 possibilites, 81 bits used
+	bands: UncheckedArray27, // 9 digits, 3 rows each
+	prev_bands: UncheckedArray27,
+	unsolved_cells: UncheckedArray3, // 81 bits used
+	unsolved_rows: UncheckedArray3, // 27 slices, 3 bits per slice
+	pairs: UncheckedArray3, // cells with only 2 possibilites, 81 bits used
 }
 
 type SolvStack = Vec<SudokuSolver2>;
@@ -934,11 +966,11 @@ impl SudokuSolver2 {
 	// InitSudoku equivalent
 	fn from_sudoku(sudoku: Sudoku) -> Result<Self, Unsolvable> {
 		let mut solver = SudokuSolver2 {
-			bands: [ALL; 27],
-			prev_bands: [0; 27],
-			unsolved_cells: [ALL; 3],
-			unsolved_rows: [ALL; 3],
-			pairs: [0; 3],
+			bands: UncheckedArray27([ALL; 27]),
+			prev_bands: UncheckedArray27([0; 27]),
+			unsolved_cells: UncheckedArray3([ALL; 3]),
+			unsolved_rows: UncheckedArray3([ALL; 3]),
+			pairs: UncheckedArray3([0; 3]),
 		};
 		for (cell, num) in (0..81).zip(sudoku.iter()) {
 			if let Some(num) = num {
@@ -950,25 +982,24 @@ impl SudokuSolver2 {
 
 	// SetSolvedDigit equivalent
 	fn _insert_entry(&mut self, entry: Entry) -> Result<(), Unsolvable> {
-		//self.grid.0[entry.cell() as usize] = entry.num();
-		let band = BAND_OF_CELL[entry.cell()]; //entry.cell / 27; // BENCHME
-		let slice = DIGIT_TO_BASE[(entry.num() - 1) as usize] + band; //(entry.num() - 1) * 3 + band; // BENCHME
-		let cell_mask = MASK_OF_CELL[entry.cell as usize]; //1 << (entry.cell % 27); // BENCHME
+		let band = band_of_cell(entry.cell);
+		let slice = digit_to_base(entry.num) + band;
+		let cell_mask = mask_of_cell(entry.cell);
 
 		if self.bands[slice as usize] & cell_mask == 0 {
-			//panic!("{}, {}", entry.cell(), entry.num());
 			return Err(Unsolvable)
 		}
 
-		self.bands[slice as usize] &= SELF_MASK[entry.cell()];
-		let other_mask = OTHER_MASK[entry.cell()];
-		self.bands[OTHER_SLICE1[slice as usize] as usize] &= other_mask;
-		self.bands[OTHER_SLICE2[slice as usize] as usize] &= other_mask;
+		self.bands[slice as usize] &= self_mask(entry.cell);
+		let other_mask = other_mask(entry.cell);
+		let (ns1, ns2) = neighbour_slices(slice);
+		self.bands[ns1 as usize] &= other_mask;
+		self.bands[ns2 as usize] &= other_mask;
 
 		let mask = !cell_mask;
 		self.unsolved_cells[band as usize] &= mask;
-		let row_bit = (entry.num()-1)*9 + entry.row();
-		self.unsolved_rows[row_bit as usize /27] &= !(1 << MOD27[row_bit as usize]); // !(1 << (row_bit % 27) ); // BENCHME
+		let row_bit = (entry.num()-1)*9 + row_of_cell(entry.cell); //entry.row();
+		self.unsolved_rows[row_bit as usize /27] &= !(1 << mod27(row_bit));
 
 		let mut band = band as usize;
 		for _ in 0..9 {
@@ -981,43 +1012,35 @@ impl SudokuSolver2 {
 		Ok(())
 	}
 
-	// unlikely to be a problem
 	fn extract_solution(&self) -> Sudoku {
 		let mut sudoku = [0; 81];
-		for (slice, &mask) in (0u8..27).zip(self.bands.iter()) {
+		for (slice, &mask) in (0u8..27).zip(self.bands.0.iter()) {
 			let mut mask = mask;
 			let digit = slice / 3;
-			let base_cell_in_band = (slice % 3)*27;
+			let base_cell_in_band = mod3(slice)*27;
 			while mask != 0 {
 				// lowest bit == cell mask == 1 << (cell % 27)
 				let lowest_bit = mask & (!mask + 1);
-				let cell_in_band = lowest_bit.trailing_zeros() as u8;
+				let cell_in_band = bit_pos(lowest_bit) as u8;
 				unsafe {
 					*sudoku.get_unchecked_mut( (cell_in_band + base_cell_in_band) as usize ) = digit + 1;
 				}
+
+				// guaranteed no overlap between mask and lowest_bit
 				mask ^= lowest_bit;
 			}
 		}
 		Sudoku(sudoku)
 	}
 
-	fn _set_solved_mask(&mut self, slice: u32, mask: u32) -> Result<(), Unsolvable> {
-		static DE_BRUIJN_FACTOR: [u32; 32] = [
-			0, 1, 28, 2, 29, 14, 24, 3, 30, 22, 20, 15, 25, 17, 4, 8,
-			31, 27, 13, 23, 21, 19, 16, 7, 26, 12, 18, 6, 11, 5, 10, 9
-		];
-		fn bit_pos(mask: u32) -> u32 {
-			DE_BRUIJN_FACTOR[(mask.wrapping_mul(0x077CB531)) as usize >> 27]
-		}
-
+	fn _set_solved_mask(&mut self, slice: u8, mask: u32) -> Result<(), Unsolvable> {
 		if self.bands[slice as usize] & mask == 0 {
 			return Err(Unsolvable);
 		}
-		let band = MOD3[slice as usize]; //slice % 3; // BENCHME
+		let band = mod3(slice);
 		let cell = band*27 + bit_pos(mask);
 
-		self.bands[slice as usize] &= SELF_MASK[cell as usize];
-
+		self.bands[slice as usize] &= self_mask(cell);
 		Ok(())
 	}
 
@@ -1025,7 +1048,7 @@ impl SudokuSolver2 {
 	fn find_singles(&mut self) -> Result<bool, Unsolvable> {
 		let mut single_applied = false;
 
-		for band in 0..3u32 {
+		for band in 0..3 {
 			let mut r1 = 0; // exists
 			let mut r2 = 0; // exists twice
 			let mut r3 = 0; // exists thrice or more
@@ -1043,7 +1066,6 @@ impl SudokuSolver2 {
 				}
 			} else {
 				///////////// unrolled loop
-				// seems to be harmful
 				let mut band_mask = self.bands[band as usize];
 				r1 |= band_mask;
 				band_mask = self.bands[3 + band as usize];
@@ -1085,18 +1107,19 @@ impl SudokuSolver2 {
 			}
 
 			// store doubles
-			self.pairs[band as usize] = r2 & !r3;
+			// equivalent to `r2 & !r3` because every bit in r3 is also in r2
+			self.pairs[band as usize] = r2 ^ r3;
 
 			// singles
-			r1 &= !r2;
+			r1 ^= r2;
 			// new singles, ignore previously solved ones
 			r1 &= self.unsolved_cells[band as usize];
 
 			'r1: while r1 != 0 {
-				single_applied = true; // PERF: Maybe put in if statement before loop?
+				single_applied = true;
 				let lowest_bit = r1 & (!r1 + 1);
 				r1 ^= lowest_bit;
-				for digit in 0..9u32 {
+				for digit in 0..9 {
 					if self.bands[(digit*3 + band) as usize] & lowest_bit != 0 {
 						self._set_solved_mask(digit*3 + band, lowest_bit); // ORIGBUG: no early return? 2 other places
 						continue 'r1;
@@ -1124,17 +1147,20 @@ impl SudokuSolver2 {
 		l: u32,
 	) -> Result<(), Unsolvable> {
 		*a = self.bands[(i * 3 + j) as usize];
-		*shrink = SHRINK_MASK[(*a & LOW9) as usize] | SHRINK_MASK[((*a>>9) & LOW9) as usize] << 3 | SHRINK_MASK[*a as usize>>18] << 6;
-		*a &= COMPLEX_MASK[*shrink as usize];
+		*shrink = shrink_mask(*a & LOW9) | shrink_mask(*a >> 9 & LOW9) << 3 | shrink_mask(*a >> 18 & LOW9) << 6;
+		*a &= complex_mask(*shrink);
 		if *a == 0 {
 			return Err(Unsolvable);
 		}
 		*b = self.bands[(i * 3 + k) as usize];
 		*c = self.bands[(i * 3 + l) as usize];
-		*s = (*a | (*a >> 9) | (*a >> 18)) & LOW9;
-		self.bands[(i*3 + l) as usize] &= MASK_SINGLE[*s as usize];
-		self.bands[(i*3 + k) as usize] &= MASK_SINGLE[*s as usize];
-		*s = ROW_UNIQ[(SHRINK_SINGLE[*shrink as usize] & COLUMN_SINGLE[*s as usize]) as usize];
+		*s = (*a | *a >> 9 | *a >> 18) & LOW9;
+		self.bands[(i*3 + l) as usize] &= mask_single(*s);
+		self.bands[(i*3 + k) as usize] &= mask_single(*s);
+		*s = row_uniq(
+			shrink_single(*shrink) & column_single(*s)
+		);
+
 		self.prev_bands[(i * 3 + j) as usize] = *a;
 		self.bands[(i * 3 + j) as usize] = *a;
 		Ok(())
@@ -1142,7 +1168,7 @@ impl SudokuSolver2 {
 
 	#[inline(always)]
 	fn upwcl(&mut self, cl: &mut u32, a: u32, s: u32, i: u32, p: u32, q: u32, r: u32, t: u32, u: u32, v: u32, w: u32, x: u32) {
-		*cl = !(a & ROW_MASK[s as usize]);
+		*cl = !(a & row_mask(s));
 		self.unsolved_cells[i as usize] &= *cl;
 		self.bands[p as usize] &= *cl;
 		self.bands[q as usize] &= *cl;
@@ -1154,25 +1180,16 @@ impl SudokuSolver2 {
 		self.bands[x as usize] &= *cl;
 	}
 
-	// seems correct
+	/*
 	#[inline(always)]
 	fn upwcl_slice(&mut self, cl: &mut u32, a: u32, s: u32, args: [u32; 9]) {
-		*cl = !(a & ROW_MASK[s as usize]);
+		*cl = !(a & unsafe { *ROW_MASK.get_unchecked(s as usize) });
 		self.unsolved_cells[args[0] as usize] &= *cl;
-		/*
-		self.bands[args[1] as usize] &= *cl;
-		self.bands[args[2] as usize] &= *cl;
-		self.bands[args[3] as usize] &= *cl;
-		self.bands[args[4] as usize] &= *cl;
-		self.bands[args[5] as usize] &= *cl;
-		self.bands[args[6] as usize] &= *cl;
-		self.bands[args[7] as usize] &= *cl;
-		self.bands[args[8] as usize] &= *cl;
-		*/
 		for &idx in &args[1..] {
 			self.bands[idx as usize] &= *cl;
 		}
 	}
+	*/
 
 	fn update(&mut self) -> Result<(), Unsolvable> {
 		let mut shrink: u32 = 1;
@@ -1615,7 +1632,7 @@ impl SudokuSolver2 {
 	}
 
 	fn is_solved(&self) -> bool {
-		self.unsolved_cells == [0; 3]
+		self.unsolved_cells.0 == [0; 3]
 	}
 
 	fn guess(&mut self, solver_stack: &mut SolvStack, limit: usize, solutions: &mut Solutions) {
@@ -1680,10 +1697,11 @@ impl SudokuSolver2 {
 			}
 			let one_unsolved_cell = unsolved_cells & (!unsolved_cells + 1);
 			let mut slice = band;
-			for digit in 0..9 {
-				if self.bands[slice] & one_unsolved_cell != 0 {
+			// check every digit
+			for _ in 0..9 {
+				if self.bands[slice as usize] & one_unsolved_cell != 0 {
 					let mut solver = self.clone();
-					solver._set_solved_mask(slice as u32, one_unsolved_cell);
+					solver._set_solved_mask(slice, one_unsolved_cell);
 					if solver.full_update(limit, solutions).is_ok() {
 						solver.guess(solver_stack, limit, solutions);
 					}
@@ -1718,6 +1736,80 @@ impl SudokuSolver2 {
 	}
 }
 
+#[inline]
+fn mask_of_cell(cell: u8) -> u32 {
+	/*
+	static MASK_OF_CELL: [u32; 81] = [
+		0x1,	0x2,	0x4,	0x8,	0x10,	0x20,	0x40,	0x80,	0x100,
+		0x200,	0x400,	0x800,	0x1000,	0x2000,	0x4000,	0x8000,	0x10000,	0x20000,
+		0x40000,	0x80000,	0x100000,	0x200000,	0x400000,	0x800000,	0x1000000,	0x2000000,	0x4000000,
+		0x1,	0x2,	0x4,	0x8,	0x10,	0x20,	0x40,	0x80,	0x100,
+		0x200,	0x400,	0x800,	0x1000,	0x2000,	0x4000,	0x8000,	0x10000,	0x20000,
+		0x40000,	0x80000,	0x100000,	0x200000,	0x400000,	0x800000,	0x1000000,	0x2000000,	0x4000000,
+		0x1,	0x2,	0x4,	0x8,	0x10,	0x20,	0x40,	0x80,	0x100,
+		0x200,	0x400,	0x800,	0x1000,	0x2000,	0x4000,	0x8000,	0x10000,	0x20000,
+		0x40000,	0x80000,	0x100000,	0x200000,	0x400000,	0x800000,	0x1000000,	0x2000000,	0x4000000,
+	];
+	debug_assert!(cell < 81);
+	unsafe { *MASK_OF_CELL.get_unchecked(cell as usize) }
+	*/
+	1 << mod27(cell)
+}
+
+#[inline]
+fn digit_to_base(digit: u8) -> u8 {
+	/*
+	static DIGIT_TO_BASE: [u8; 9] = [
+		0,	3,	6,	9,	12,	15,	18,	21,	24,
+	];
+	debug_assert!(digit < 9);
+	unsafe { *DIGIT_TO_BASE.get_unchecked((digit - 1) as usize) }
+	*/
+	(digit - 1) * 3
+}
+
+#[inline]
+fn row_of_cell(cell: u8) -> u8 {
+	/*
+	static ROW_OF_CELL: [u8; 81] = [
+		0,	0,	0,	0,	0,	0,	0,	0,	0,
+		1,	1,	1,	1,	1,	1,	1,	1,	1,
+		2,	2,	2,	2,	2,	2,	2,	2,	2,
+		3,	3,	3,	3,	3,	3,	3,	3,	3,
+		4,	4,	4,	4,	4,	4,	4,	4,	4,
+		5,	5,	5,	5,	5,	5,	5,	5,	5,
+		6,	6,	6,	6,	6,	6,	6,	6,	6,
+		7,	7,	7,	7,	7,	7,	7,	7,	7,
+		8,	8,	8,	8,	8,	8,	8,	8,	8,
+	];
+	ROW_OF_CELL[cell as usize]
+	*/
+	cell / 9
+}
+
+
+#[inline]
+fn band_of_cell(cell: u8) -> u8 {
+	/*
+	static BAND_OF_CELL: [u8; 81] = [
+		0,	0,	0,	0,	0,	0,	0,	0,	0,
+		0,	0,	0,	0,	0,	0,	0,	0,	0,
+		0,	0,	0,	0,	0,	0,	0,	0,	0,
+		1,	1,	1,	1,	1,	1,	1,	1,	1,
+		1,	1,	1,	1,	1,	1,	1,	1,	1,
+		1,	1,	1,	1,	1,	1,	1,	1,	1,
+		2,	2,	2,	2,	2,	2,	2,	2,	2,
+		2,	2,	2,	2,	2,	2,	2,	2,	2,
+		2,	2,	2,	2,	2,	2,	2,	2,	2,
+	];
+	debug_assert!(cell < 81);
+	unsafe { *BAND_OF_CELL.get_unchecked(cell as usize) }
+	*/
+	cell / 27
+}
+
+#[inline]
+fn self_mask(cell: u8) -> u32 {
 // ???
 static SELF_MASK: [u32; 81] = [
 	0x37E3F001,	0x37E3F002,	0x37E3F004,	0x371F8E08,	0x371F8E10,	0x371F8E20,	0x30FC7E40,	0x30FC7E80,
@@ -1732,7 +1824,12 @@ static SELF_MASK: [u32; 81] = [
 	0x1807F1F8,	0x180BF1F8,	0x1813F1F8,	0x18238FC7,	0x18438FC7,	0x18838FC7,	0x19007E3F,	0x1A007E3F,
 	0x1C007E3F,
 ];
+	debug_assert!(cell < 81);
+	unsafe { *SELF_MASK.get_unchecked(cell as usize) }
+}
 
+#[inline]
+fn other_mask(cell: u8) -> u32 {
 // ???
 static OTHER_MASK: [u32; 81] = [
 	0x3FFBFDFE,	0x3FF7FBFD,	0x3FEFF7FB,	0x3FDFEFF7,	0x3FBFDFEF,	0x3F7FBFDF,	0x3EFF7FBF,	0x3DFEFF7F,
@@ -1747,23 +1844,101 @@ static OTHER_MASK: [u32; 81] = [
 	0x3FFBFDFE,	0x3FF7FBFD,	0x3FEFF7FB,	0x3FDFEFF7,	0x3FBFDFEF,	0x3F7FBFDF,	0x3EFF7FBF,	0x3DFEFF7F,
 	0x3BFDFEFF,
 ];
+	debug_assert!(cell < 81);
+	unsafe { *OTHER_MASK.get_unchecked(cell as usize) }
+}
 
+#[inline]
+fn shrink_mask(thing: u32) -> u32 {
+	debug_assert!(thing < 512);
+	unsafe { *SHRINK_MASK.get_unchecked(thing as usize) as u32 }
+}
 
-static OTHER_SLICE1: [u32; 27] = [
-	0x1,	0x0,	0x0,	0x4,	0x3,	0x3,	0x7,	0x6,
-	0x6,	0xA,	0x9,	0x9,	0xD,	0xC,	0xC,	0x10,
-	0xF,	0xF,	0x13,	0x12,	0x12,	0x16,	0x15,	0x15,
-	0x19,	0x18,	0x18,
+#[inline]
+fn complex_mask(thing: u32) -> u32 {
+	debug_assert!(thing < 512);
+	unsafe { *COMPLEX_MASK.get_unchecked(thing as usize) }
+}
+
+#[inline]
+fn mask_single(thing: u32) -> u32 {
+	debug_assert!(thing < 512);
+	unsafe { *MASK_SINGLE.get_unchecked(thing as usize) }
+}
+
+#[inline]
+fn column_single(thing: u32) -> u32 {
+	debug_assert!(thing < 512);
+	unsafe { *COLUMN_SINGLE.get_unchecked(thing as usize) as u32 }
+}
+
+#[inline]
+fn shrink_single(thing: u32) -> u32 {
+	debug_assert!(thing < 512);
+	unsafe { *SHRINK_SINGLE.get_unchecked(thing as usize) }
+}
+
+#[inline]
+fn row_uniq(thing: u32) -> u32 {
+	debug_assert!(thing < 512);
+	unsafe { *ROW_UNIQ.get_unchecked(thing as usize) as u32 }
+}
+
+#[inline]
+fn row_mask(thing: u32) -> u32 {
+	debug_assert!(thing < 8);
+	unsafe { *ROW_MASK.get_unchecked(thing as usize) }
+}
+
+#[inline]
+fn mod3(num: u8) -> u8 {
+	/*
+	static MOD3: [u8; 27] = [
+		0,	1,	2,	0,	1,	2,	0,	1,	2,
+		0,	1,	2,	0,	1,	2,	0,	1,	2,
+		0,	1,	2,	0,	1,	2,	0,	1,	2,
 ];
+	MOD3[num as usize]
+	*/
+	num % 3
+}
 
-static OTHER_SLICE2: [u32; 27] = [
-	0x2,	0x2,	0x1,	0x5,	0x5,	0x4,	0x8,	0x8,
-	0x7,	0xB,	0xB,	0xA,	0xE,	0xE,	0xD,	0x11,
-	0x11,	0x10,	0x14,	0x14,	0x13,	0x17,	0x17,	0x16,
-	0x1A,	0x1A,	0x19,
+#[inline]
+fn mod27(num: u8) -> u8 {
+	/*
+	static MOD27: [u8; 81] = [
+		0,	1,	2,	3,	4,	5,	6,	7,	8,
+		9,	10,	11,	12,	13,	14,	15,	16,	17,
+		18,	19,	20,	21,	22,	23,	24,	25,	26,
+		0,	1,	2,	3,	4,	5,	6,	7,	8,
+		9,	10,	11,	12,	13,	14,	15,	16,	17,
+		18,	19,	20,	21,	22,	23,	24,	25,	26,
+		0,	1,	2,	3,	4,	5,	6,	7,	8,
+		9,	10,	11,	12,	13,	14,	15,	16,	17,
+		18,	19,	20,	21,	22,	23,	24,	25,	26,
+	];
+	MOD27[num as usize]
+	*/
+	num % 27
+}
+
+#[inline]
+fn neighbour_slices(slice: u8) -> (u8, u8) {
+	static NEIGHBOUR_SLICES: [(u8, u8); 27] = [
+		(1, 2), (2, 0), (0, 1),
+		(4, 5), (5, 3), (3, 4),
+		(7, 8), (8, 6), (6, 7),
+		(10, 11), (11, 9), (9, 10),
+		(13, 14), (14, 12), (12, 13),
+		(16, 17), (17, 15), (15, 16),
+		(19, 20), (20, 18), (18, 19),
+		(22, 23), (23, 21), (21, 22),
+		(25, 26), (26, 24), (24, 25),
 ];
+	unsafe { *NEIGHBOUR_SLICES.get_unchecked(slice as usize) }
+}
 
-static SHRINK_MASK: [u32; 512] = [
+static SHRINK_MASK: [u8; 512] = [
 	0, 1, 1, 1, 1, 1, 1, 1, 2, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3,
 	2, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3,
 	4, 5, 5, 5, 5, 5, 5, 5, 6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7,
@@ -1927,7 +2102,7 @@ static SHRINK_SINGLE: [u32; 512] = [	// keep only rows with single
 	0, 0o241, 0o142, 0o40, 0, 0o241, 0o142, 0o40, 0, 0o241, 0o2, 0, 0o214, 0o200, 0, 0, 0, 0o1, 0o142, 0, 0o124, 0, 0o100, 0, 0, 0o1, 0o2, 0, 0o4, 0, 0, 0,
 ];
 
-static ROW_UNIQ: [u32; 512] = [	// 1 is row not defined in block  mode  1 to 111
+static ROW_UNIQ: [u8; 512] = [	// 1 is row not defined in block  mode  1 to 111
 	7, 6, 6, 6, 6, 6, 6, 6, 5, 4, 4, 4, 4, 4, 4, 4, 5, 4, 4, 4, 4, 4, 4, 4, 5, 4, 4, 4, 4, 4, 4, 4,
 	5, 4, 4, 4, 4, 4, 4, 4, 5, 4, 4, 4, 4, 4, 4, 4, 5, 4, 4, 4, 4, 4, 4, 4, 5, 4, 4, 4, 4, 4, 4, 4,
 	3, 2, 2, 2, 2, 2, 2, 2, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0,
@@ -2015,60 +2190,14 @@ static UPWCL_ARGS: [[u32; 9]; 27] = [
     [2, 2, 5, 8, 11, 14, 17, 20, 23],
 ];
 
-static BAND_OF_CELL: [u8; 81] = [
-	0,	0,	0,	0,	0,	0,	0,	0,	0,
-	0,	0,	0,	0,	0,	0,	0,	0,	0,
-	0,	0,	0,	0,	0,	0,	0,	0,	0,
-	1,	1,	1,	1,	1,	1,	1,	1,	1,
-	1,	1,	1,	1,	1,	1,	1,	1,	1,
-	1,	1,	1,	1,	1,	1,	1,	1,	1,
-	2,	2,	2,	2,	2,	2,	2,	2,	2,
-	2,	2,	2,	2,	2,	2,	2,	2,	2,
-	2,	2,	2,	2,	2,	2,	2,	2,	2,
+#[inline(always)]
+fn bit_pos(mask: u32) -> u8 {
+	/*
+	static DE_BRUIJN_FACTOR: [u32; 32] = [
+		0, 1, 28, 2, 29, 14, 24, 3, 30, 22, 20, 15, 25, 17, 4, 8,
+		31, 27, 13, 23, 21, 19, 16, 7, 26, 12, 18, 6, 11, 5, 10, 9
 ];
-
-static MASK_OF_CELL: [u32; 81] = [
-	0x1,	0x2,	0x4,	0x8,	0x10,	0x20,	0x40,	0x80,	0x100,
-	0x200,	0x400,	0x800,	0x1000,	0x2000,	0x4000,	0x8000,	0x10000,	0x20000,
-	0x40000,	0x80000,	0x100000,	0x200000,	0x400000,	0x800000,	0x1000000,	0x2000000,	0x4000000,
-	0x1,	0x2,	0x4,	0x8,	0x10,	0x20,	0x40,	0x80,	0x100,
-	0x200,	0x400,	0x800,	0x1000,	0x2000,	0x4000,	0x8000,	0x10000,	0x20000,
-	0x40000,	0x80000,	0x100000,	0x200000,	0x400000,	0x800000,	0x1000000,	0x2000000,	0x4000000,
-	0x1,	0x2,	0x4,	0x8,	0x10,	0x20,	0x40,	0x80,	0x100,
-	0x200,	0x400,	0x800,	0x1000,	0x2000,	0x4000,	0x8000,	0x10000,	0x20000,
-	0x40000,	0x80000,	0x100000,	0x200000,	0x400000,	0x800000,	0x1000000,	0x2000000,	0x4000000,
-];
-
-static DIGIT_TO_BASE: [u8; 9] = [
-	0,	3,	6,	9,	12,	15,	18,	21,	24,
-];
-
-static ROW_OF_CELL: [u32; 81] = [
-	0,	0,	0,	0,	0,	0,	0,	0,	0,
-	1,	1,	1,	1,	1,	1,	1,	1,	1,
-	2,	2,	2,	2,	2,	2,	2,	2,	2,
-	3,	3,	3,	3,	3,	3,	3,	3,	3,
-	4,	4,	4,	4,	4,	4,	4,	4,	4,
-	5,	5,	5,	5,	5,	5,	5,	5,	5,
-	6,	6,	6,	6,	6,	6,	6,	6,	6,
-	7,	7,	7,	7,	7,	7,	7,	7,	7,
-	8,	8,	8,	8,	8,	8,	8,	8,	8,
-];
-
-static MOD3: [u32; 27] = [
-	0,	1,	2,	0,	1,	2,	0,	1,	2,
-	0,	1,	2,	0,	1,	2,	0,	1,	2,
-	0,	1,	2,	0,	1,	2,	0,	1,	2,
-];
-
-static MOD27: [u32; 81] = [
-	0,	1,	2,	3,	4,	5,	6,	7,	8,
-	9,	10,	11,	12,	13,	14,	15,	16,	17,
-	18,	19,	20,	21,	22,	23,	24,	25,	26,
-	0,	1,	2,	3,	4,	5,	6,	7,	8,
-	9,	10,	11,	12,	13,	14,	15,	16,	17,
-	18,	19,	20,	21,	22,	23,	24,	25,	26,
-	0,	1,	2,	3,	4,	5,	6,	7,	8,
-	9,	10,	11,	12,	13,	14,	15,	16,	17,
-	18,	19,	20,	21,	22,	23,	24,	25,	26,
-];
+	unsafe { *DE_BRUIJN_FACTOR.get_unchecked((mask.wrapping_mul(0x077CB531)) as usize >> 27)  as u8}
+	*/
+	mask.trailing_zeros() as u8
+}

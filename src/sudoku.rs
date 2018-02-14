@@ -199,7 +199,7 @@ impl Sudoku {
 		for &cell in cell_order.iter() {
 			let mut sudoku_tmp = sudoku;
 			sudoku_tmp.0[cell] = 0;
-			if sudoku_tmp.solve_unique().is_some() {
+			if sudoku_tmp.is_uniquely_solvable() {
 				sudoku = sudoku_tmp;
 			}
 		}
@@ -454,6 +454,20 @@ impl Sudoku {
 			true => solutions.into_iter().next(),
 			false => None,
 		}
+	}
+
+	/// Counts number of solutions to sudoku up to `limit`
+	/// This solves the sudoku but does not return the solutions which allows for slightly faster execution.
+	pub fn count_at_most(self, limit: usize) -> usize {
+		SudokuSolver2::from_sudoku(self)
+			.ok()
+			.map_or(0, |solver| solver.count_at_most(limit))
+	}
+
+	/// Checks whether sudoku has one and only one solution.
+	/// This solves the sudoku but does not return the solution which allows for slightly faster execution.
+	pub fn is_uniquely_solvable(self) -> bool {
+		self.count_at_most(2) == 1
 	}
 
 	/// Solve sudoku and return the first `limit` solutions it finds. If less solutions exist, return only those. Return `None` if no solution exists.
@@ -882,7 +896,30 @@ impl ::core::fmt::Display for SudokuLine {
 const ALL: u32 = 0o777_777_777;
 const LOW9: u32 = 0o000_000_777;
 
-#[derive(Clone)]
+
+#[derive(Debug)]
+enum Solutions {
+	Count(usize),
+	Vector(Vec<Sudoku>),
+}
+
+impl Solutions {
+	fn len(&self) -> usize {
+		match *self {
+			Solutions::Count(len) => len,
+			Solutions::Vector(ref v) => v.len(),
+		}
+	}
+
+	fn into_vec(self) -> Option<Vec<Sudoku>> {
+		match self {
+			Solutions::Vector(v) => Some(v),
+			Solutions::Count(_) => None,
+		}
+	}
+}
+
+#[derive(Clone, Copy)]
 struct SudokuSolver2 {
 	bands: [u32; 27], // 9 digits, 3 rows each
 	prev_bands: [u32; 27],
@@ -1559,7 +1596,7 @@ impl SudokuSolver2 {
 		Ok(())
 	}
 
-	fn full_update(&mut self, limit: usize, solutions: &mut Vec<Sudoku>) -> Result<(), Unsolvable> {
+	fn full_update(&mut self, limit: usize, solutions: &mut Solutions) -> Result<(), Unsolvable> {
 		debug_assert!(solutions.len() <= limit);
 		if solutions.len() == limit {
 			return Err(Unsolvable); // not really, but it forces a recursion stop
@@ -1578,22 +1615,23 @@ impl SudokuSolver2 {
 	}
 
 	fn is_solved(&self) -> bool {
-		(self.unsolved_cells[0] | self.unsolved_cells[1] | self.unsolved_cells[2]) == 0
+		self.unsolved_cells == [0; 3]
 	}
 
-	fn guess(&mut self, solver_stack: &mut SolvStack, limit: usize, solutions: &mut Vec<Sudoku>) {
+	fn guess(&mut self, solver_stack: &mut SolvStack, limit: usize, solutions: &mut Solutions) {
 		if self.is_solved() {
 			debug_assert!(solutions.len() < limit, "too many solutions in guess: limit: {}, len: {}", limit, solutions.len());
-			solutions.push(self.extract_solution());
-			return
+			match *solutions {
+				Solutions::Count(ref mut count) => *count += 1,
+				Solutions::Vector(ref mut vec) => vec.push( self.extract_solution() )
 		}
+		} else if self.guess_bivalue_in_cell(solver_stack, limit, solutions).is_ok() {
 		// .is_ok() == found nothing
-		if self.guess_bivalue_in_cell(solver_stack, limit, solutions).is_ok() {
 			self.guess_first_cell(solver_stack, limit, solutions);
 		}
 	}
 
-	fn guess_bivalue_in_cell(&mut self, solver_stack: &mut SolvStack, limit: usize, solutions: &mut Vec<Sudoku>) -> Result<(), Unsolvable> {
+	fn guess_bivalue_in_cell(&mut self, solver_stack: &mut SolvStack, limit: usize, solutions: &mut Solutions) -> Result<(), Unsolvable> {
 		for band in 0..3 {
 			let mut pairs = self.pairs[band as usize];
 			if pairs != 0 {
@@ -1633,7 +1671,7 @@ impl SudokuSolver2 {
 	// iterates through every possibility and calls guess()
 	// guess() short circuits when enough solutions were found and therefore
 	// so does this
-	fn guess_first_cell(&mut self, solver_stack: &mut SolvStack, limit: usize, solutions: &mut Vec<Sudoku>) {
+	fn guess_first_cell(&mut self, solver_stack: &mut SolvStack, limit: usize, solutions: &mut Solutions) {
 		// guess all possibilities in the first unsolved cell encountered
 		for band in 0..3 {
 			let mut unsolved_cells = self.unsolved_cells[band as usize];
@@ -1658,7 +1696,7 @@ impl SudokuSolver2 {
 		}
 	}
 
-	fn _solve_at_most(mut self, limit: usize, solutions: &mut Vec<Sudoku>) {
+	fn _solve_at_most(mut self, limit: usize, solutions: &mut Solutions) {
 		if self.find_singles().is_err() { return }
 
 		// either solved or impossible
@@ -1668,9 +1706,15 @@ impl SudokuSolver2 {
 	}
 
 	fn solve_at_most(self, limit: usize) -> Vec<Sudoku> {
-		let mut solutions = vec![];
+		let mut solutions = Solutions::Vector(vec![]);
 		self._solve_at_most(limit, &mut solutions);
-		solutions
+		solutions.into_vec().unwrap()
+	}
+
+	fn count_at_most(self, limit: usize) -> usize {
+		let mut solutions = Solutions::Count(0);
+		self._solve_at_most(limit, &mut solutions);
+		solutions.len()
 	}
 }
 

@@ -23,7 +23,7 @@ fn easy_sudokus_solve_all(b: &mut test::Bencher) {
     let sudokus = read_sudokus( include_str!("../sudokus/Lines/easy_sudokus.txt") );
     let sudokus_1000 = sudokus.iter().cycle().cloned().take(100).collect::<Vec<_>>();;
 	b.iter(|| {
-		for sudoku in sudokus_1000.iter().cloned() { sudoku.solve_at_most(100); }
+		for sudoku in sudokus_1000.iter().cloned() { sudoku.is_uniquely_solvable(); }
 	})
 }
 
@@ -41,7 +41,7 @@ fn medium_sudokus_solve_all(b: &mut test::Bencher) {
     let sudokus = read_sudokus( include_str!("../sudokus/Lines/medium_sudokus.txt") );
     let sudokus_1000 = sudokus.iter().cycle().cloned().take(100).collect::<Vec<_>>();;
 	b.iter(|| {
-		for sudoku in sudokus_1000.iter().cloned() { sudoku.solve_at_most(100); }
+		for sudoku in sudokus_1000.iter().cloned() { sudoku.is_uniquely_solvable(); }
 	})
 }
 
@@ -59,7 +59,7 @@ fn hard_sudokus_solve_all(b: &mut test::Bencher) {
     let sudokus = read_sudokus( include_str!("../sudokus/Lines/hard_sudokus.txt") );
     let sudokus_1000 = sudokus.iter().cycle().cloned().take(100).collect::<Vec<_>>();;
 	b.iter(|| {
-		for sudoku in sudokus_1000.iter().cloned() { sudoku.solve_at_most(100); }
+		for sudoku in sudokus_1000.iter().cloned() { sudoku.is_uniquely_solvable(); }
 	})
 }
 

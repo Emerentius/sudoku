@@ -172,7 +172,7 @@ impl Sudoku {
 		);
 
 		SudokuSolver::new()
-			._randomized_solve_one(&mut stack)
+			.randomized_solve_one(&mut stack)
 			.unwrap()
 	}
 
@@ -197,13 +197,64 @@ impl Sudoku {
 		::rand::thread_rng().shuffle(&mut cell_order);
 
 		// remove cell content if possible without destroying uniqueness of solution
-		for &cell in cell_order.iter() {
+		const CUTOFF: usize = 20;
+		let mut sudoku_tmp = sudoku;
+		for &cell in &cell_order[..CUTOFF] {
+			sudoku_tmp.0[cell] = 0;
+		}
+		if sudoku_tmp.is_uniquely_solvable() {
+			sudoku = sudoku_tmp;
+		} else {
+			for &cell in &cell_order[..CUTOFF] {
+				let mut sudoku_tmp = sudoku;
+				sudoku_tmp.0[cell] = 0;
+				if sudoku_tmp.is_uniquely_solvable() {
+					sudoku = sudoku_tmp;
+				}
+			}
+		}
+
+		let mut n_cell = CUTOFF;
+		while n_cell < 50 {
+			let mut sudoku_tmp = sudoku;
+			let cell1 = cell_order[n_cell];
+			let cell2 = cell_order[n_cell+1];
+			sudoku_tmp.0[cell1] = 0;
+			sudoku_tmp.0[cell2] = 0;
+			if sudoku_tmp.is_uniquely_solvable() {
+				// both numbers can be left out
+				sudoku = sudoku_tmp;
+				n_cell += 2;
+				continue
+			}
+
+			sudoku_tmp.0[cell2] = sudoku.0[cell2];
+			if sudoku_tmp.is_uniquely_solvable() {
+				// first number can be left out
+				sudoku = sudoku_tmp;
+				n_cell += 2;
+				continue
+			}
+
+			sudoku_tmp.0[cell1] = sudoku.0[cell1];
+			sudoku_tmp.0[cell2] = 0;
+			if sudoku_tmp.is_uniquely_solvable() {
+				// second number can be left out
+				sudoku = sudoku_tmp;
+			}
+
+			// no number can be left out;
+			n_cell += 2;
+		}
+
+		for &cell in &cell_order[50..] {
 			let mut sudoku_tmp = sudoku;
 			sudoku_tmp.0[cell] = 0;
 			if sudoku_tmp.is_uniquely_solvable() {
 				sudoku = sudoku_tmp;
 			}
 		}
+
 		sudoku
 	}
 
@@ -810,7 +861,7 @@ impl SudokuSolver {
 	}
 
 	// for generation of random, filled sudokus
-	fn _randomized_solve_one(mut self, stack: &mut Vec<Entry>) -> Result<Sudoku, Unsolvable> {
+	fn randomized_solve_one(mut self, stack: &mut Vec<Entry>) -> Result<Sudoku, Unsolvable> {
 		// insert and deduce in a loop
 		// do a random guess when no more deductions are found
 		// backtrack on error (via recursion)
@@ -825,7 +876,7 @@ impl SudokuSolver {
 
 			let entry = self.find_good_random_guess();
 			stack.push(entry);
-			if let filled_sudoku @ Ok(_) = self.clone()._randomized_solve_one(stack) {
+			if let filled_sudoku @ Ok(_) = self.clone().randomized_solve_one(stack) {
 				return filled_sudoku;
 			}
 			stack.clear();

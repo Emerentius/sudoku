@@ -33,6 +33,12 @@ Version 0.4.1 (2018-01-01)
   for random solved and unsolved but uniquely solvable sudokus respectively.
 * Implement `Hash`, `PartialOrd`, `Ord` for `Sudoku` and `SudokuLine`.
 
-Unreleased
-----------
+Version 0.5.0 (2018-02-14)
+==========================
 * Optional `serde` support
+* Implemented the JCZsolve algorithm which is to date and to the best knowledge of the author
+  the fastest sudoku solver in existence.
+* Added `unchecked_indexing` feature
+  While testing hasn't shown any incorrect indexing, bounds checks are activated by default to guarantee memory safety in case of a bug. This lowers the speed by 2-12% and can be deactivated by the aforementioned feature
+* Added two new functions `count_at_most(limit)` and `is_uniquely_solvable()` which run slightly faster
+  than their equivalents that return the solved grid.

@@ -51,6 +51,7 @@ extern crate rand;
 mod consts;
 mod types;
 mod sudoku;
+mod solver;
 mod positions;
 
 pub use sudoku::Sudoku;

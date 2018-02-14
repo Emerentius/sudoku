@@ -281,16 +281,26 @@ impl Sudoku {
 			}
 	}
 
-	fn from_chars_line<CI: Iterator<Item=char>>(mut chars: CI) -> Result<Sudoku, LineFormatParseError> {
+	/// Reads a sudoku in the line format
+	/// Stops parsing after the first sudoku
+	pub fn from_str_line(s: &str) -> Result<Sudoku, LineFormatParseError> {
+		let chars = s.as_bytes();
 		let mut grid = [0; N_CELLS];
 		let mut i = 0;
-		for (cell, ch) in grid.iter_mut().zip(chars.by_ref()) {
+		for (cell, &ch) in grid.iter_mut().zip(chars) {
 			match ch {
-				'_' | '.' | '0' => *cell = 0,
-				'1' ... '9' => *cell = ch as u8 - b'0',
+				b'_' | b'.' => *cell = 0,
+				b'0' ... b'9' => *cell = ch - b'0',
 				// space ends sudoku before grid is filled
-				' ' | '\t' => return Err(LineFormatParseError::NotEnoughCells(i)),
-				_ => return Err(LineFormatParseError::InvalidEntry(PubEntry{cell: i, ch: ch })),
+				b' ' | b'\t' => return Err(LineFormatParseError::NotEnoughCells(i)),
+				_ => return Err(
+					LineFormatParseError::InvalidEntry(
+						PubEntry {
+							cell: i,
+							ch: s[i as usize..].chars().next().unwrap(),
+						}
+					)
+				),
 			}
 			i += 1;
 		}
@@ -300,12 +310,12 @@ impl Sudoku {
 		}
 
 		// if more than 81 elements, sudoku must be delimited
-		if let Some(ch) = chars.next() {
+		if let Some(&ch) = chars.get(81) {
 			match ch {
 				// delimiters, end of sudoku
-				'\t' | ' ' | '\r' | '\n' => (),
+				b'\t' | b' ' | b'\r' | b'\n' => (),
 				// valid cell entry => too long
-				'_' | '.' | '0' | '1'...'9' => {
+				b'_' | b'.' | b'0'...b'9' => {
 					return Err(LineFormatParseError::TooManyCells)
 				},
 				// any other char can not be part of sudoku
@@ -315,17 +325,7 @@ impl Sudoku {
 			}
 		}
 
-		// Read a single sudoku in line format
-		// '_', '.' and '0' are treated as empty cells
-		// an optional comment is allowed after the sudoku
-		// which must be delimited by a space
 		Ok(Sudoku(grid))
-	}
-
-	/// Reads a sudoku in the line format
-	/// Stops parsing after the first sudoku
-	pub fn from_str_line(s: &str) -> Result<Sudoku, LineFormatParseError> {
-		Sudoku::from_chars_line(s.chars())
 	}
 
 	/// Reads a sudoku in the block format with or without field delimiters
@@ -406,8 +406,8 @@ impl Sudoku {
 
 				let cell = n_line_sud * 9 + n_col_sud;
 				match ch {
-					'1'...'9'       => grid[cell as usize] = ch as u8 - b'0',
-					'_' | '.' | '0' => grid[cell as usize] = 0,
+					'_' | '.' => grid[cell as usize] = 0,
+					'0'...'9' => grid[cell as usize] = ch as u8 - b'0',
 					_ => return Err(BlockFormatParseError::InvalidEntry(PubEntry{cell: cell as u8, ch })),
 				}
 				n_col_sud += 1;
@@ -440,10 +440,10 @@ impl Sudoku {
 			let mut row_vals = [0; 9];
 			let mut nums_in_row = 0;
 			for ch in line.chars() {
-				if ['.', '_', '0'].contains(&ch) {
+				if ['.', '_'].contains(&ch) {
 					row_vals[nums_in_row] = 0;
 					nums_in_row += 1;
-				} else if '1' <= ch && ch <= '9' {
+				} else if '0' <= ch && ch <= '9' {
 					row_vals[nums_in_row] = ch as u8 - b'0';
 					nums_in_row += 1;
 				}

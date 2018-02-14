@@ -72,3 +72,29 @@ fn generate_filled_sudoku(b: &mut test::Bencher) {
 fn generate_unique_sudoku(b: &mut test::Bencher) {
 	b.iter(Sudoku::generate_unique)
 }
+
+#[bench]
+fn parse_line(b: &mut test::Bencher) {
+	let sudokus = (0..1000).map(|_| Sudoku::generate_unique().to_str_line())
+		.collect::<Vec<_>>();
+	let mut sudokus = sudokus.iter().cycle();
+
+	b.iter(|| {
+		Sudoku::from_str_line(sudokus.next().unwrap())
+	})
+}
+
+#[bench]
+fn parse_lines(b: &mut test::Bencher) {
+	let sudokus = (0..1000).map(|_| Sudoku::generate_unique().to_str_line())
+		.collect::<Vec<_>>();
+	let sudokus = sudokus.iter().map(|line| &**line)
+		.collect::<Vec<_>>();
+	let sudokus = sudokus.join("\n");
+
+	b.iter(|| {
+		for line in sudokus.lines() {
+			let _ = Sudoku::from_str_line(line);
+		}
+	})
+}

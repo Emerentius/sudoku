@@ -57,11 +57,14 @@ extern crate rand;
 mod consts;
 mod types;
 mod sudoku;
+mod strategy_solver;
 mod solver;
 mod generator;
 mod positions;
 
 pub use sudoku::Sudoku;
+pub use strategy_solver::StrategySolver;
+pub use strategy_solver::strategies;
 //pub use types::{LineFormatParseError, BlockFormatParseError, PubEntry as Entry};
 
 /// Contains errors for the various parsing modes

@@ -156,7 +156,6 @@ pub type Iter<'a> = iter::Map<slice::Iter<'a, u8>, fn(&u8)->Option<u8>>; // Iter
 
 impl Sudoku {
 	/// Generate a random, solved sudoku
-	/// Any valid sudoku can occur with equal probability
 	pub fn generate_filled() -> Self {
 		// fill first row with a permutation of 1...9
 		// not necessary, but ~15% faster

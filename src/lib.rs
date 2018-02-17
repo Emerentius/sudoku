@@ -50,6 +50,7 @@
 //!     let cell_contents: [u8; 81] = solution.to_bytes();
 //! }
 //! ```
+#![cfg_attr(nightly, feature(test))]
 #[cfg(feature="serde")] extern crate serde;
 extern crate core;
 extern crate rand;

@@ -888,7 +888,8 @@ fn find_unique<I: Iterator<Item=Mask<Digit>>>(possibilities: I) -> (Mask<Digit>,
 
 #[cfg(test)]
 mod test {
-    #[cfg(bench)] extern crate test;
+	#[cfg(nightly)]
+	extern crate test;
     use super::*;
     fn read_sudokus(sudokus_str: &str) -> Vec<Sudoku> {
     sudokus_str.lines()
@@ -978,7 +979,7 @@ mod test {
     }
 
     #[bench]
-    #[cfg(bench)]
+	#[cfg(nightly)]
     fn easy_sudokus_strategy_solver(b: &mut test::Bencher) {
         let sudokus = read_sudokus( include_str!("../sudokus/Lines/easy_sudokus.txt") );
         let sudokus_100 = sudokus.iter().cycle().cloned().take(100).collect::<Vec<_>>();
@@ -991,7 +992,7 @@ mod test {
     }
 
     #[bench]
-    #[cfg(bench)]
+	#[cfg(nightly)]
     fn medium_sudokus_strategy_solver(b: &mut test::Bencher) {
         let sudokus = read_sudokus( include_str!("../sudokus/Lines/medium_sudokus.txt") );
         let sudokus_100 = sudokus.iter().cycle().cloned().take(100).collect::<Vec<_>>();
@@ -1005,7 +1006,7 @@ mod test {
     }
 
 	#[bench]
-    #[cfg(bench)]
+	#[cfg(nightly)]
     fn easy_sudokus_backtracking_strategy_solver(b: &mut test::Bencher) {
         let sudokus = read_sudokus( include_str!("../sudokus/Lines/easy_sudokus.txt") );
         let sudokus_100 = sudokus.iter().cycle().cloned().take(100).collect::<Vec<_>>();
@@ -1018,7 +1019,7 @@ mod test {
     }
 
     #[bench]
-    #[cfg(bench)]
+	#[cfg(nightly)]
     fn medium_sudokus_backtracking_strategy_solver(b: &mut test::Bencher) {
         let sudokus = read_sudokus( include_str!("../sudokus/Lines/medium_sudokus.txt") );
         let sudokus_100 = sudokus.iter().cycle().cloned().take(100).collect::<Vec<_>>();

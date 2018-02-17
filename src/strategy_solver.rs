@@ -360,6 +360,7 @@ impl Strategy for HiddenSingles {
 					// remove single from mask
 					singles &= !Mask::from_num(num);
 					// everything in this zone found
+					//if singles == Mask::NONE { return Ok(()) }
 					if singles == Mask::NONE { break }
 				}
 			}
@@ -472,6 +473,7 @@ impl Strategy for LockedCandidates {
 					remove_impossibles(field_uniques, &line_neighbours)
 				}
 			}
+			//return Ok(())
 		}
 		Ok(())
 	}
@@ -496,6 +498,8 @@ impl Strategy for NakedSubsets {
 			impossible_entries: &mut Vec<Entry>,
 		) {
 			if stack.len() == 5 { return }
+			// QUICK RETURN for speedup only
+			if impossible_entries.len() > 0 { return }
 			if stack.len() > 0 && total_poss_digs.n_possibilities() == stack.len() as u8 {
 				//println!("depth: {} => {:?}, commons: {:b}", stack.len(), stack, total_poss_digs.0);
 				for cell in all_cells.iter().filter(|cell| !stack.contains(cell)) {
@@ -610,33 +614,6 @@ impl Strategy for XWing {
 			// 0..9 = rows, 9..18 = cols
 			for lines in &[Line::ALL_ROWS, Line::ALL_COLS] {
 				basic_fish_walk_combinations(sudoku, num_off, 2, &mut stack, lines, lines, Mask::NONE, impossible_entries);
-				/*
-				for (i, line1) in lines.iter().enumerate() {
-					let poss_pos1 = sudoku.zone_poss_positions[line1.0 as usize][num_off];
-					if poss_pos1.n_possibilities() != 2 { continue }
-
-					//let boundary = if line1 < 9 { 9 } else { 18 };
-					for line2 in (&lines[i+1..]).iter() {
-						let poss_pos2 = sudoku.zone_poss_positions[line2.0 as usize][num_off];
-
-						if poss_pos1 == poss_pos2 {
-							// loop through other rows
-							for line in lines.iter().filter(|&line| line != line1 && line != line2 ) {
-								for pos in poss_pos1 {
-									let cell = Cell::from_zone_pos(line.zone(), pos);
-									//Cell::from_zone_pos()
-									//let cell = row*9 + col;
-									let cell_mask = sudoku.possible_digits_in_cell(cell);
-									if cell_mask & Mask::from_num(num_off as u8 +1) != Mask::NONE {
-										impossible_entries.push(Entry{ num: num_off as u8 +1, cell: cell.0 });
-									}
-								}
-							}
-						}
-
-
-					}
-				}*/
 			}
 		}
 		Ok(())
@@ -888,7 +865,6 @@ fn find_unique<I: Iterator<Item=Mask<Digit>>>(possibilities: I) -> (Mask<Digit>,
 
 #[cfg(test)]
 mod test {
-	#[cfg(nightly)]
 	extern crate test;
     use super::*;
     fn read_sudokus(sudokus_str: &str) -> Vec<Sudoku> {
@@ -979,20 +955,18 @@ mod test {
     }
 
     #[bench]
-	#[cfg(nightly)]
     fn easy_sudokus_strategy_solver(b: &mut test::Bencher) {
         let sudokus = read_sudokus( include_str!("../sudokus/Lines/easy_sudokus.txt") );
         let sudokus_100 = sudokus.iter().cycle().cloned().take(100).collect::<Vec<_>>();
         let strategies = all_strategies();
         b.iter(|| {
             for sudoku in sudokus_100.iter().cloned() {
-                StrategySolver::from_sudoku(sudoku).unwrap().solve(&strategies).unwrap();
+                let _ = StrategySolver::from_sudoku(sudoku).unwrap().solve(&strategies);
             }
         })
     }
 
     #[bench]
-	#[cfg(nightly)]
     fn medium_sudokus_strategy_solver(b: &mut test::Bencher) {
         let sudokus = read_sudokus( include_str!("../sudokus/Lines/medium_sudokus.txt") );
         let sudokus_100 = sudokus.iter().cycle().cloned().take(100).collect::<Vec<_>>();
@@ -1000,13 +974,12 @@ mod test {
         b.iter(|| {
             for sudoku in sudokus_100.iter().cloned() {
                 // solution not guaranteed yet, discard error.
-                let _ = StrategySolver::from_sudoku(sudoku).unwrap().solve(&strategies).unwrap();
+                let _ = StrategySolver::from_sudoku(sudoku).unwrap().solve(&strategies);
             }
         })
     }
 
 	#[bench]
-	#[cfg(nightly)]
     fn easy_sudokus_backtracking_strategy_solver(b: &mut test::Bencher) {
         let sudokus = read_sudokus( include_str!("../sudokus/Lines/easy_sudokus.txt") );
         let sudokus_100 = sudokus.iter().cycle().cloned().take(100).collect::<Vec<_>>();
@@ -1019,7 +992,6 @@ mod test {
     }
 
     #[bench]
-	#[cfg(nightly)]
     fn medium_sudokus_backtracking_strategy_solver(b: &mut test::Bencher) {
         let sudokus = read_sudokus( include_str!("../sudokus/Lines/medium_sudokus.txt") );
         let sudokus_100 = sudokus.iter().cycle().cloned().take(100).collect::<Vec<_>>();

@@ -42,3 +42,7 @@ Version 0.5.0 (2018-02-14)
   While testing hasn't shown any incorrect indexing, bounds checks are activated by default to guarantee memory safety in case of a bug. This lowers the speed by 2-12% and can be deactivated by the aforementioned feature
 * Added two new functions `count_at_most(limit)` and `is_uniquely_solvable()` which run slightly faster
   than their equivalents that return the solved grid.
+
+Unreleased
+==========
+* Add `generate_unique_from(sudoku)`

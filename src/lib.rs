@@ -9,6 +9,7 @@
         write_with_newline,
     )
 )]
+#![feature(generators, generator_trait, conservative_impl_trait)]
 //! The Sudoku library
 //!
 //! ## Overview
@@ -64,8 +65,8 @@ mod generator;
 mod positions;
 
 pub use sudoku::Sudoku;
-pub use strategy_solver::StrategySolver;
-pub use strategy_solver::strategies;
+//pub use strategy_solver::StrategySolver;
+//pub use strategy_solver::strategies;
 //pub use types::{LineFormatParseError, BlockFormatParseError, PubEntry as Entry};
 
 /// Contains errors for the various parsing modes

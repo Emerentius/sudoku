@@ -1,3 +1,4 @@
+#![allow(unused)]
 #![allow(missing_docs)]
 use sudoku::Sudoku;
 use types::{Array81, Mask, Digit, Position, Unsolvable, Entry};
@@ -6,6 +7,7 @@ use positions::{
     row_zone, col_zone, field_zone, cells_of_zone,
     Cell, Line, Zone, Slice, Band,
 };
+use super::NewStrategy;
 
 // State of Sudoku
 // Contains caches of various properties of the grid
@@ -136,7 +138,7 @@ impl StrategySolver {
 		Ok(())
 	}
 
-	fn possible_digits_in_cell(&self, Cell(cell): Cell) -> Mask<Digit> {
+	pub(crate) fn possible_digits_in_cell(&self, Cell(cell): Cell) -> Mask<Digit> {
 		self.cell_poss_digits[cell as usize]
 	}
 
@@ -239,48 +241,59 @@ impl StrategySolver {
 				continue 'outer
 			}
 		}
+	}
 
-		/*
+    fn _solve_with_backtracking2(mut self, strategies: &[Box<Strategy>]) -> Result<Sudoku, Unsolvable> {
+		let mut deduced_entries = vec![];
+		let mut impossible_entries = vec![];
+		let mut solver_stack = vec![];
 
-		//println!("start:\n{}", self.grid);
 		'outer: loop {
-			for strategy in strategies.iter() {
-				strategy.apply_strategy(&self, &mut deduced_entries, &mut impossible_entries)?;
-				let found_sth = deduced_entries.len() != 0 || impossible_entries.len() != 0;
+			'solve: loop {
+				// deduce as much as possible
+				for strategy in strategies.iter() {
+					if strategy.apply_strategy(&self, &mut deduced_entries, &mut impossible_entries).is_err() {
+						break 'solve
+					}
+					let found_sth = deduced_entries.len() != 0 || impossible_entries.len() != 0;
 
-				//println!("applying {:?}. strategy => {:2} entries deduced, {:2} possibilities removed", i, deduced_entries.len(), impossible_entries.len());
+					//println!("applying {:?}. strategy => {:2} entries deduced, {:2} possibilities removed", i, deduced_entries.len(), impossible_entries.len());
 
-				if deduced_entries.len() != 0 {
-					self.insert_entries(&mut deduced_entries)?;
+					if deduced_entries.len() != 0 {
+						if self.insert_entries(&mut deduced_entries).is_err() {
+							break 'solve
+						}
+					}
+					if impossible_entries.len() != 0 {
+						if self.remove_impossibilities(&mut impossible_entries).is_err() {
+							break 'solve
+						}
+					}
+					if found_sth { continue 'solve }
+					if self.is_solved() {
+						return Ok(self.grid)
+					}
 				}
-				if impossible_entries.len() != 0 {
-					self.remove_impossibilities(&mut impossible_entries)?;
-				}
-				if found_sth { continue 'outer }
-				if self.is_solved() {
-					return Ok(self.grid)
-				}
+
+				// start backtracking
+				let entry = self.find_good_guess();
+				deduced_entries.push(entry);
+				solver_stack.push((self.clone(), entry));
+				self.insert_entries(&mut deduced_entries).unwrap();
 			}
 
-			let entry = self.find_good_guess();
-            deduced_entries.push(entry);
-			let mut clone = self.clone();
-			clone.insert_entries(&mut deduced_entries).unwrap();
-			match clone._solve_with_backtracking(strategies) {
-                 solution @ Ok(_) => return solution,
-				 Err(Unsolvable)  => {
-					deduced_entries.clear();
-					impossible_entries.clear();
-					self.remove_cell_impossibilities(entry.cell, Mask::from_num(entry.num))?;
+			'backtrack: loop {
+				deduced_entries.clear();
+				impossible_entries.clear();
+				let (solver, entry): (_, _) = solver_stack.pop().ok_or(Unsolvable)?;
+				self = solver;
+				impossible_entries.push(entry);
+				if self.remove_impossibilities(&mut impossible_entries).is_err() {
 					continue
-				 }
-            };
-
-			//println!("Failure, but got this far: \n{}\n", self.grid);
-
-			//break Err(Unsolvable)
+				};
+				continue 'outer
+			}
 		}
-		*/
 	}
 
     // copied from fast solver
@@ -329,7 +342,7 @@ impl Strategy for HiddenSingles {
 	fn apply_strategy(&self, sudoku: &StrategySolver, new_entrs: &mut Vec<Entry>, _: &mut Vec<Entry>) -> Result<(), Unsolvable> {
 		for zone in 0..27 {
 			/* equivalent but slower
-			for num_off in 0..8 {
+			for num_off in 0..9 {
 				let poss_pos = sudoku.zone_poss_positions[zone as usize][num_off as usize];
 				if let Some(unique_pos) = poss_pos.unique_pos().unwrap_or(None) {
 					let cell = Cell::from_zone_pos(Zone(zone), unique_pos).0;
@@ -914,49 +927,49 @@ mod test {
 
     #[test]
     fn strategy_solver_correct_solution_easy_sudokus() {
-        let sudokus = read_sudokus( include_str!("../sudokus/Lines/easy_sudokus.txt") );
-        let solved_sudokus = read_sudokus( include_str!("../sudokus/Lines/solved_easy_sudokus.txt") );
+        let sudokus = read_sudokus( include_str!("../../sudokus/Lines/easy_sudokus.txt") );
+        let solved_sudokus = read_sudokus( include_str!("../../sudokus/Lines/solved_easy_sudokus.txt") );
         strategy_solver_correct_solution(sudokus, solved_sudokus, StrategySolver::solve);
     }
 
     #[test]
     fn strategy_solver_correct_solution_medium_sudokus() {
-        let sudokus = read_sudokus( include_str!("../sudokus/Lines/medium_sudokus.txt") );
-        let solved_sudokus = read_sudokus( include_str!("../sudokus/Lines/solved_medium_sudokus.txt") );
+        let sudokus = read_sudokus( include_str!("../../sudokus/Lines/medium_sudokus.txt") );
+        let solved_sudokus = read_sudokus( include_str!("../../sudokus/Lines/solved_medium_sudokus.txt") );
         strategy_solver_correct_solution(sudokus, solved_sudokus, StrategySolver::solve);
     }
 
     #[test]
     fn strategy_solver_correct_solution_hard_sudokus() {
-        let sudokus = read_sudokus( include_str!("../sudokus/Lines/hard_sudokus.txt") );
-        let solved_sudokus = read_sudokus( include_str!("../sudokus/Lines/solved_hard_sudokus.txt") );
+        let sudokus = read_sudokus( include_str!("../../sudokus/Lines/hard_sudokus.txt") );
+        let solved_sudokus = read_sudokus( include_str!("../../sudokus/Lines/solved_hard_sudokus.txt") );
         strategy_solver_correct_solution(sudokus, solved_sudokus, StrategySolver::solve);
     }
 
     #[test]
     fn backtracking_strategy_solver_correct_solution_easy_sudokus() {
-        let sudokus = read_sudokus( include_str!("../sudokus/Lines/easy_sudokus.txt") );
-        let solved_sudokus = read_sudokus( include_str!("../sudokus/Lines/solved_easy_sudokus.txt") );
+        let sudokus = read_sudokus( include_str!("../../sudokus/Lines/easy_sudokus.txt") );
+        let solved_sudokus = read_sudokus( include_str!("../../sudokus/Lines/solved_easy_sudokus.txt") );
         strategy_solver_correct_solution(sudokus, solved_sudokus, StrategySolver::solve_with_backtracking);
     }
 
     #[test]
     fn backtracking_strategy_solver_correct_solution_medium_sudokus() {
-        let sudokus = read_sudokus( include_str!("../sudokus/Lines/medium_sudokus.txt") );
-        let solved_sudokus = read_sudokus( include_str!("../sudokus/Lines/solved_medium_sudokus.txt") );
+        let sudokus = read_sudokus( include_str!("../../sudokus/Lines/medium_sudokus.txt") );
+        let solved_sudokus = read_sudokus( include_str!("../../sudokus/Lines/solved_medium_sudokus.txt") );
         strategy_solver_correct_solution(sudokus, solved_sudokus, StrategySolver::solve_with_backtracking);
     }
 
     #[test]
     fn backtracking_strategy_solver_correct_solution_hard_sudokus() {
-        let sudokus = read_sudokus( include_str!("../sudokus/Lines/hard_sudokus.txt") );
-        let solved_sudokus = read_sudokus( include_str!("../sudokus/Lines/solved_hard_sudokus.txt") );
+        let sudokus = read_sudokus( include_str!("../../sudokus/Lines/hard_sudokus.txt") );
+        let solved_sudokus = read_sudokus( include_str!("../../sudokus/Lines/solved_hard_sudokus.txt") );
         strategy_solver_correct_solution(sudokus, solved_sudokus, StrategySolver::solve_with_backtracking);
     }
 
     #[bench]
     fn easy_sudokus_strategy_solver(b: &mut test::Bencher) {
-        let sudokus = read_sudokus( include_str!("../sudokus/Lines/easy_sudokus.txt") );
+        let sudokus = read_sudokus( include_str!("../../sudokus/Lines/easy_sudokus.txt") );
         let sudokus_100 = sudokus.iter().cycle().cloned().take(100).collect::<Vec<_>>();
         let strategies = all_strategies();
         b.iter(|| {
@@ -968,7 +981,7 @@ mod test {
 
     #[bench]
     fn medium_sudokus_strategy_solver(b: &mut test::Bencher) {
-        let sudokus = read_sudokus( include_str!("../sudokus/Lines/medium_sudokus.txt") );
+        let sudokus = read_sudokus( include_str!("../../sudokus/Lines/medium_sudokus.txt") );
         let sudokus_100 = sudokus.iter().cycle().cloned().take(100).collect::<Vec<_>>();
         let strategies = all_strategies();
         b.iter(|| {
@@ -981,7 +994,7 @@ mod test {
 
 	#[bench]
     fn easy_sudokus_backtracking_strategy_solver(b: &mut test::Bencher) {
-        let sudokus = read_sudokus( include_str!("../sudokus/Lines/easy_sudokus.txt") );
+        let sudokus = read_sudokus( include_str!("../../sudokus/Lines/easy_sudokus.txt") );
         let sudokus_100 = sudokus.iter().cycle().cloned().take(100).collect::<Vec<_>>();
         let strategies = all_strategies();
         b.iter(|| {
@@ -993,7 +1006,7 @@ mod test {
 
     #[bench]
     fn medium_sudokus_backtracking_strategy_solver(b: &mut test::Bencher) {
-        let sudokus = read_sudokus( include_str!("../sudokus/Lines/medium_sudokus.txt") );
+        let sudokus = read_sudokus( include_str!("../../sudokus/Lines/medium_sudokus.txt") );
         let sudokus_100 = sudokus.iter().cycle().cloned().take(100).collect::<Vec<_>>();
         let strategies = all_strategies();
         b.iter(|| {

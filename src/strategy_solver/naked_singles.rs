@@ -1,3 +1,4 @@
+/*
 #![allow(missing_docs, unused)]
 use sudoku::Sudoku;
 use types::{Array81, Mask, Digit, Position, Unsolvable, Entry};
@@ -6,31 +7,29 @@ use positions::{
     row_zone, col_zone, field_zone, cells_of_zone,
     Cell, Line, Zone, Slice, Band,
 };
-use super::{StrategySolver, Deduce, NewStrategy};
+use super::{StrategySolver, Deduce, NewStrategy, SudokuState};
 
-#[derive(Debug, Clone, Copy)]
-pub struct NakedSingles;
+struct NakedSingles {
+}
 
-pub struct NakedSinglesDed {
-    entry: Entry,
+impl NakedSingles {
+	fn iter(state: &SudokuState) -> NakedSinglesIter {
+        NakedSinglesIter {
+            cell: 0,
+            sudoku: state.grid,
+        }
+    }
 }
 
 pub struct NakedSinglesIter {
     cell: u8,
-    state: StrategySolver,
-}
-
-impl Deduce for NakedSinglesDed {
-    fn apply_deductions(&mut self, deduced_entries: &mut Vec<Entry>, impossible_entries: &mut Vec<Entry>) -> Result<(), Unsolvable> {
-        deduced_entries.push(self.entry);
-        Ok(())
-    }
+    sudoku: Sudoku
 }
 
 impl Iterator for NakedSinglesIter {
-    type Item = Result<NakedSinglesDed, Unsolvable>;
+    type Item = Result<Entry, Unsolvable>;
     fn next(&mut self) -> Option<Self::Item> {
-        let state = &self.state;
+        let sudoku = &self.sudoku;
         for (cell, poss_digits) in (self.cell..).zip(&self.state.cell_poss_digits.0[self.cell as usize..])
 			// skip filled cells
 			.filter(|&(cell, _)| state.grid.0[cell as usize] == 0)
@@ -61,3 +60,4 @@ impl NewStrategy for NakedSingles {
         }
 	}
 }
+*/

@@ -16,7 +16,7 @@ pub struct HiddenSinglesDed {
     singles: Mask<Digit>,
     state: StrategySolver,
 }
-
+/*
 impl Deduce for HiddenSinglesDed {
     fn apply_deductions(&mut self, deduced_entries: &mut Vec<Entry>, impossible_entries: &mut Vec<Entry>) -> Result<(), Unsolvable> {
         for &cell in cells_of_zone(self.zone) {
@@ -92,7 +92,7 @@ impl NewStrategy for HiddenSingles {
         }
 	}
 }
-
+*/
 #[inline]
 fn find_unique<I: Iterator<Item=Mask<Digit>>>(possibilities: I) -> (Mask<Digit>, Mask<Digit>, Mask<Digit>) {
 	let mut unsolved = Mask::NONE;

@@ -79,28 +79,38 @@ impl SudokuState {
 		}
 	}
 
-	fn solve(mut self, strategies: &[Strategy]) -> Result<Sudoku, Unsolvable> {
+	fn solve(mut self, strategies: &[Strategy]) -> Result<Sudoku, Sudoku> {
 		'outer: loop {
 			if self.is_solved() {
 				self.update_grid();
-				println!("WTF: len: {}, deductions: {}, grid: {}", self.deduced_entries.len(), self.employed_strategies.len(), self.grid.to_str_line());
+				//println!("WTF: len: {}, deductions: {}, grid: {}", self.deduced_entries.len(), self.employed_strategies.len(), self.grid.to_str_line());
 				return Ok(self.grid)
 			}
 
 			// no chance without strategies
-			let (first, rest) = strategies.split_first().ok_or(Unsolvable)?;
-
-			first.deduce_all(&mut self)?;
-
 			let n_deductions = self.deduced_entries.len();
+			let (first, rest) = match strategies.split_first().ok_or(Unsolvable) {
+				Ok(tup) => tup,
+				Err(_) => break,
+			};
+			if first.deduce_all(&mut self).is_err() { break };
+			if self.deduced_entries.len() > n_deductions {
+				continue 'outer
+			}
+
 			for strategy in rest {
 				strategy.deduce_one(&mut self);
 				if self.deduced_entries.len() > n_deductions {
 					continue 'outer
 				}
 			}
-			break Err(Unsolvable)
+			self.update_grid();
+			println!("got this far: {}", self.grid);
+			println!("{:?}", self.employed_strategies);
+			break // Err(self.grid)
 		}
+		self.update_grid();
+		Err(self.grid)
 	}
 
 	fn is_solved(&self) -> bool {
@@ -279,7 +289,10 @@ impl SudokuState {
 		cell_mask.remove(impossible);
 		if let Some(num) = cell_mask.unique_num()? {
 			deduced_entries.push(Entry{ cell, num });
-			employed_strategies.push(Strategy::NakedSingles);
+
+			// this is true
+			// but can also lead to duplicates
+			//employed_strategies.push(Strategy::NakedSingles);
 		}
 		Ok(())
 	}
@@ -487,7 +500,7 @@ impl SudokuState {
 		Ok(())
 	}
 
-	fn find_hidden_subsets(&mut self, stop_after_first: bool) -> Result<(), Unsolvable> 	{
+	fn find_hidden_subsets(&mut self, stop_after_first: bool) -> Result<(), Unsolvable> {
 		// TODO: limit min/max length so hidden pairs / triples / quadruples can be distinguished
 		//		 breadth first search?
 		fn walk_combinations(
@@ -542,7 +555,222 @@ impl SudokuState {
 		}
 		Ok(())
 	}
+
+	fn find_xwings(&mut self, stop_after_first: bool) {
+		self.find_fish(2, stop_after_first)
+	}
+
+
+	fn find_swordfish(&mut self, stop_after_first: bool) {
+		self.find_fish(3, stop_after_first)
+	}
+
+
+	fn find_jellyfish(&mut self, stop_after_first: bool) {
+		self.find_fish(4, stop_after_first)
+	}
+
+	fn find_fish(&mut self, max_size: usize, stop_after_first: bool) {
+		let mut stack = vec![];
+		for num_off in 0..9 {
+			// 0..9 = rows, 9..18 = cols
+			for lines in &[Line::ALL_ROWS, Line::ALL_COLS] {
+				if basic_fish_walk_combinations(self, num_off, max_size, &mut stack, lines, lines, Mask::NONE, stop_after_first) {
+					return
+				};
+			}
+		}
+	}
+
+	fn find_singles_chain(&mut self) -> Result<(), Unsolvable> {
+        #[derive(Copy, Clone, PartialEq, Eq)]
+        enum Colour {
+            Uncoloured,
+            A,
+            B,
+        }
+
+        fn follow_links(num_off: u8, cell: Cell, is_a: bool, sudoku: &SudokuState, cell_color: &mut [Colour; 81], link_nr: u8, cell_linked: &mut [u8; 81]) {
+            if cell_linked[cell.0 as usize] <= link_nr { return }
+
+            for &(con_zone, current_pos) in &[
+                (cell.row().zone(), Position::in_row_of_cell(cell.0)),
+                (cell.col().zone(), Position::in_col_of_cell(cell.0)),
+                (cell.field().zone(), Position::in_field_of_cell(cell.0)),
+            ] {
+                let zone_poss_positions = sudoku.zone_poss_positions.state[con_zone.0 as usize][num_off as usize];
+                if zone_poss_positions.n_possibilities() == 2 {
+                    let other_pos = (zone_poss_positions & !Mask::from_pos(current_pos.0)).one_possibility();
+                    let other_cell = Cell::from_zone_pos(con_zone, other_pos);
+
+                    match cell_linked[other_cell.0 as usize] <= link_nr {
+                        true => continue,
+                        false => cell_linked[other_cell.0 as usize] = link_nr,
+                    };
+
+                    cell_color[other_cell.0 as usize] = if is_a { Colour::A } else { Colour::B };
+
+                    follow_links(num_off, other_cell, !is_a, sudoku, cell_color, link_nr, cell_linked);
+                }
+            }
+        }
+
+        for num_off in 0..9 {
+            let mut cell_touched = [false; N_CELLS];
+            let mut link_nr = 0;
+
+            let mut cell_linked = [0; 81];
+            let mut cell_color = [Colour::Uncoloured; 81];
+
+            for zone in (0..27).map(Zone) {
+                let zone_poss_positions = self.zone_poss_positions.state[zone.0 as usize][num_off as usize];
+                if zone_poss_positions.n_possibilities() == 2 {
+                    let first = zone_poss_positions.one_possibility();
+                    let cell = Cell::from_zone_pos(zone, first);
+
+                    match cell_touched[cell.0 as usize] {
+                        true => continue,
+                        false => cell_touched[cell.0 as usize] = true,
+                    };
+
+                    follow_links(num_off, cell, true, self, &mut cell_color, link_nr, &mut cell_linked);
+                    link_nr += 1;
+                }
+            }
+
+            for link_nr in 0..link_nr {
+                // Rule 1:
+                // if two cells in the same row, part of the same chain
+                // have the same color, those cells must not contain the number
+                // Rule 2:
+                // if one cell is neighbour to two cells with opposite colours
+                // it can not contain the number
+
+
+                // ===== Rule 1 ======
+                for zone in (0..27).map(Zone) {
+                    // Collect colours in this link chain and this zone
+                    let mut zone_colors = [Colour::Uncoloured; 9];
+                    for (pos, &cell) in zone.cells()
+                        .iter()
+                        .enumerate()
+                        .filter(|c| cell_linked[c.0 as usize] == link_nr)
+                    {
+                        zone_colors[pos] = cell_color[cell.0 as usize];
+                    }
+
+                    let (n_a, n_b) = zone_colors.iter()
+                        .fold((0, 0), |(n_a, n_b), &colour| {
+                            match colour {
+                                Colour::A => (n_a+1, n_b),
+                                Colour::B => (n_a, n_b+1),
+                                Colour::Uncoloured => (n_a, n_b),
+                            }
+                        });
+
+                    fn mark_impossible(num: u8, link_nr: u8, colour: Colour, cell_color: [Colour; 81], cell_linked: [u8; 81], impossible_entries: &mut Vec<Entry>) {
+                        (0..81).zip(cell_color.iter()).zip(cell_linked.iter())
+                            .filter(|&((_, &cell_colour), &cell_link_nr)| link_nr == cell_link_nr && colour == cell_colour)
+                            .for_each(|((cell, _), _)| impossible_entries.push( Entry { cell, num }));
+                    }
+
+                    let impossible_colour;
+                    match (n_a >= 2, n_b >= 2) {
+                        (true, true) => return Err(Unsolvable),
+                        (true, false) => impossible_colour = Colour::A,
+                        (false, true) => impossible_colour = Colour::B,
+                        (false, false) => continue,
+                    };
+                    mark_impossible(num_off+1, link_nr, impossible_colour, cell_color, cell_linked, &mut self.eliminated_entries);
+                    // chain handled, go to next
+                    // note: as this eagerly marks a colour impossible as soon as a double in any colour is found
+                    //       a case of two doubles in some later zone will not always be found
+                    //       impossibility is then detected further down the strategy chain
+                    break
+                }
+
+                // ===== Rule 2 =====
+                let mut cell_sees_colour = [(false, false); 81];
+                for ((cell, &cell_colour), _) in (0..81).map(Cell).
+                    zip(cell_color.iter())
+                    .zip(cell_linked.iter())
+                    .filter(|&((_, &cell_colour), &cell_link_nr)| link_nr == cell_link_nr && cell_colour != Colour::Uncoloured)
+                {
+                    for &zone in &cell.zones() {
+                        for &neighbour_cell in zone.cells().iter().filter(|&&c| cell != c) {
+                            let (sees_a, sees_b) = cell_sees_colour[neighbour_cell.0 as usize];
+                            if cell_colour == Colour::A && !sees_a {
+                                cell_sees_colour[neighbour_cell.0 as usize].0 = true;
+                                if sees_b {
+                                    self.eliminated_entries.push( Entry{ cell: neighbour_cell.0, num: num_off+1 })
+                                }
+                            } else if cell_colour == Colour::B && !sees_b {
+                                cell_sees_colour[neighbour_cell.0 as usize].1 = true;
+                                if sees_a {
+                                    self.eliminated_entries.push( Entry{ cell: neighbour_cell.0, num: num_off+1 })
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+		Ok(())
+	}
 }
+
+//             goal_depth
+// <degenerated>   1 (basically a naked/hidden single, not supported by this fn)
+// x-wing          2
+// swordfish       3
+// jellyfish       4
+fn basic_fish_walk_combinations(
+	sudoku: &mut SudokuState,
+	num_off: usize,
+	goal_depth: usize,
+	stack: &mut Vec<Line>,
+	lines: &[Line],
+	all_lines: &[Line; 9],
+	union_poss_pos: Mask<Position>,
+	stop_after_first: bool,
+) -> bool {
+	if stack.len() == goal_depth {
+		// nothing of interest found
+		if union_poss_pos.n_possibilities() != goal_depth as u8 { return false }
+
+		// found xwing, swordfish, jellyfish, whatever-the-name
+		for line in all_lines.iter().filter(|&line| !stack.contains(line)) {
+			for pos in union_poss_pos.iter() {
+				let cell = Cell::from_zone_pos(line.zone(), pos);
+				let cell_mask = sudoku.cell_poss_digits.state[cell.0 as usize];
+				if cell_mask & Mask::from_num(num_off as u8 +1) != Mask::NONE {
+					sudoku.eliminated_entries.push(Entry{ num: num_off as u8 +1, cell: cell.0 });
+					sudoku.employed_strategies.push( match goal_depth {
+						2 => Strategy::XWing,
+						3 => Strategy::Swordfish,
+						4 => Strategy::Jellyfish,
+						_ => unreachable!(),
+					})
+				}
+			}
+		}
+		return true
+	}
+	for (i, &line) in lines.iter().enumerate() {
+		let possible_pos = sudoku.zone_poss_positions.state[line.0 as usize][num_off];
+		let n_poss = possible_pos.n_possibilities();
+		let new_union_poss_pos = union_poss_pos | possible_pos;
+		if n_poss < 2 || new_union_poss_pos.n_possibilities() > goal_depth as u8 { continue }
+
+		stack.push(line);
+		if basic_fish_walk_combinations(sudoku, num_off, goal_depth, stack, &lines[i+1..], all_lines, new_union_poss_pos, stop_after_first) {
+			return true
+		};
+		stack.pop();
+	}
+	false
+}
+
 
 #[derive(Debug, Clone)]
 pub struct State<T> {
@@ -808,6 +1036,10 @@ impl Strategy {
 			LockedCandidates => state.find_locked_candidates(true),
 			NakedSubsets => state.find_naked_subsets(true),
 			HiddenSubsets => state.find_hidden_subsets(true),
+			XWing => { state.find_xwings(true); Ok(()) },
+			Swordfish => { state.find_swordfish(true); Ok(()) },
+			Jellyfish => { state.find_jellyfish(true); Ok(()) },
+			SinglesChain => state.find_singles_chain(), // TODO: Remove eager solver
             _ => unimplemented!(),
         }
     }
@@ -905,15 +1137,15 @@ mod test {
             NakedSubsets,
             HiddenSubsets,
             LockedCandidates,
-            //XWing,
-            //Swordfish,
-            //Jellyfish,
+            XWing,
+            Swordfish,
+            Jellyfish,
             //SinglesChain,
         ]
     }
 
     fn strategy_solver_correct_solution<F>(sudokus: Vec<Sudoku>, solved_sudokus: Vec<Sudoku>, solver: F)
-        where F: Fn(SudokuState, &[Strategy]) -> Result<Sudoku, Unsolvable>,
+        where F: Fn(SudokuState, &[Strategy]) -> Result<Sudoku, Sudoku>,
     {
         let strategies = all_strategies();
         //let mut n_skip = 1; // FIXME: Improve solver, so the 7th sudoku can be solved without backtracking
@@ -923,20 +1155,31 @@ mod test {
             //print!("\nn_sudoku = {} ", i);
             match cache.solve(&strategies) {
                 Ok(solution) => assert_eq!(solution, solved_sudoku),
-                Err(Unsolvable) => unsolved.push((i, sudoku, solved_sudoku)), // panic!("Found multiple solutions to sudoku with unique solution or none at all for {}th sudoku:\n{}", i, sudoku),
+                Err(part_solved) => unsolved.push((i, sudoku, part_solved, solved_sudoku)), // panic!("Found multiple solutions to sudoku with unique solution or none at all for {}th sudoku:\n{}", i, sudoku),
                 //_ => n_skip -= 1,
             }
         }
         if unsolved.len() != 0 {
             println!("Could not solve {} sudokus:\n", unsolved.len());
 
-            //for (i, sudoku, _solution) in unsolved {
-            //	println!("\nsudoku nr {}:\n\n{}", i+1, sudoku);
-            //}
+            for (i, sudoku, part_solution, _solution) in unsolved {
+            	println!("\nsudoku nr {}:\n{}\n{}\n{}", i+1, sudoku.to_str_line(), part_solution.to_str_line(), _solution.to_str_line());
+            }
             panic!();
         }
     }
 
+
+	#[test]
+	fn strategy_solve() {
+        let sudokus = read_sudokus( include_str!("../../sudokus/Lines/easy_sudokus.txt") );
+        let solved_sudokus = read_sudokus( include_str!("../../sudokus/Lines/solved_easy_sudokus.txt") );
+		let strategies = all_strategies();
+		let solved = SudokuState::from_sudoku(sudokus[5]).solve(&strategies).unwrap();
+	}
+
+
+	/*
     #[test]
     fn strategy_solver_correct_solution_easy_sudokus() {
         let sudokus = read_sudokus( include_str!("../../sudokus/Lines/easy_sudokus.txt") );
@@ -957,6 +1200,7 @@ mod test {
         let solved_sudokus = read_sudokus( include_str!("../../sudokus/Lines/solved_hard_sudokus.txt") );
         strategy_solver_correct_solution(sudokus, solved_sudokus, SudokuState::solve);
     }
+	*/
 	/*
     #[test]
     fn backtracking_strategy_solver_correct_solution_easy_sudokus() {
@@ -979,6 +1223,7 @@ mod test {
         strategy_solver_correct_solution(sudokus, solved_sudokus, SudokuState::solve_with_backtracking);
     }
 	*/
+	/*
     #[bench]
     fn easy_sudokus_strategy_solver(b: &mut test::Bencher) {
         let sudokus = read_sudokus( include_str!("../../sudokus/Lines/easy_sudokus.txt") );
@@ -1003,6 +1248,7 @@ mod test {
             }
         })
     }
+	*/
 	/*
 	#[bench]
     fn easy_sudokus_backtracking_strategy_solver(b: &mut test::Bencher) {

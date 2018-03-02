@@ -1,4 +1,5 @@
 #![warn(missing_docs)]
+#![allow(unused)]
 #![cfg_attr(feature = "cargo-clippy",
     allow(
         clippy_complexity,

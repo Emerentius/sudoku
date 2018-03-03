@@ -105,8 +105,8 @@ impl SudokuState {
 				}
 			}
 			self.update_grid();
-			println!("got this far: {}", self.grid);
-			println!("{:?}", self.employed_strategies);
+			//println!("got this far: {}", self.grid);
+			//println!("{:?}", self.employed_strategies);
 			break // Err(self.grid)
 		}
 		self.update_grid();
@@ -124,11 +124,12 @@ impl SudokuState {
 
 			for &entry in &self.eliminated_entries[*le_cp as _..] {
 				let impossibles = Mask::from_num(entry.num());
-				let cell_mask = &mut cell_poss[entry.cell as usize];
-				*cell_mask &= !impossibles;
-				if *cell_mask == Mask::NONE {
-					return Err(Unsolvable)
-				}
+				Self::remove_impossibilities(&mut self.grid, cell_poss, entry.cell, impossibles, &mut self.deduced_entries, &mut self.employed_strategies)?;
+				//let cell_mask = &mut cell_poss[entry.cell as usize];
+				//*cell_mask &= !impossibles;
+				//if *cell_mask == Mask::NONE {
+				//	return Err(Unsolvable)
+				//}
 			}
 			*le_cp = self.eliminated_entries.len() as _;
 		}
@@ -212,7 +213,7 @@ impl SudokuState {
 			Self::_insert_entry_cp_zs(entry, &mut self.n_solved, &mut self.employed_strategies, cell_poss_digits, zone_solved_digits);
 			for &cell in neighbours(entry.cell) {
 				if entry_mask & cell_poss_digits[cell as usize] != Mask::NONE {
-					Self::remove_impossibilities(cell_poss_digits, cell, entry_mask, &mut self.deduced_entries, &mut self.employed_strategies)?;
+					Self::remove_impossibilities(&mut self.grid, cell_poss_digits, cell, entry_mask, &mut self.deduced_entries, &mut self.employed_strategies)?;
 				};
 			}
 
@@ -230,7 +231,8 @@ impl SudokuState {
 		cell_poss_digits: &mut Array81<Mask<Digit>>,
 		zone_solved_digits: &mut [Mask<Digit>; 27]
 	) {
-		employed_strategies.push(Strategy::NakedSingles);
+		// Hidden singles can do it, too
+		//employed_strategies.push(Strategy::NakedSingles);
 		*n_solved += 1;
 		cell_poss_digits[entry.cell()] = Mask::NONE;
 		zone_solved_digits[entry.row() as usize +ROW_OFFSET] |= entry.mask();
@@ -272,7 +274,7 @@ impl SudokuState {
 				| zone_solved_digits[col_zone(cell)]
 				| zone_solved_digits[field_zone(cell)];
 
-			Self::remove_impossibilities(cell_poss_digits, cell, zones_mask, &mut self.deduced_entries, &mut self.employed_strategies)?;
+			Self::remove_impossibilities(&mut self.grid, cell_poss_digits, cell, zones_mask, &mut self.deduced_entries, &mut self.employed_strategies)?;
 		}
 		Ok(())
 	}
@@ -280,20 +282,37 @@ impl SudokuState {
 	// remove impossible digits from masks for given cell
 	// also check for naked singles and impossibility of sudoku
 	fn remove_impossibilities(
+		sudoku: &mut Sudoku,
 		cell_poss_digits: &mut Array81<Mask<Digit>>,
-		cell: u8, impossible: Mask<Digit>,
+		cell: u8,
+		impossible: Mask<Digit>,
 		deduced_entries: &mut Vec<Entry>,
 		employed_strategies: &mut Vec<Strategy>
 	) -> Result<(), Unsolvable> {
 		let cell_mask = &mut cell_poss_digits[cell as usize];
 		cell_mask.remove(impossible);
 		if let Some(num) = cell_mask.unique_num()? {
-			deduced_entries.push(Entry{ cell, num });
-
-			// this is true
-			// but can also lead to duplicates
+			Self::push_new_entry(sudoku, deduced_entries, Entry { cell, num }, employed_strategies, Strategy::NakedSingles)?;
 			//employed_strategies.push(Strategy::NakedSingles);
 		}
+		Ok(())
+	}
+
+	fn push_new_entry(sudoku: &mut Sudoku,
+		deduced_entries: &mut Vec<Entry>,
+		entry: Entry,
+		employed_strategies: &mut Vec<Strategy>,
+		strategy: Strategy
+	) -> Result<(), Unsolvable> {
+		let old_num = &mut sudoku.0[entry.cell()];
+		if *old_num == entry.num {
+			return Ok(())
+		} else if *old_num != 0 {
+			return Err(Unsolvable)
+		}
+		*old_num = entry.num;
+		deduced_entries.push(entry);
+		employed_strategies.push(strategy);
 		Ok(())
 	}
 
@@ -323,8 +342,9 @@ impl SudokuState {
 
 				if let Ok(maybe_unique) = (mask & singles).unique_num() {
 					let num = maybe_unique.ok_or(Unsolvable)?;
-					self.deduced_entries.push(Entry{ cell: cell, num: num } );
-					self.employed_strategies.push(Strategy::HiddenSingles);
+					Self::push_new_entry(&mut self.grid, &mut self.deduced_entries, Entry { cell, num }, &mut self.employed_strategies, Strategy::HiddenSingles )?;
+					//self.deduced_entries.push(Entry{ cell: cell, num: num } );
+					//self.employed_strategies.push(Strategy::HiddenSingles);
 
 					// mark num as found
 					singles.remove(Mask::from_num(num));
@@ -457,15 +477,19 @@ impl SudokuState {
 			if stack.len() > 0 && total_poss_digs.n_possibilities() == stack.len() as u8 {
 				// found a subset
 
+				let n_eliminated = state.eliminated_entries.len();
 				for cell in all_cells.iter().filter(|cell| !stack.contains(cell)) {
 					let conflicts = state.cell_poss_digits.state[cell.0 as usize] & total_poss_digs;
 					for num in conflicts.iter() {
 						state.eliminated_entries.push(Entry{ cell: cell.0, num});
 					}
 				}
-				state.employed_strategies.push(Strategy::NakedSubsets);
-				if stop_after_first {
-					return true
+
+				if n_eliminated < state.eliminated_entries.len() {
+					state.employed_strategies.push(Strategy::NakedSubsets);
+					if stop_after_first {
+						return true
+					}
 				}
 			}
 
@@ -516,6 +540,8 @@ impl SudokuState {
 			let zone_poss_positions = state.zone_poss_positions.state[zone as usize];
 
 			if stack.len() > 0 && total_poss_pos.n_possibilities() == stack.len() as u8 {
+
+				let n_eliminated = state.eliminated_entries.len();
 				for &num_off in all_num_offs.iter().filter(|num_off| !stack.contains(num_off)) {
 					let conflicts = zone_poss_positions[num_off as usize] & total_poss_pos;
 					for pos in conflicts.iter() {
@@ -523,9 +549,11 @@ impl SudokuState {
 						state.eliminated_entries.push(Entry{ cell, num: num_off + 1});
 					}
 				}
-				state.employed_strategies.push(Strategy::HiddenSubsets);
-				if stop_after_first {
-					return true
+				if n_eliminated < state.eliminated_entries.len() {
+					state.employed_strategies.push(Strategy::HiddenSubsets);
+					if stop_after_first {
+						return true
+					}
 				}
 			}
 
@@ -739,22 +767,28 @@ fn basic_fish_walk_combinations(
 		if union_poss_pos.n_possibilities() != goal_depth as u8 { return false }
 
 		// found xwing, swordfish, jellyfish, whatever-the-name
+		let n_eliminated = sudoku.eliminated_entries.len();
 		for line in all_lines.iter().filter(|&line| !stack.contains(line)) {
 			for pos in union_poss_pos.iter() {
 				let cell = Cell::from_zone_pos(line.zone(), pos);
 				let cell_mask = sudoku.cell_poss_digits.state[cell.0 as usize];
 				if cell_mask & Mask::from_num(num_off as u8 +1) != Mask::NONE {
 					sudoku.eliminated_entries.push(Entry{ num: num_off as u8 +1, cell: cell.0 });
-					sudoku.employed_strategies.push( match goal_depth {
-						2 => Strategy::XWing,
-						3 => Strategy::Swordfish,
-						4 => Strategy::Jellyfish,
-						_ => unreachable!(),
-					})
 				}
 			}
 		}
-		return true
+
+		if n_eliminated < sudoku.eliminated_entries.len() {
+			sudoku.employed_strategies.push( match goal_depth {
+				2 => Strategy::XWing,
+				3 => Strategy::Swordfish,
+				4 => Strategy::Jellyfish,
+				_ => unreachable!(),
+			});
+			if stop_after_first {
+				return true
+			}
+		}
 	}
 	for (i, &line) in lines.iter().enumerate() {
 		let possible_pos = sudoku.zone_poss_positions.state[line.0 as usize][num_off];
@@ -1178,8 +1212,6 @@ mod test {
 		let solved = SudokuState::from_sudoku(sudokus[5]).solve(&strategies).unwrap();
 	}
 
-
-	/*
     #[test]
     fn strategy_solver_correct_solution_easy_sudokus() {
         let sudokus = read_sudokus( include_str!("../../sudokus/Lines/easy_sudokus.txt") );
@@ -1200,7 +1232,7 @@ mod test {
         let solved_sudokus = read_sudokus( include_str!("../../sudokus/Lines/solved_hard_sudokus.txt") );
         strategy_solver_correct_solution(sudokus, solved_sudokus, SudokuState::solve);
     }
-	*/
+
 	/*
     #[test]
     fn backtracking_strategy_solver_correct_solution_easy_sudokus() {

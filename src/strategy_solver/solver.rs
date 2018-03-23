@@ -29,17 +29,6 @@ pub struct StrategySolver {
 	pub(crate) last_cell: u8, // last cell checked in guess routine
 }
 
-// This is the link to which links the
-/*
-#[derive(Debug, Clone)]
-
-pub enum Deduction {
-	Forced(::std::ops::Range<usize>),
-	Impossible(::std::ops::Range<usize>),
-}
-use self::Deduction::*;
-*/
-
 type DeductionRange = ::std::ops::Range<usize>;
 
 #[derive(Debug, Clone)]
@@ -91,7 +80,6 @@ impl SudokuState {
 		'outer: loop {
 			if self.is_solved() {
 				self.update_grid();
-				//println!("WTF: len: {}, deductions: {}, grid: {}", self.deduced_entries.len(), self.employed_strategies.len(), self.grid.to_str_line());
 				return Ok(self.grid)
 			}
 
@@ -136,30 +124,15 @@ impl SudokuState {
 				}
 
 			}
-
-			/*
-			let deductions = match strategy.result {
-				Forced(rg) => &self.deduced_entries[rg],
-				Impossible(rg) => &self.eliminated_entries[rg],
-			};
-			for &entry in deductions {
-				println!("\tr{}c{} {}", entry.row()+1, entry.col()+1, entry.num);
-			}
-			*/
-		//println!("{:?}", self.employed_strategies);
 		}
 		assert!(self.zone_poss_positions.last_eliminated == self.eliminated_entries.len() as _);
 		assert!(self.zone_poss_positions.next_deduced == self.deduced_entries.len() as _);
-		println!("positions for 4 and 9 in col 7:");
+		println!("zone poss positions: ");
 		for zone in 0..27 {
 			println!("{:?} {}", zone_type(zone as _), 1 + zone % 9 );
 			for num in 0..9 {
 				let poss_pos = join_iter(self.zone_poss_positions.state[zone][num].iter().map(|pos| pos.0 + 1));
 				println!("\t{}: {}", num + 1, poss_pos);
-
-				//println!("4: {}", join_iter(self.zone_poss_positions.state[7+COL_OFFSET - 1][4 - 1].iter().map(|pos| pos.0 + 1)));
-				//println!("9: {}", join_iter(self.zone_poss_positions.state[7+COL_OFFSET - 1][9 - 1].iter().map(|pos| pos.0 + 1)));
-
 			}
 		}
 
@@ -175,20 +148,18 @@ impl SudokuState {
 		{
 			let (_, le_cp, cell_poss) = self.cell_poss_digits.get_mut();
 
-			let mut dummy = vec![];
 			for &entry in &self.eliminated_entries[*le_cp as _..] {
 				let impossibles = Mask::from_num(entry.num());
 
 				// deductions made here may conflict with entries already in the queue
 				// in the queue. In that case the sudoku is impossible.
-				Self::remove_impossibilities(&mut self.grid, cell_poss, entry.cell, impossibles, &mut self.deduced_entries, &mut dummy, &mut self.employed_strategies)?;
+				Self::remove_impossibilities(&mut self.grid, cell_poss, entry.cell, impossibles, &mut self.deduced_entries, &mut self.employed_strategies)?;
 				//let cell_mask = &mut cell_poss[entry.cell as usize];
 				//*cell_mask &= !impossibles;
 				//if *cell_mask == Mask::NONE {
 				//	return Err(Unsolvable)
 				//}
 			}
-			assert!(dummy.len() == 0);
 			*le_cp = self.eliminated_entries.len() as _;
 		}
 
@@ -304,7 +275,7 @@ impl SudokuState {
 			Self::_insert_entry_cp_zs(entry, &mut self.n_solved, cell_poss_digits, zone_solved_digits);
 			for &cell in neighbours(entry.cell) {
 				if entry_mask & cell_poss_digits[cell as usize] != Mask::NONE {
-					Self::remove_impossibilities(&mut self.grid, cell_poss_digits, cell, entry_mask, &mut self.deduced_entries, &mut self.eliminated_entries, &mut self.employed_strategies)?;
+					Self::remove_impossibilities(&mut self.grid, cell_poss_digits, cell, entry_mask, &mut self.deduced_entries, &mut self.employed_strategies)?;
 				};
 			}
 
@@ -321,8 +292,6 @@ impl SudokuState {
 		cell_poss_digits: &mut Array81<Mask<Digit>>,
 		zone_solved_digits: &mut [Mask<Digit>; 27]
 	) {
-		// Hidden singles can do it, too
-		//employed_strategies.push(Strategy::NakedSingles);
 		*n_solved += 1;
 		cell_poss_digits[entry.cell()] = Mask::NONE;
 		zone_solved_digits[entry.row() as usize +ROW_OFFSET] |= entry.mask();
@@ -333,9 +302,7 @@ impl SudokuState {
 	pub fn batch_insert_entries(&mut self) -> Result<(), Unsolvable> {
 		let (ld_cp, _, cell_poss_digits) = self.cell_poss_digits.get_mut();
 		let (ld_zs, _, zone_solved_digits) = self.zone_solved_digits.get_mut();
-		//while self.deduced_entries.len() > *ld_cp as usize {
-		loop {
-			if self.deduced_entries.len() <= *ld_cp as usize { break }
+		while self.deduced_entries.len() > *ld_cp as usize {
 			let entry = self.deduced_entries[*ld_cp as usize];
 			*ld_cp += 1;
 			*ld_zs += 1;
@@ -364,7 +331,7 @@ impl SudokuState {
 				| zone_solved_digits[col_zone(cell)]
 				| zone_solved_digits[field_zone(cell)];
 
-			Self::remove_impossibilities(&mut self.grid, cell_poss_digits, cell, zones_mask, &mut self.deduced_entries, &mut self.eliminated_entries, &mut self.employed_strategies)?;
+			Self::remove_impossibilities(&mut self.grid, cell_poss_digits, cell, zones_mask, &mut self.deduced_entries, &mut self.employed_strategies)?;
 		}
 		Ok(())
 	}
@@ -377,27 +344,14 @@ impl SudokuState {
 		cell: u8,
 		impossible: Mask<Digit>,
 		deduced_entries: &mut Vec<Entry>,
-		eliminated_entries: &mut Vec<Entry>,
 		employed_strategies: &mut Vec<StrategyResult>,
 	) -> Result<(), Unsolvable> {
 		let cell_mask = &mut cell_poss_digits[cell as usize];
 		cell_mask.remove(impossible);
 
-		/*
-		eliminated_entries.extend(
-			impossible.iter()
-				.map(|num| Entry { cell, num })
-		);
-		*/
-		/*
-		for num in cell_mask.iter() {
-			eliminated_entries.push( Entry { cell, num });
-		}*/
-
 		if let Some(num) = cell_mask.unique_num()? {
 			let entry = Entry { cell, num };
 			Self::push_new_entry(sudoku, deduced_entries, entry, employed_strategies, StrategyResult::NakedSingles(entry))?;
-			//employed_strategies.push(Strategy::NakedSingles);
 		}
 		Ok(())
 	}
@@ -414,22 +368,19 @@ impl SudokuState {
 			use self::StrategyResult::*;
 			match strategy {
 				NakedSingles(..) | HiddenSingles(..) => (),
-				_ => panic!("Called push_new_entry with wrong strategy type")
+				_ => panic!("Internal error: Called push_new_entry with wrong strategy type")
 			};
 		}
 
-
 		let old_num = &mut sudoku.0[entry.cell()];
-		if *old_num == entry.num {
-			return Ok(())
-		} else if *old_num != 0 {
-			return Err(Unsolvable)
+		match entry.num {
+			0 => (),                              // not solved
+			n if n == *old_num => return Ok(()),  // previously solved
+			_ => return Err(Unsolvable),          // conflict
 		}
 		*old_num = entry.num;
 		deduced_entries.push(entry);
 		employed_strategies.push(strategy);
-		//let pos = deduced_entries.len();
-		//employed_strategies.push((strategy, Forced(pos..pos+1) ));
 		Ok(())
 	}
 
@@ -462,8 +413,6 @@ impl SudokuState {
 					let entry = Entry { cell, num };
 					let strat_res = StrategyResult::HiddenSingles(entry, zone_type(zone));
 					Self::push_new_entry(&mut self.grid, &mut self.deduced_entries, entry, &mut self.employed_strategies, strat_res)?;
-					//self.deduced_entries.push(Entry{ cell: cell, num: num } );
-					//self.employed_strategies.push(Strategy::HiddenSingles);
 
 					// mark num as found
 					singles.remove(Mask::from_num(num));
@@ -552,40 +501,15 @@ impl SudokuState {
 					n_eliminated..eliminated_entries.len()
 				};
 
-   				if stop_after_first {
-					for &(uniques, neighbours) in &[(line_uniques, &field_neighbours), (field_uniques, &line_neighbours)] {
-						let rg_eliminations = find_impossibles(uniques, neighbours);
-						if rg_eliminations.len() > 0 {
-							self.employed_strategies.push(StrategyResult::LockedCandidates(slice, uniques, rg_eliminations));
-							return Ok(());
-						}
-					}
-					/*
-					let (uniques, neighbours) = if line_uniques != Mask::NONE {
-						(line_uniques, &field_neighbours)
-					} else if field_uniques != Mask::NONE {
-						(field_uniques, &line_neighbours)
-					} else {
-						continue
-					};
+				for &(uniques, neighbours) in [(line_uniques, &field_neighbours), (field_uniques, &line_neighbours)].iter()
+					.filter(|&&(uniques, _)| uniques != Mask::NONE)
+				{
 					let rg_eliminations = find_impossibles(uniques, neighbours);
 					if rg_eliminations.len() > 0 {
 						self.employed_strategies.push(StrategyResult::LockedCandidates(slice, uniques, rg_eliminations));
-						return Ok(());
-					}
-					*/
-				} else {
-					if line_uniques != Mask::NONE {
-						let rg_eliminations = find_impossibles(line_uniques, &field_neighbours);
-						if rg_eliminations.len() > 0 {
-							self.employed_strategies.push(StrategyResult::LockedCandidates(slice, line_uniques, rg_eliminations));
-						}
-					}
 
-					if field_uniques != Mask::NONE {
-						let rg_eliminations = find_impossibles(field_uniques, &line_neighbours);
-						if rg_eliminations.len() > 0 {
-							self.employed_strategies.push(StrategyResult::LockedCandidates(slice, field_uniques, rg_eliminations));
+						if stop_after_first {
+							return Ok(());
 						}
 					}
 				}
@@ -751,7 +675,6 @@ impl SudokuState {
 			// 0..9 = rows, 9..18 = cols
 			for lines in &[Line::ALL_ROWS, Line::ALL_COLS] {
 				if basic_fish_walk_combinations(self, num_off, max_size, &mut stack, lines, lines, Mask::NONE, stop_after_first) {
-					//panic!("found fish");
 					return
 				};
 			}
@@ -927,7 +850,6 @@ fn basic_fish_walk_combinations(
 
 		let rg_eliminations = n_eliminated..sudoku.eliminated_entries.len();
 		if rg_eliminations.len() > 0 {
-			//panic!("fishy!");
 
 			let lines = stack.clone();
 			let positions = union_poss_pos;
@@ -959,7 +881,6 @@ fn basic_fish_walk_combinations(
 		// n_poss == 0 => solved row (or impossible)
 		// n_poss == 1 => hidden single
 		if n_poss < 2 || new_union_poss_pos.n_possibilities() > goal_depth as u8 { continue }
-		//panic!("fishyness");
 		stack.push(line);
 		if basic_fish_walk_combinations(sudoku, num_off, goal_depth, stack, &lines[i+1..], all_lines, new_union_poss_pos, stop_after_first) {
 			return true
@@ -987,11 +908,6 @@ impl<T> State<T> {
 	}
 }
 
-// tokens handed out when updating
-//struct CellPossibilities;
-//struct ZoneSolvedDigits;
-//struct ZonePossibilities;
-
 impl<T> State<T> {
 	fn get_mut(&mut self) -> (&mut u16, &mut u16, &mut T) {
 		let &mut State {
@@ -1000,216 +916,7 @@ impl<T> State<T> {
 		(ld, le, state)
 	}
 }
-/*
-fn find_naked_singles(state: &mut SudokuState) {
-	let (ld_cp, le_cp, cell_poss) = state.cell_poss_digits.get_mut();
-	let (ld_zp, le_zp, zone_solved) = state.zone_solved_digits.get_mut();
-
-	for &entry in &impossibles[*le as usize + 1 ..] {
-		let impossibles = Mask::from_num(entry.num());
-		let cell_mask = &mut poss_digits[entry.cell as usize];
-		*cell_mask &= !impossibles;
-		if *cell_mask == Mask::NONE {
-			return Err(Unsolvable)
-		}
-	}
-	*le = impossibles.len() as _;
-
-
-
-	unimplemented!()
-}*/
-
-/*
-impl CellPossibilities {
-	fn get_as_is(&self) -> Array81
-
-	// update state, deduce singles during that
-	// then return array
-	// TODO: how to pass info about number of deductions
-	fn deduce_get(&mut self, entries: &mut Vec<Entry>, impossibles: &mut Vec<Entry>, _: Sudoku) -> Result<Array81<Mask<Digit>>, Unsolvable> {
-		let &mut CellPossibilities(State {
-			next_deduced: ref mut ld, last_eliminated: ref mut le, state: ref mut poss_digits
-		}) = self;
-
-		for &entry in &impossibles[*le as usize + 1 ..] {
-			let impossibles = Mask::from_num(entry.num());
-			let cell_mask = &mut poss_digits[entry.cell as usize];
-			*cell_mask &= !impossibles;
-			if *cell_mask == Mask::NONE {
-				return Err(Unsolvable)
-			}
-		}
-		*le = impossibles.len() as _;
-
-
-
-		unimplemented!()
-	}
-}
-*/
-/*
-impl StrategySolver {
-	fn new() -> StrategySolver {
-		StrategySolver {
-			grid: Sudoku([0; 81]),
-			n_solved_cells: 0,
-			cell_poss_digits: Array81([Mask::ALL; 81]),
-			zone_solved_digits: [Mask::NONE; 27],
-			zone_poss_positions: [[Mask::ALL; 9]; 27],
-			last_cell: 0,
-		}
-	}
-
-	pub fn from_sudoku(sudoku: Sudoku) -> Result<StrategySolver, Unsolvable> {
-		let mut solver = Self::new();
-		let mut stack = sudoku.iter()
-			.enumerate()
-			.flat_map(|(i, num)| num.map(|n| Entry { cell: i as u8, num: n }))
-			.collect();
-		solver.insert_entries(&mut stack)?;
-		Ok(solver)
-	}
-
-	fn _insert_entry(&mut self, entry: Entry) {
-		self.n_solved_cells += 1;
-		self.grid.0[entry.cell()] = entry.num;
-		let old_cell_possibilities = self.cell_poss_digits[entry.cell()];
-		self.cell_poss_digits[entry.cell()] = Mask::NONE;
-
-		self.zone_solved_digits[entry.row() as usize +ROW_OFFSET] |= entry.mask();
-		self.zone_solved_digits[entry.col() as usize +COL_OFFSET] |= entry.mask();
-		self.zone_solved_digits[entry.field() as usize +FIELD_OFFSET] |= entry.mask();
-
-		// FIXME: Abstract away, this is used twice
-		let cell = entry.cell;
-		let row_pos = Mask::row_pos_of_cell(cell);
-		let col_pos = Mask::col_pos_of_cell(cell);
-		let field_pos = Mask::field_pos_of_cell(cell);
-		let row = row_zone(cell);
-		let col = col_zone(cell);
-		let field = field_zone(cell);
-		let impossible = old_cell_possibilities; // & !Mask::from_num(entry.num());
-		for num in impossible.iter() {
-			self.zone_poss_positions[row][num as usize - 1] &= !row_pos;
-			self.zone_poss_positions[col][num as usize - 1] &= !col_pos;
-			self.zone_poss_positions[field][num as usize - 1] &= !field_pos;
-		}
-	}
-
-	//fn batch_insert_entries(&mut self, stack: &mut Vec<Entry>) -> Result<(), Unsolvable> {
-	fn insert_entries(&mut self, stack: &mut Vec<Entry>) -> Result<(), Unsolvable> {
-		for entry in stack.drain(..) {
-			// cell already solved from previous entry in stack, skip
-			if self.cell_poss_digits[entry.cell()] == Mask::NONE { continue }
-
-			let entry_mask = entry.mask();
-
-			// is entry still possible?
-			// have to check zone possibilities, because cell possibility
-			// is temporarily out of date
-			if self.zone_solved_digits[entry.row() as usize + ROW_OFFSET] & entry_mask != Mask::NONE
-			|| self.zone_solved_digits[entry.col() as usize + COL_OFFSET] & entry_mask != Mask::NONE
-			|| self.zone_solved_digits[entry.field() as usize +FIELD_OFFSET] & entry_mask != Mask::NONE
-			{
-				return Err(Unsolvable);
-			}
-
-			self._insert_entry(entry);
-		}
-
-		// update cell possibilities from zone masks
-		for cell in 0..81 {
-			if self.cell_poss_digits[cell as usize] == Mask::NONE { continue }
-			let zones_mask = self.zone_solved_digits[row_zone(cell)]
-				| self.zone_solved_digits[col_zone(cell)]
-				| self.zone_solved_digits[field_zone(cell)];
-
-			self.remove_cell_impossibilities(cell, zones_mask)?;
-		}
-		Ok(())
-	}
-
-	#[inline]
-	fn is_solved(&self) -> bool {
-		self.n_solved_cells == 81
-	}
-
-	// remove impossible digits from masks for given cell
-	fn remove_cell_impossibilities(&mut self, cell: u8, impossible: Mask<Digit>) -> Result<(), Unsolvable> {
-		let cell_mask = &mut self.cell_poss_digits[cell as usize];
-		// *cell_mask &= !impossible;
-		//if *cell_mask == Mask::NONE {
-		//	return Err(Unsolvable)
-		//}
-
-		{ // remove now impossible positions from list
-			let row_pos = Mask::row_pos_of_cell(cell);
-			let col_pos = Mask::col_pos_of_cell(cell);
-			let field_pos = Mask::field_pos_of_cell(cell);
-			let row = row_zone(cell);
-			let col = col_zone(cell);
-			let field = field_zone(cell);
-			for num in impossible.iter() {
-				self.zone_poss_positions[row][num as usize - 1] &= !row_pos;
-				self.zone_poss_positions[col][num as usize - 1] &= !col_pos;
-				self.zone_poss_positions[field][num as usize - 1] &= !field_pos;
-			}
-		}
-		Ok(())
-	}
-
-	pub(crate) fn possible_digits_in_cell(&self, Cell(cell): Cell) -> Mask<Digit> {
-		self.cell_poss_digits[cell as usize]
-	}
-
-    /*
-	fn possible_digits_in_zone(&self, Zone(zone): Zone) -> Mask<Digit> {
-		!self.zone_solved_digits[zone as usize] & Mask::ALL
-	}
-    */
-
-	fn remove_impossibilities(&mut self, imposs_entrs: &mut Vec<Entry>) -> Result<(), Unsolvable> {
-		for entry in imposs_entrs.drain(..) {
-			let impossibles = Mask::from_num(entry.num());
-			self.remove_cell_impossibilities(entry.cell, impossibles)?;
-		}
-		Ok(())
-	}
-
-    // copied from fast solver
-    // TODO: combine them
-    fn find_good_guess(&mut self) -> Entry {
-		let mut min_possibilities = 10;
-		let mut best_cell = 100;
-
-		{
-			let mut cell = (self.last_cell + 1) % 81;
-			loop {
-				let cell_mask = self.cell_poss_digits[cell as usize];
-				let n_possibilities = cell_mask.n_possibilities();
-				// 0 means cell was already processed or its impossible in which case,
-				// it should have been caught elsewhere
-				// 1 shouldn't happen for the same reason, should have been processed
-				if n_possibilities > 0 && n_possibilities < min_possibilities {
-					best_cell = cell;
-					min_possibilities = n_possibilities;
-					if n_possibilities == 2 { break }
-				}
-				if cell == self.last_cell { break }
-				cell = if cell == 80 { 0 } else { cell + 1 }
-			}
-			self.last_cell = cell;
-		}
-
-		let num = self.cell_poss_digits[best_cell as usize].one_possibility();
-		Entry{ num: num, cell: best_cell }
-	}
-}
-*/
-
 ///////////////////////////////////////////////////////////////////////////////////////////
-//use std::ops::{Generator, GeneratorState};
 
 #[derive(Debug, Clone)]
 pub enum Strategy {
@@ -1313,22 +1020,6 @@ pub(crate) enum StrategyResult {
     #[doc(hidden)] __NonExhaustive
 }
 
-/*
-		for strategy_result in self.employed_strategies {
-
-			println!("{:?}:", strategy);
-			let deductions = match rg {
-				Forced(rg) => &self.deduced_entries[rg],
-				Impossible(rg) => &self.eliminated_entries[rg],
-			};
-			for &entry in deductions {
-				println!("\tr{}c{} {}", entry.row()+1, entry.col()+1, entry.num);
-			}
-		//println!("{:?}", self.employed_strategies);
-		}
-
-*/
-
 impl StrategyResult {
 	fn strategy(&self) -> Strategy {
 		use self::StrategyResult::*;
@@ -1426,7 +1117,7 @@ fn find_unique<I: Iterator<Item=Mask<Digit>>>(possibilities: I) -> (Mask<Digit>,
 	(unsolved, multiple_unsolved, unsolved & !multiple_unsolved)
 }
 
-//#[cfg(test)]
+#[cfg(test)]
 mod test {
     extern crate test;
     use super::*;

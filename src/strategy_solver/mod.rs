@@ -4,6 +4,6 @@ mod solver;
 //mod strategies;
 
 //pub use self::traits::*;
-pub(crate) use self::solver::*;
+//pub(crate) use self::solver::*;
 //pub(crate) use self::hidden_singles::*;
 //pub(crate) use self::naked_singles::*;

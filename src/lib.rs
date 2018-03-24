@@ -1,5 +1,4 @@
 #![warn(missing_docs)]
-//#![allow(unused)]
 #![cfg_attr(feature = "cargo-clippy",
     allow(
         clippy_complexity,
@@ -10,7 +9,6 @@
         write_with_newline,
     )
 )]
-#![feature(generators, generator_trait, conservative_impl_trait)]
 //! The Sudoku library
 //!
 //! ## Overview

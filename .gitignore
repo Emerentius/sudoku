@@ -5,3 +5,4 @@ src/main.rs
 rls
 settings.json
 launch.json
+.vscode

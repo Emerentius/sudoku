@@ -71,26 +71,35 @@ impl StrategySolver {
 
 	}
 
+	fn into_deductions(self) -> Deductions {
+		Deductions {
+			employed_strategies: self.employed_strategies,
+			deduced_entries: self.deduced_entries,
+			eliminated_entries: self.eliminated_entries,
+		}
+	}
+
 	fn update_grid(&mut self) {
 		for &Entry { cell, num } in &self.deduced_entries {
 			self.grid.state.0[cell as usize] = num;
 		}
 	}
 
-	pub fn solve(mut self, strategies: &[Strategy]) -> Result<Sudoku, Sudoku> {
+	/// Try to solve the sudoku using the given `strategies`. Returns a `Result` of the sudoku and a struct containing the series of deductions.
+	/// If a solution was found, `Ok(..)` is returned, otherwise `Err(..)`.
+	pub fn solve(mut self, strategies: &[Strategy]) -> Result<(Sudoku, Deductions), (Sudoku, Deductions)> {
 		'outer: loop {
 			if self.is_solved() {
 				self.update_grid();
-				return Ok(self.grid.state)
+				return Ok((self.grid.state, self.into_deductions()))
 			}
 
 			// no chance without strategies
 			let n_deductions = self.deduced_entries.len();
 			let n_eliminated = self.eliminated_entries.len();
-			// normally this is .ok_or()?
-			let (first, rest) = match strategies.split_first().ok_or(Unsolvable) {
-				Ok(tup) => tup,
-				Err(_) => break,
+			let (first, rest) = match strategies.split_first() {
+				Some(tup) => tup,
+				None => break,
 			};
 			if first.deduce_all(&mut self).is_err() { break };
 			if self.deduced_entries.len() > n_deductions {
@@ -105,40 +114,10 @@ impl StrategySolver {
 					continue 'outer
 				}
 			}
-			//self.update_grid();
-			break // Err(self.grid)
+			break
 		}
 		self.update_grid();
-		println!("got this far: {}", self.grid.state);
-		for strategy_result in self.employed_strategies {
-
-			print!("{:25?}: ", strategy_result.strategy());
-			strategy_result.print_reason();
-			print!("\n");
-			match strategy_result.deductions(&self.eliminated_entries) {
-				Ok(entry) => println!("\tr{}c{} {}", entry.row()+1, entry.col()+1, entry.num),
-
-				Err(deductions) => {
-					for &entry in deductions {
-						println!("\tr{}c{} {}", entry.row()+1, entry.col()+1, entry.num);
-					}
-				}
-
-			}
-		}
-		assert!(self.zone_poss_positions.last_eliminated == self.eliminated_entries.len() as _);
-		assert!(self.zone_poss_positions.next_deduced == self.deduced_entries.len() as _);
-		println!("zone poss positions: ");
-		for zone in 0..27 {
-			println!("{:?} {}", zone_type(zone as _), 1 + zone % 9 );
-			for num in 0..9 {
-				let poss_pos = join_iter(self.zone_poss_positions.state[zone][num].iter().map(|pos| pos.0 + 1));
-				println!("\t{}: {}", num + 1, poss_pos);
-			}
-		}
-
-
-		Err(self.grid.state)
+		Err((self.grid.state, self.into_deductions()))
 	}
 
 	pub fn is_solved(&self) -> bool {
@@ -502,6 +481,7 @@ impl StrategySolver {
 				{
 					let rg_eliminations = find_impossibles(uniques, neighbours);
 					if rg_eliminations.len() > 0 {
+						// TODO: If stop_after_first is true, only enter the number whose conflicts were eliminated
 						self.employed_strategies.push(StrategyResult::LockedCandidates(slice, uniques, rg_eliminations));
 
 						if stop_after_first {
@@ -531,7 +511,6 @@ impl StrategySolver {
 			if stack.len() == 5 { return false }
 			if stack.len() > 0 && total_poss_digs.n_possibilities() == stack.len() as u8 {
 				// found a subset
-
 				let n_eliminated = state.eliminated_entries.len();
 				for cell in zone.cells().iter().filter(|cell| !stack.contains(cell)) {
 					let conflicts = state.cell_poss_digits.state[cell.0 as usize] & total_poss_digs;
@@ -973,6 +952,33 @@ pub enum LineType {
 #[derive(Debug, Clone)]
 struct SinglesChain;
 
+#[derive(Debug)]
+pub struct Deductions {
+	pub(crate) employed_strategies: Vec<StrategyResult>,
+	pub(crate) deduced_entries: Vec<Entry>,
+	pub(crate) eliminated_entries: Vec<Entry>,
+}
+
+impl Deductions {
+	fn print_deductions(&self) {
+		for strategy_result in &self.employed_strategies {
+			print!("{:25?}: ", strategy_result.strategy());
+			strategy_result.print_reason();
+			print!("\n");
+			match strategy_result.deductions(&self.eliminated_entries) {
+				Ok(entry) => println!("\tr{}c{} {}", entry.row()+1, entry.col()+1, entry.num),
+
+				Err(deductions) => {
+					for &entry in deductions {
+						println!("\tr{}c{} {}", entry.row()+1, entry.col()+1, entry.num);
+					}
+				}
+
+			}
+		}
+	}
+}
+
 // TODO: Expand
 #[derive(Debug, Clone)]
 pub(crate) enum StrategyResult {
@@ -1015,21 +1021,24 @@ pub(crate) enum StrategyResult {
     #[doc(hidden)] __NonExhaustive
 }
 
-impl StrategyResult {
-	fn strategy(&self) -> Strategy {
-		use self::StrategyResult::*;
-		match *self {
-			NakedSingles(..) => Strategy::NakedSingles,
-			HiddenSingles(..) => Strategy::HiddenSingles,
-			LockedCandidates(..) => Strategy::LockedCandidates,
-			NakedSubsets{..} => Strategy::NakedSubsets,
-			HiddenSubsets{..} => Strategy::HiddenSubsets,
-			XWing{..} => Strategy::XWing,
-			Swordfish{..} => Strategy::Swordfish,
-			Jellyfish{..} => Strategy::Jellyfish,
-			SinglesChain{..} => Strategy::SinglesChain,
-			__NonExhaustive => Strategy::__NonExhaustive,
+macro_rules! map_to_strategy {
+	($this:expr; $($variant:ident),*) => {
+		match *$this {
+			$(
+				$variant {..} => Strategy::$variant
+			),*
 		}
+	}
+}
+
+impl StrategyResult {
+	pub fn strategy(&self) -> Strategy {
+		use self::StrategyResult::*;
+		// for each strategy: StrategyName{..} => Strategy::StrategyName
+		map_to_strategy!( self;
+			NakedSingles, HiddenSingles, LockedCandidates, NakedSubsets, HiddenSubsets,
+			XWing, Swordfish, Jellyfish, SinglesChain, __NonExhaustive
+		)
 	}
 
 	// not really an error, I just want an Either
@@ -1138,15 +1147,15 @@ mod test {
 
 
     fn strategy_solver_correct_solution<F>(sudokus: Vec<Sudoku>, solved_sudokus: Vec<Sudoku>, solver: F)
-        where F: Fn(StrategySolver, &[Strategy]) -> Result<Sudoku, Sudoku>,
+        where F: Fn(StrategySolver, &[Strategy]) -> Result<(Sudoku, Deductions), (Sudoku, Deductions)>,
     {
         let strategies = all_strategies();
         let mut unsolved = vec![];
         for (i, (sudoku, solved_sudoku)) in sudokus.into_iter().zip(solved_sudokus).enumerate() {
             let cache = StrategySolver::from_sudoku(sudoku);
             match solver(cache, &strategies) {
-                Ok(solution) => assert_eq!(solution, solved_sudoku),
-                Err(part_solved) => unsolved.push((i, sudoku, part_solved, solved_sudoku)),
+                Ok((solution, _deductions)) => assert_eq!(solution, solved_sudoku),
+                Err((part_solved, _deductions)) => unsolved.push((i, sudoku, part_solved, solved_sudoku)),
             }
         }
         if unsolved.len() != 0 {

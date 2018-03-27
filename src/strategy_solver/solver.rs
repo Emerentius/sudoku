@@ -369,9 +369,9 @@ impl StrategySolver {
 		}
 
 		let old_num = &mut sudoku.0[entry.cell()];
-		match entry.num {
+		match *old_num {
+			n if n == entry.num => return Ok(()),  // previously solved
 			0 => (),                              // not solved
-			n if n == *old_num => return Ok(()),  // previously solved
 			_ => return Err(Unsolvable),          // conflict
 		}
 		*old_num = entry.num;

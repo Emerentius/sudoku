@@ -8,61 +8,62 @@ use positions::{
     row_zone, col_zone, field_zone, cells_of_zone, neighbours,
     Cell, Line, Zone, Slice, Band,
 };
-//use super::NewStrategy;
-
-// State of Sudoku
-// Contains caches of various properties of the grid
-// so that arbitrary strategies can be applied efficiently without
-// having to scan the entire grid beforehand
-//
-// Strategies are structs that implement the trait Strategy
-// they can access the caches and return deductions
-// which can be applied to the State struct through a common interface
-// that will keep the caches consistent.
-#[derive(Debug, Clone)]
-pub struct StrategySolver {
-	pub(crate) grid: Sudoku,
-	pub(crate) n_solved_cells: u8,
-	pub(crate) cell_poss_digits: Array81<Mask<Digit>>,
-	pub(crate) zone_solved_digits: [Mask<Digit>; 27],
-	pub(crate) zone_poss_positions: [[Mask<Position>; 9]; 27],
-	pub(crate) last_cell: u8, // last cell checked in guess routine
-}
 
 type DeductionRange = ::std::ops::Range<usize>;
 
+/// A `StrategySolver` is built from a
+/// single `Sudoku` for which it for which it allows
+/// the efficient application of strategies like humans would do.
+/// It can find hints or solve the `Sudoku` completely and return the
+/// sequence of logical steps taken. By weighting the difficulty
+/// of each strategy, it can also grade sudoku difficulties.
+
+// To allow for the above functionality, this struct contains caches
+// of various properties of the sudoku grid. The caches are lazily updated
+// on demand. This avoids both unnecessary and repetitive work.
+//
+// Two histories are kept:
+// 1. A list of all strategies that were successfully used to deduce or eliminate entries
+// 2. Two lists for all deduced (or entered) and eliminated entries
+//
+// The 1st is for reporting the sequence of strategies applied
+// The 2nd is for the updating of internal caches. It is kept simple to offer an easy interface
+// and can contain duplicates.
+//
+// These two histories can contain overlapping information and the 1st one can also contain references
+// to the 2nd but not vice versa.
 #[derive(Debug, Clone)]
-pub(crate) struct SudokuState {
-	// keeps a history of all deductions, both filled cells and eliminated possibilities
-	// as well as what reasoning was used
-	pub employed_strategies: Vec<StrategyResult>,
-	pub deduced_entries: Vec<Entry>,
-	pub eliminated_entries: Vec<Entry>,
-	pub n_solved: u8,
+pub struct StrategySolver {
+	pub(crate) employed_strategies: Vec<StrategyResult>,
+	pub(crate) deduced_entries: Vec<Entry>,
+	pub(crate) eliminated_entries: Vec<Entry>,
+	pub(crate) n_solved: u8, // deduced_entries can contain duplicates so a separate counter is necessary
 	// current state of the sudoku
 	// for when it's faster to recompute from the end state
 	// than update through the new entries
-	// TODO: lazily updated?
-	pub grid: Sudoku,
+	pub(crate) grid: State<Sudoku>,
 	// TODO: combine states that are updated together
+	// Mask of possible numbers in cell
 	pub(crate) cell_poss_digits: State<Array81<Mask<Digit>>>,
+	// Mask of solved digits in zone
 	pub(crate) zone_solved_digits: State<[Mask<Digit>; 27]>,
+	// Mask of possible positions for a zone and number
 	pub(crate) zone_poss_positions: State<[[Mask<Position>; 9]; 27]>,
 }
 
-impl SudokuState {
-	pub fn from_sudoku(sudoku: Sudoku) -> SudokuState {
+impl StrategySolver {
+	pub fn from_sudoku(sudoku: Sudoku) -> StrategySolver {
 		let deduced_entries = sudoku.iter()
 			.enumerate()
 			.filter_map(|(cell, opt_num)| {
 				opt_num.map(|num| Entry { cell: cell as u8, num })
 			}).collect();
-		SudokuState {
+		StrategySolver {
 			employed_strategies: vec![],
 			deduced_entries,
 			eliminated_entries: vec![],
 			n_solved: 0,
-			grid: Sudoku([0; 81]),
+			grid: State::from(Sudoku([0; 81])),
 			cell_poss_digits: State::from(Array81([Mask::ALL; 81])),
 			zone_solved_digits: State::from([Mask::NONE; 27]),
 			zone_poss_positions: State::from([[Mask::ALL; 9]; 27]),
@@ -72,7 +73,7 @@ impl SudokuState {
 
 	fn update_grid(&mut self) {
 		for &Entry { cell, num } in &self.deduced_entries {
-			self.grid.0[cell as usize] = num;
+			self.grid.state.0[cell as usize] = num;
 		}
 	}
 
@@ -80,7 +81,7 @@ impl SudokuState {
 		'outer: loop {
 			if self.is_solved() {
 				self.update_grid();
-				return Ok(self.grid)
+				return Ok(self.grid.state)
 			}
 
 			// no chance without strategies
@@ -108,7 +109,7 @@ impl SudokuState {
 			break // Err(self.grid)
 		}
 		self.update_grid();
-		println!("got this far: {}", self.grid);
+		println!("got this far: {}", self.grid.state);
 		for strategy_result in self.employed_strategies {
 
 			print!("{:25?}: ", strategy_result.strategy());
@@ -137,7 +138,7 @@ impl SudokuState {
 		}
 
 
-		Err(self.grid)
+		Err(self.grid.state)
 	}
 
 	pub fn is_solved(&self) -> bool {
@@ -153,12 +154,7 @@ impl SudokuState {
 
 				// deductions made here may conflict with entries already in the queue
 				// in the queue. In that case the sudoku is impossible.
-				Self::remove_impossibilities(&mut self.grid, cell_poss, entry.cell, impossibles, &mut self.deduced_entries, &mut self.employed_strategies)?;
-				//let cell_mask = &mut cell_poss[entry.cell as usize];
-				//*cell_mask &= !impossibles;
-				//if *cell_mask == Mask::NONE {
-				//	return Err(Unsolvable)
-				//}
+				Self::remove_impossibilities(&mut self.grid.state, cell_poss, entry.cell, impossibles, &mut self.deduced_entries, &mut self.employed_strategies)?;
 			}
 			*le_cp = self.eliminated_entries.len() as _;
 		}
@@ -275,7 +271,7 @@ impl SudokuState {
 			Self::_insert_entry_cp_zs(entry, &mut self.n_solved, cell_poss_digits, zone_solved_digits);
 			for &cell in neighbours(entry.cell) {
 				if entry_mask & cell_poss_digits[cell as usize] != Mask::NONE {
-					Self::remove_impossibilities(&mut self.grid, cell_poss_digits, cell, entry_mask, &mut self.deduced_entries, &mut self.employed_strategies)?;
+					Self::remove_impossibilities(&mut self.grid.state, cell_poss_digits, cell, entry_mask, &mut self.deduced_entries, &mut self.employed_strategies)?;
 				};
 			}
 
@@ -331,7 +327,7 @@ impl SudokuState {
 				| zone_solved_digits[col_zone(cell)]
 				| zone_solved_digits[field_zone(cell)];
 
-			Self::remove_impossibilities(&mut self.grid, cell_poss_digits, cell, zones_mask, &mut self.deduced_entries, &mut self.employed_strategies)?;
+			Self::remove_impossibilities(&mut self.grid.state, cell_poss_digits, cell, zones_mask, &mut self.deduced_entries, &mut self.employed_strategies)?;
 		}
 		Ok(())
 	}
@@ -412,7 +408,7 @@ impl SudokuState {
 					let num = maybe_unique.ok_or(Unsolvable)?;
 					let entry = Entry { cell, num };
 					let strat_res = StrategyResult::HiddenSingles(entry, zone_type(zone));
-					Self::push_new_entry(&mut self.grid, &mut self.deduced_entries, entry, &mut self.employed_strategies, strat_res)?;
+					Self::push_new_entry(&mut self.grid.state, &mut self.deduced_entries, entry, &mut self.employed_strategies, strat_res)?;
 
 					// mark num as found
 					singles.remove(Mask::from_num(num));
@@ -523,7 +519,7 @@ impl SudokuState {
 		// TODO: limit min/max length so naked pairs / triples / quadruples can be distinguished
 		//		 breadth first search?
 		fn walk_combinations(
-			state: &mut SudokuState,
+			state: &mut StrategySolver,
 			total_poss_digs: Mask<Digit>,
 			cells: &[Cell],
 			zone: Zone,
@@ -592,7 +588,7 @@ impl SudokuState {
 		// TODO: limit min/max length so hidden pairs / triples / quadruples can be distinguished
 		//		 breadth first search?
 		fn walk_combinations(
-			state: &mut SudokuState,
+			state: &mut StrategySolver,
 			zone: u8,
 			total_poss_pos: Mask<Position>,
 			num_offs: &[u8],
@@ -689,7 +685,7 @@ impl SudokuState {
             B,
         }
 
-        fn follow_links(num_off: u8, cell: Cell, is_a: bool, sudoku: &SudokuState, cell_color: &mut [Colour; 81], link_nr: u8, cell_linked: &mut [u8; 81]) {
+        fn follow_links(num_off: u8, cell: Cell, is_a: bool, sudoku: &StrategySolver, cell_color: &mut [Colour; 81], link_nr: u8, cell_linked: &mut [u8; 81]) {
             if cell_linked[cell.0 as usize] <= link_nr { return }
 
             for &(con_zone, current_pos) in &[
@@ -824,7 +820,7 @@ impl SudokuState {
 // swordfish       3
 // jellyfish       4
 fn basic_fish_walk_combinations(
-	sudoku: &mut SudokuState,
+	sudoku: &mut StrategySolver,
 	num_off: usize,
 	goal_depth: usize,
 	stack: &mut Vec<Line>,
@@ -918,6 +914,8 @@ impl<T> State<T> {
 }
 ///////////////////////////////////////////////////////////////////////////////////////////
 
+/// The strategies that can be used with the `StrategySolver` to find hints, solve or grade a `Sudoku`.
+/// May be expanded in the future.
 #[derive(Debug, Clone)]
 pub enum Strategy {
     NakedSingles,
@@ -933,32 +931,29 @@ pub enum Strategy {
 }
 
 impl Strategy {
-    fn deduce_one(&self, state: &mut SudokuState) -> Result<(), Unsolvable> {
-        use self::Strategy::*;
+	fn deduce(&self, state: &mut StrategySolver, stop_after_first: bool) -> Result<(), Unsolvable> {
+		use self::Strategy::*;
         match *self {
-            NakedSingles => unimplemented!(),
-			HiddenSingles => state.find_hidden_singles(true),
-			LockedCandidates => state.find_locked_candidates(true),
-			NakedSubsets => state.find_naked_subsets(true),
-			HiddenSubsets => state.find_hidden_subsets(true),
-			XWing => { state.find_xwings(true); Ok(()) },
-			Swordfish => { state.find_swordfish(true); Ok(()) },
-			Jellyfish => { state.find_jellyfish(true); Ok(()) },
-			SinglesChain => state.find_singles_chain(), // TODO: Remove eager solver
+            NakedSingles if stop_after_first => unimplemented!(), // TODO: Implement non-eager NakedSingles
+            NakedSingles => state.update_cell_poss_zone_solved(),
+			HiddenSingles => state.find_hidden_singles(stop_after_first),
+			LockedCandidates => state.find_locked_candidates(stop_after_first),
+			NakedSubsets => state.find_naked_subsets(stop_after_first),
+			HiddenSubsets => state.find_hidden_subsets(stop_after_first),
+			XWing => { state.find_xwings(stop_after_first); Ok(()) },
+			Swordfish => { state.find_swordfish(stop_after_first); Ok(()) },
+			Jellyfish => { state.find_jellyfish(stop_after_first); Ok(()) },
+			SinglesChain if !stop_after_first => state.find_singles_chain(), // TODO: Implement non-eager SinglesChain
             _ => unimplemented!(),
         }
+	}
+
+    fn deduce_one(&self, state: &mut StrategySolver) -> Result<(), Unsolvable> {
+        self.deduce(state, true)
     }
 
-    fn deduce_all(&self, state: &mut SudokuState) -> Result<(), Unsolvable> {
-        use self::Strategy::*;
-        match *self {
-            NakedSingles => state.update_cell_poss_zone_solved(),
-			HiddenSingles => state.find_hidden_singles(false),
-			LockedCandidates => state.find_locked_candidates(false),
-			LockedCandidates => state.find_naked_subsets(false),
-			HiddenSubsets => state.find_hidden_subsets(false),
-            _ => unimplemented!(),
-        }
+    fn deduce_all(&self, state: &mut StrategySolver) -> Result<(), Unsolvable> {
+        self.deduce(state, false)
     }
 }
 
@@ -1071,7 +1066,6 @@ impl StrategyResult {
 				let zone_type = zone_type(zone.0);
 				let nums = digits.iter().map(|n| n.to_string()).collect::<Vec<_>>().join(",");
 				let cells = cells.iter().map(|n| format!("r{}c{}", 1 + n.row().0, 1 + n.col().0 - 9)).collect::<Vec<_>>().join(",");
-				//print!("slice {} nums: {}", slice.0, nums.join(","))
 				print!("{:?} {} nums: {}, cells: {}", zone_type, 1 + zone.0 % 9, nums, cells);
 			},
 			HiddenSubsets { zone, ref num_offsets, positions, .. } => {
@@ -1144,18 +1138,15 @@ mod test {
 
 
     fn strategy_solver_correct_solution<F>(sudokus: Vec<Sudoku>, solved_sudokus: Vec<Sudoku>, solver: F)
-        where F: Fn(SudokuState, &[Strategy]) -> Result<Sudoku, Sudoku>,
+        where F: Fn(StrategySolver, &[Strategy]) -> Result<Sudoku, Sudoku>,
     {
         let strategies = all_strategies();
-        //let mut n_skip = 1; // FIXME: Improve solver, so the 7th sudoku can be solved without backtracking
         let mut unsolved = vec![];
         for (i, (sudoku, solved_sudoku)) in sudokus.into_iter().zip(solved_sudokus).enumerate() {
-            let cache = SudokuState::from_sudoku(sudoku);
-            //print!("\nn_sudoku = {} ", i);
+            let cache = StrategySolver::from_sudoku(sudoku);
             match solver(cache, &strategies) {
                 Ok(solution) => assert_eq!(solution, solved_sudoku),
-                Err(part_solved) => unsolved.push((i, sudoku, part_solved, solved_sudoku)), // panic!("Found multiple solutions to sudoku with unique solution or none at all for {}th sudoku:\n{}", i, sudoku),
-                //_ => n_skip -= 1,
+                Err(part_solved) => unsolved.push((i, sudoku, part_solved, solved_sudoku)),
             }
         }
         if unsolved.len() != 0 {
@@ -1177,7 +1168,7 @@ mod test {
 		let strategies = all_strategies();
 		let sudoku = sudokus[5];
 		println!("{}\n", sudoku);
-		let solved = SudokuState::from_sudoku(sudoku).solve(&strategies).unwrap();
+		let solved = StrategySolver::from_sudoku(sudoku).solve(&strategies).unwrap();
 	}
 	*/
 
@@ -1185,7 +1176,7 @@ mod test {
     fn strategy_solver_correct_solution_easy_sudokus() {
         let sudokus = read_sudokus( include_str!("../../sudokus/Lines/easy_sudokus.txt") );
         let solved_sudokus = read_sudokus( include_str!("../../sudokus/Lines/solved_easy_sudokus.txt") );
-        strategy_solver_correct_solution(sudokus, solved_sudokus, SudokuState::solve);
+        strategy_solver_correct_solution(sudokus, solved_sudokus, StrategySolver::solve);
     }
 
     #[test]
@@ -1198,7 +1189,7 @@ mod test {
 			.collect::<Vec<_>>();
         let sudokus = filter_9(read_sudokus( include_str!("../../sudokus/Lines/medium_sudokus.txt") ));
         let solved_sudokus = filter_9(read_sudokus( include_str!("../../sudokus/Lines/solved_medium_sudokus.txt") ));
-        strategy_solver_correct_solution(sudokus, solved_sudokus, SudokuState::solve);
+        strategy_solver_correct_solution(sudokus, solved_sudokus, StrategySolver::solve);
     }
 
 	/*
@@ -1206,7 +1197,7 @@ mod test {
     fn strategy_solver_correct_solution_hard_sudokus() {
         let sudokus = read_sudokus( include_str!("../../sudokus/Lines/hard_sudokus.txt") );
         let solved_sudokus = read_sudokus( include_str!("../../sudokus/Lines/solved_hard_sudokus.txt") );
-        strategy_solver_correct_solution(sudokus, solved_sudokus, SudokuState::solve);
+        strategy_solver_correct_solution(sudokus, solved_sudokus, StrategySolver::solve);
     }
 	*/
 
@@ -1215,21 +1206,21 @@ mod test {
     fn backtracking_strategy_solver_correct_solution_easy_sudokus() {
         let sudokus = read_sudokus( include_str!("../../sudokus/Lines/easy_sudokus.txt") );
         let solved_sudokus = read_sudokus( include_str!("../../sudokus/Lines/solved_easy_sudokus.txt") );
-        strategy_solver_correct_solution(sudokus, solved_sudokus, SudokuState::solve_with_backtracking);
+        strategy_solver_correct_solution(sudokus, solved_sudokus, StrategySolver::solve_with_backtracking);
     }
 
     #[test]
     fn backtracking_strategy_solver_correct_solution_medium_sudokus() {
         let sudokus = read_sudokus( include_str!("../../sudokus/Lines/medium_sudokus.txt") );
         let solved_sudokus = read_sudokus( include_str!("../../sudokus/Lines/solved_medium_sudokus.txt") );
-        strategy_solver_correct_solution(sudokus, solved_sudokus, SudokuState::solve_with_backtracking);
+        strategy_solver_correct_solution(sudokus, solved_sudokus, StrategySolver::solve_with_backtracking);
     }
 
     #[test]
     fn backtracking_strategy_solver_correct_solution_hard_sudokus() {
         let sudokus = read_sudokus( include_str!("../../sudokus/Lines/hard_sudokus.txt") );
         let solved_sudokus = read_sudokus( include_str!("../../sudokus/Lines/solved_hard_sudokus.txt") );
-        strategy_solver_correct_solution(sudokus, solved_sudokus, SudokuState::solve_with_backtracking);
+        strategy_solver_correct_solution(sudokus, solved_sudokus, StrategySolver::solve_with_backtracking);
     }
 	*/
 
@@ -1240,7 +1231,7 @@ mod test {
         let strategies = all_strategies();
         b.iter(|| {
             for sudoku in sudokus_100.iter().cloned() {
-                SudokuState::from_sudoku(sudoku).solve(&strategies).unwrap(); //.unwrap();
+                StrategySolver::from_sudoku(sudoku).solve(&strategies).unwrap(); //.unwrap();
             }
         })
     }
@@ -1253,7 +1244,7 @@ mod test {
         b.iter(|| {
             for sudoku in sudokus_100.iter().cloned() {
                 // solution not guaranteed yet, discard error.
-                let _ = SudokuState::from_sudoku(sudoku).solve(&strategies); //.unwrap();
+                let _ = StrategySolver::from_sudoku(sudoku).solve(&strategies); //.unwrap();
             }
         })
     }
@@ -1265,7 +1256,7 @@ mod test {
         let strategies = all_strategies();
         b.iter(|| {
             for sudoku in sudokus_100.iter().cloned() {
-                SudokuState::from_sudoku(sudoku).solve_with_backtracking(&strategies).unwrap();
+                StrategySolver::from_sudoku(sudoku).solve_with_backtracking(&strategies).unwrap();
             }
         })
     }
@@ -1278,7 +1269,7 @@ mod test {
         b.iter(|| {
             for sudoku in sudokus_100.iter().cloned() {
                 // solution not guaranteed yet, discard error.
-                let _ = SudokuState::from_sudoku(sudoku).solve_with_backtracking(&strategies).unwrap();
+                let _ = StrategySolver::from_sudoku(sudoku).solve_with_backtracking(&strategies).unwrap();
             }
         })
     }

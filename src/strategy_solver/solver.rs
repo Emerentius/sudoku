@@ -88,20 +88,21 @@ impl StrategySolver {
 	/// Try to solve the sudoku using the given `strategies`. Returns a `Result` of the sudoku and a struct containing the series of deductions.
 	/// If a solution was found, `Ok(..)` is returned, otherwise `Err(..)`.
 	pub fn solve(mut self, strategies: &[Strategy]) -> Result<(Sudoku, Deductions), (Sudoku, Deductions)> {
+		// first strategy can be optimized
+		let (first, rest) = match strategies.split_first() {
+			Some(tup) => tup,
+			// no chance without strategies
+			None => return Err((self.grid.state, self.into_deductions())),
+		};
 		'outer: loop {
 			if self.is_solved() {
 				self.update_grid();
 				return Ok((self.grid.state, self.into_deductions()))
 			}
 
-			// no chance without strategies
 			let n_deductions = self.deduced_entries.len();
 			let n_eliminated = self.eliminated_entries.len();
-			let (first, rest) = match strategies.split_first() {
-				Some(tup) => tup,
-				None => break,
-			};
-			if first.deduce_all(&mut self).is_err() { break };
+			if first.deduce_all(&mut self, true).is_err() { break };
 			if self.deduced_entries.len() > n_deductions {
 				continue 'outer
 			}
@@ -125,6 +126,10 @@ impl StrategySolver {
 	}
 
 	fn update_cell_poss_zone_solved(&mut self) -> Result<(), Unsolvable> {
+		self._update_cell_poss_zone_solved(false)
+	}
+
+	fn _update_cell_poss_zone_solved(&mut self, find_naked_singles: bool) -> Result<(), Unsolvable> {
 		{
 			let (_, le_cp, cell_poss) = self.cell_poss_digits.get_mut();
 
@@ -133,12 +138,12 @@ impl StrategySolver {
 
 				// deductions made here may conflict with entries already in the queue
 				// in the queue. In that case the sudoku is impossible.
-				Self::remove_impossibilities(&mut self.grid.state, cell_poss, entry.cell, impossibles, &mut self.deduced_entries, &mut self.employed_strategies)?;
+				Self::remove_impossibilities(&mut self.grid.state, cell_poss, entry.cell, impossibles, &mut self.deduced_entries, &mut self.employed_strategies, find_naked_singles)?;
 			}
 			*le_cp = self.eliminated_entries.len() as _;
 		}
 
-		self.insert_entries()
+		self.insert_entries(find_naked_singles)
 	}
 
 	fn update_zone_poss_positions(&mut self) -> Result<(), Unsolvable> {
@@ -207,7 +212,7 @@ impl StrategySolver {
 	}
 
 	#[inline(always)]
-	fn insert_entries(&mut self) -> Result<(), Unsolvable> {
+	fn insert_entries(&mut self, find_naked_singles: bool) -> Result<(), Unsolvable> {
 		// code hereafter depends on this
 		// but it's not necessary in general
 		assert!(self.cell_poss_digits.next_deduced == self.zone_solved_digits.next_deduced);
@@ -215,12 +220,12 @@ impl StrategySolver {
 		// TODO: Delete?
 		// start off with batch insertion so every cell is visited at least once
 		// because other strategies may have touched their possibilities which singly_insertion may miss
-		self.batch_insert_entries()?;
+		self.batch_insert_entries(find_naked_singles)?;
 		loop {
 			match self.deduced_entries.len() - self.cell_poss_digits.next_deduced as usize {
 				0 => break Ok(()),
-				1...4 => self.insert_entries_singly()?,
-				_ => self.batch_insert_entries()?,
+				1...4 => self.insert_entries_singly(find_naked_singles)?,
+				_ => self.batch_insert_entries(find_naked_singles)?,
 			}
 		}
 	}
@@ -229,7 +234,7 @@ impl StrategySolver {
 	// and then remove possibility from each cell neighbouring it in all
 	// zones (rows, cols, fields) eagerly
 	// check for naked singles and impossible cells during this check
-	fn insert_entries_singly(&mut self) -> Result<(), Unsolvable> {
+	fn insert_entries_singly(&mut self, find_naked_singles: bool) -> Result<(), Unsolvable> {
 		let (ld_cp, _, cell_poss_digits) = self.cell_poss_digits.get_mut();
 		let (ld_zs, _, zone_solved_digits) = self.zone_solved_digits.get_mut();
 
@@ -250,7 +255,7 @@ impl StrategySolver {
 			Self::_insert_entry_cp_zs(entry, &mut self.n_solved, cell_poss_digits, zone_solved_digits);
 			for &cell in neighbours(entry.cell) {
 				if entry_mask & cell_poss_digits[cell as usize] != Mask::NONE {
-					Self::remove_impossibilities(&mut self.grid.state, cell_poss_digits, cell, entry_mask, &mut self.deduced_entries, &mut self.employed_strategies)?;
+					Self::remove_impossibilities(&mut self.grid.state, cell_poss_digits, cell, entry_mask, &mut self.deduced_entries, &mut self.employed_strategies, find_naked_singles)?;
 				};
 			}
 
@@ -274,7 +279,7 @@ impl StrategySolver {
 		zone_solved_digits[entry.field() as usize +FIELD_OFFSET] |= entry.mask();
 	}
 
-	pub fn batch_insert_entries(&mut self) -> Result<(), Unsolvable> {
+	pub fn batch_insert_entries(&mut self, find_naked_singles: bool) -> Result<(), Unsolvable> {
 		let (ld_cp, _, cell_poss_digits) = self.cell_poss_digits.get_mut();
 		let (ld_zs, _, zone_solved_digits) = self.zone_solved_digits.get_mut();
 		while self.deduced_entries.len() > *ld_cp as usize {
@@ -306,7 +311,7 @@ impl StrategySolver {
 				| zone_solved_digits[col_zone(cell)]
 				| zone_solved_digits[field_zone(cell)];
 
-			Self::remove_impossibilities(&mut self.grid.state, cell_poss_digits, cell, zones_mask, &mut self.deduced_entries, &mut self.employed_strategies)?;
+			Self::remove_impossibilities(&mut self.grid.state, cell_poss_digits, cell, zones_mask, &mut self.deduced_entries, &mut self.employed_strategies, find_naked_singles)?;
 		}
 		Ok(())
 	}
@@ -320,13 +325,20 @@ impl StrategySolver {
 		impossible: Mask<Digit>,
 		deduced_entries: &mut Vec<Entry>,
 		employed_strategies: &mut Vec<StrategyResult>,
+		find_naked_singles: bool,
 	) -> Result<(), Unsolvable> {
 		let cell_mask = &mut cell_poss_digits[cell as usize];
 		cell_mask.remove(impossible);
 
-		if let Some(num) = cell_mask.unique_num()? {
-			let entry = Entry { cell, num };
-			Self::push_new_entry(sudoku, deduced_entries, entry, employed_strategies, StrategyResult::NakedSingles(entry))?;
+		if find_naked_singles {
+			if let Some(num) = cell_mask.unique_num()? {
+				let entry = Entry { cell, num };
+				Self::push_new_entry(sudoku, deduced_entries, entry, employed_strategies, StrategyResult::NakedSingles(entry))?;
+			}
+		} else {
+			if *cell_mask == Mask::NONE {
+				return Err(Unsolvable)
+			}
 		}
 		Ok(())
 	}
@@ -357,6 +369,27 @@ impl StrategySolver {
 		deduced_entries.push(entry);
 		employed_strategies.push(strategy);
 		Ok(())
+	}
+
+	fn find_naked_singles(&mut self, stop_after_first: bool) -> Result<(), Unsolvable> {
+		self.update_cell_poss_zone_solved()?;
+
+		for (cell, poss_digits) in (0..).zip(self.cell_poss_digits.state.iter()) {
+			// if Err(_), then it's Mask::NONE and the cell is already solved (or impossible)
+			// skip in that case (via unwrap_or(None))
+			if let Some(num) = poss_digits.unique_num().unwrap_or(None) {
+				let entry = Entry { cell, num };
+
+				Self::push_new_entry(&mut self.grid.state, &mut self.deduced_entries, entry, &mut self.employed_strategies, StrategyResult::NakedSingles(entry))?;
+				//Self::push_new_entry(sudoku, deduced_entries, entry, employed_strategies, StrategyResult::NakedSingles(entry))?;
+				self.deduced_entries.push(entry);
+				if stop_after_first {
+					break
+				}
+			}
+		}
+		// call update again so newly found entries are inserted
+		self.update_cell_poss_zone_solved()
 	}
 
 	fn find_hidden_singles(&mut self, stop_after_first: bool) -> Result<(), Unsolvable> {
@@ -910,11 +943,13 @@ pub enum Strategy {
 }
 
 impl Strategy {
-	fn deduce(&self, state: &mut StrategySolver, stop_after_first: bool) -> Result<(), Unsolvable> {
+	// is_first_strategy is an optimization hint
+	// it doesn't need to be used
+	fn deduce(&self, state: &mut StrategySolver, stop_after_first: bool, is_first_strategy: bool) -> Result<(), Unsolvable> {
 		use self::Strategy::*;
         match *self {
-            NakedSingles if stop_after_first => unimplemented!(), // TODO: Implement non-eager NakedSingles
-            NakedSingles => state.update_cell_poss_zone_solved(),
+            NakedSingles if !stop_after_first && is_first_strategy => state._update_cell_poss_zone_solved(true),
+			NakedSingles => state.find_naked_singles(stop_after_first),
 			HiddenSingles => state.find_hidden_singles(stop_after_first),
 			LockedCandidates => state.find_locked_candidates(stop_after_first),
 			NakedSubsets => state.find_naked_subsets(stop_after_first),
@@ -928,11 +963,11 @@ impl Strategy {
 	}
 
     fn deduce_one(&self, state: &mut StrategySolver) -> Result<(), Unsolvable> {
-        self.deduce(state, true)
+        self.deduce(state, true, false)
     }
 
-    fn deduce_all(&self, state: &mut StrategySolver) -> Result<(), Unsolvable> {
-        self.deduce(state, false)
+    fn deduce_all(&self, state: &mut StrategySolver, is_first_strategy: bool) -> Result<(), Unsolvable> {
+        self.deduce(state, false, is_first_strategy)
     }
 }
 

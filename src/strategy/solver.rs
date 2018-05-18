@@ -11,12 +11,13 @@ use positions::{
 
 type DeductionRange = ::std::ops::Range<usize>;
 
-/// A `StrategySolver` is built from a
-/// single `Sudoku` for which it for which it allows
-/// the efficient application of strategies like humans would do.
-/// It can find hints or solve the `Sudoku` completely and return the
-/// sequence of logical steps taken. By weighting the difficulty
-/// of each strategy, it can also grade sudoku difficulties.
+/// The `StrategySolver` is the struct that allows applying human style strategies
+/// for the solution of sudokus.
+///
+/// It is built from single `Sudoku` for which it for which it allows
+/// the efficient strategy application. It can find hints or solve the
+/// `Sudoku` completely and return the sequence of logical steps taken.
+/// By weighting the difficulty of each strategy, it can also grade sudoku difficulties.
 
 // To allow for the above functionality, this struct contains caches
 // of various properties of the sudoku grid. The caches are lazily updated
@@ -71,6 +72,12 @@ impl StrategySolver {
 
 	}
 
+	/// Returns the current state of the Sudoku
+	pub fn to_sudoku(&mut self) -> Sudoku {
+		self.update_grid();
+		self.grid.state
+	}
+
 	fn into_deductions(self) -> Deductions {
 		Deductions {
 			employed_strategies: self.employed_strategies,
@@ -88,27 +95,38 @@ impl StrategySolver {
 	/// Try to solve the sudoku using the given `strategies`. Returns a `Result` of the sudoku and a struct containing the series of deductions.
 	/// If a solution was found, `Ok(..)` is returned, otherwise `Err(..)`.
 	pub fn solve(mut self, strategies: &[Strategy]) -> Result<(Sudoku, Deductions), (Sudoku, Deductions)> {
+		self.try_solve(strategies);
+		self.update_grid();
+		match self.is_solved() {
+			true => Ok((self.grid.state, self.into_deductions())),
+			false => Err((self.grid.state, self.into_deductions())),
+		}
+	}
+
+	// FIXME: change name
+	/// Try to solve the sudoku using the given `strategies`. Returns `true` if new deductions were made.
+	pub fn try_solve(&mut self, strategies: &[Strategy]) -> bool {
 		// first strategy can be optimized
 		let (first, rest) = match strategies.split_first() {
 			Some(tup) => tup,
 			// no chance without strategies
-			None => return Err((self.grid.state, self.into_deductions())),
+			None => return false,
 		};
+		let lens = (self.deduced_entries.len(), self.eliminated_entries.len());
 		'outer: loop {
 			if self.is_solved() {
-				self.update_grid();
-				return Ok((self.grid.state, self.into_deductions()))
+				break
 			}
 
 			let n_deductions = self.deduced_entries.len();
 			let n_eliminated = self.eliminated_entries.len();
-			if first.deduce_all(&mut self, true).is_err() { break };
+			if first.deduce_all(self, true).is_err() { break };
 			if self.deduced_entries.len() > n_deductions {
 				continue 'outer
 			}
 
 			for strategy in rest {
-				if strategy.deduce_one(&mut self).is_err() {
+				if strategy.deduce_one(self).is_err() {
 					break;
 				};
 				if self.deduced_entries.len() > n_deductions || self.eliminated_entries.len() > n_eliminated {
@@ -117,8 +135,7 @@ impl StrategySolver {
 			}
 			break
 		}
-		self.update_grid();
-		Err((self.grid.state, self.into_deductions()))
+		lens < (self.deduced_entries.len(), self.eliminated_entries.len())
 	}
 
 	pub fn is_solved(&self) -> bool {
@@ -279,7 +296,7 @@ impl StrategySolver {
 		zone_solved_digits[entry.field() as usize +FIELD_OFFSET] |= entry.mask();
 	}
 
-	pub fn batch_insert_entries(&mut self, find_naked_singles: bool) -> Result<(), Unsolvable> {
+	fn batch_insert_entries(&mut self, find_naked_singles: bool) -> Result<(), Unsolvable> {
 		let (ld_cp, _, cell_poss_digits) = self.cell_poss_digits.get_mut();
 		let (ld_zs, _, zone_solved_digits) = self.zone_solved_digits.get_mut();
 		while self.deduced_entries.len() > *ld_cp as usize {
@@ -370,6 +387,10 @@ impl StrategySolver {
 		employed_strategies.push(strategy);
 		Ok(())
 	}
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	////////      Strategies
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	fn find_naked_singles(&mut self, stop_after_first: bool) -> Result<(), Unsolvable> {
 		self.update_cell_poss_zone_solved()?;
@@ -900,7 +921,7 @@ fn basic_fish_walk_combinations(
 
 
 #[derive(Debug, Clone)]
-pub struct State<T> {
+pub(crate) struct State<T> {
 	next_deduced: u16,
 	last_eliminated: u16, // probably doesn't exceed 2^8, but can't prove it
 	state: T,
@@ -918,9 +939,7 @@ impl<T> State<T> {
 
 impl<T> State<T> {
 	fn get_mut(&mut self) -> (&mut u16, &mut u16, &mut T) {
-		let &mut State {
-			next_deduced: ref mut ld, last_eliminated: ref mut le, ref mut state
-		} = self;
+		let State { next_deduced: ld, last_eliminated: le, state } = self;
 		(ld, le, state)
 	}
 }
@@ -972,26 +991,71 @@ impl Strategy {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum ZoneType {
+pub(crate) enum ZoneType {
 	Row,
 	Col,
 	Block,
 }
 
 #[derive(Debug, Clone)]
-pub enum LineType {
+pub(crate) enum LineType {
 	Row,
 	Col,
 }
 
-#[derive(Debug, Clone)]
-struct SinglesChain;
+#[derive(Debug, Clone, Copy, Hash, PartialOrd, Ord, PartialEq, Eq)]
+pub enum DeductionResult<'a> {
+	Forced(Entry),
+	Eliminated(&'a [Entry]),
+}
 
 #[derive(Debug)]
+/// Result of a single strategy
+pub struct Deduction<'a> {
+	deduction: &'a StrategyResult,
+	deduced_entries: &'a [Entry],
+	eliminated_entries: &'a [Entry]
+}
+
+impl<'a> Deduction<'a> {
+	/// Returns the strategy that was used for this deduction.
+	pub fn strategy(&self) -> Strategy {
+		self.deduction.strategy()
+	}
+
+	/// Returns the entries that were entered or ruled out as a result of this strategy application
+	pub fn results(&self) -> DeductionResult {
+		self.deduction.deductions(&self.eliminated_entries)
+	}
+}
+
+#[derive(Debug)]
+/// Contains the sequence of deductions made to solve / partially solve the sudoku
 pub struct Deductions {
-	pub(crate) employed_strategies: Vec<StrategyResult>,
-	pub(crate) deduced_entries: Vec<Entry>,
-	pub(crate) eliminated_entries: Vec<Entry>,
+	employed_strategies: Vec<StrategyResult>,
+	deduced_entries: Vec<Entry>,
+	eliminated_entries: Vec<Entry>,
+}
+
+pub struct DeductionsIter<'a> {
+	employed_strategies: ::std::slice::Iter<'a, StrategyResult>,
+	deduced_entries: &'a [Entry],
+	eliminated_entries: &'a [Entry]
+}
+
+impl<'a> Iterator for DeductionsIter<'a> {
+	type Item = Deduction<'a>;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		self.employed_strategies.next()
+			.map(|strategy_result|
+				Deduction {
+					deduction: strategy_result,
+					deduced_entries: &self.deduced_entries,
+					eliminated_entries: &self.eliminated_entries,
+				}
+			)
+	}
 }
 
 impl Deductions {
@@ -1001,9 +1065,9 @@ impl Deductions {
 			strategy_result.print_reason();
 			print!("\n");
 			match strategy_result.deductions(&self.eliminated_entries) {
-				Ok(entry) => println!("\tr{}c{} {}", entry.row()+1, entry.col()+1, entry.num),
+				DeductionResult::Forced(entry) => println!("\tr{}c{} {}", entry.row()+1, entry.col()+1, entry.num),
 
-				Err(deductions) => {
+				DeductionResult::Eliminated(deductions) => {
 					for &entry in deductions {
 						println!("\tr{}c{} {}", entry.row()+1, entry.col()+1, entry.num);
 					}
@@ -1014,7 +1078,12 @@ impl Deductions {
 	}
 }
 
-// TODO: Expand
+// TODO:
+// Expand and clean up
+// This should ultimately be a public type exposing all the necessary information on how the deduction was made
+// and with methods that can generate a sequence of explanation steps including
+// highlighting of cells / houses / cell possibilities, their removal and cell-to-cell chains
+// Basically, the GUI should only need to give the basic highlighting operations and we generate the explanation
 #[derive(Debug, Clone)]
 pub(crate) enum StrategyResult {
     NakedSingles(Entry),
@@ -1067,7 +1136,7 @@ macro_rules! map_to_strategy {
 }
 
 impl StrategyResult {
-	pub fn strategy(&self) -> Strategy {
+	fn strategy(&self) -> Strategy {
 		use self::StrategyResult::*;
 		// for each strategy: StrategyName{..} => Strategy::StrategyName
 		map_to_strategy!( self;
@@ -1077,19 +1146,19 @@ impl StrategyResult {
 	}
 
 	// not really an error, I just want an Either
-	fn deductions<'e>(&self, eliminated: &'e [Entry]) -> Result<Entry, &'e [Entry]> {
+	fn deductions<'e>(&self, eliminated: &'e [Entry]) -> DeductionResult<'e> {
 		use self::StrategyResult::*;
-		match *self {
-			NakedSingles(entry) | HiddenSingles(entry, _) => Ok(entry),
-			LockedCandidates(.., ref conflicts) |
-			NakedSubsets { ref conflicts, .. } |
-			HiddenSubsets { ref conflicts, .. } |
-			XWing { ref conflicts, .. } |
-			Swordfish { ref conflicts, .. } |
-			Jellyfish { ref conflicts, .. } |
-			SinglesChain(ref conflicts)
+		match self {
+			NakedSingles(entry) | HiddenSingles(entry, _) => DeductionResult::Forced(*entry),
+			LockedCandidates(.., conflicts) |
+			NakedSubsets { conflicts, .. } |
+			HiddenSubsets { conflicts, .. } |
+			XWing { conflicts, .. } |
+			Swordfish { conflicts, .. } |
+			Jellyfish { conflicts, .. } |
+			SinglesChain(conflicts)
 
-				=> Err(&eliminated[conflicts.clone()]),
+				=> DeductionResult::Eliminated(&eliminated[conflicts.clone()]),
 
 			__NonExhaustive => unreachable!(),
 		}

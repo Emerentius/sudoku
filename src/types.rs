@@ -8,7 +8,7 @@ use positions::FIELD;
 #[derive(Debug)]
 pub struct Unsolvable;
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Entry {
 	pub cell: u8,
 	pub num: u8,

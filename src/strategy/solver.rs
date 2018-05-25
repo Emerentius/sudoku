@@ -138,6 +138,23 @@ impl StrategySolver {
 		lens < (self.deduced_entries.len(), self.eliminated_entries.len())
 	}
 
+	fn hint(&mut self, strategies: &[Strategy]) -> Option<Hint> {
+		let lens = (self.deduced_entries.len(), self.eliminated_entries.len());
+		for strategy in strategies {
+			if strategy.deduce_one(self).is_err() {
+				break
+			}
+			if (self.deduced_entries.len(), self.eliminated_entries.len()) > lens {
+				return Some(Hint {
+					solver: self,
+					old_n_deductions: lens.0,
+					old_n_eliminations: lens.1,
+				})
+			}
+		}
+		None
+	}
+
 	pub fn is_solved(&self) -> bool {
 		self.n_solved == 81
 	}
@@ -1017,6 +1034,49 @@ pub struct Deduction<'a> {
 	eliminated_entries: &'a [Entry]
 }
 
+pub struct Hint<'a> {
+	// last StrategyResult is the solution
+	solver: &'a mut StrategySolver,
+	old_n_deductions: usize,
+	old_n_eliminations: usize,
+}
+
+impl<'a> Hint<'a> {
+	/// Enter the hinted deduction into the solver
+	pub fn apply(self) {
+		// it's already in there, just have to stop the auto-removal
+		::std::mem::forget(self)
+	}
+
+	fn as_deduction(&self) -> Deduction {
+		Deduction {
+			deduction: self.solver.employed_strategies.last().unwrap(),
+			deduced_entries: &self.solver.deduced_entries,
+			eliminated_entries: &self.solver.eliminated_entries,
+		}
+	}
+
+	/// Returns the strategy that was used for this hint.
+	fn strategy(&self) -> Strategy {
+		self.as_deduction().strategy()
+	}
+
+	/// Returns the entries that were entered or ruled out as a result of this strategy application
+	pub fn results(&self) -> DeductionResult {
+		// can't go through temporary `Deduction` as that would be dropped
+		self.solver.employed_strategies.last().unwrap()
+			.deductions(&self.solver.eliminated_entries)
+	}
+}
+
+impl<'a> ::std::ops::Drop for Hint<'a> {
+	fn drop(&mut self) {
+		self.solver.employed_strategies.pop();
+		self.solver.eliminated_entries.truncate(self.old_n_eliminations);
+		self.solver.deduced_entries.truncate(self.old_n_deductions);
+	}
+}
+
 impl<'a> Deduction<'a> {
 	/// Returns the strategy that was used for this deduction.
 	pub fn strategy(&self) -> Strategy {
@@ -1145,7 +1205,6 @@ impl StrategyResult {
 		)
 	}
 
-	// not really an error, I just want an Either
 	fn deductions<'e>(&self, eliminated: &'e [Entry]) -> DeductionResult<'e> {
 		use self::StrategyResult::*;
 		match self {

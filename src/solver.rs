@@ -272,9 +272,9 @@ enum Solutions {
 
 impl Solutions {
 	fn len(&self) -> usize {
-		match *self {
-			Solutions::Count(len) => len,
-			Solutions::Vector(ref v) => v.len(),
+		match self {
+			Solutions::Count(len) => *len,
+			Solutions::Vector(v) => v.len(),
 		}
 	}
 
@@ -385,56 +385,28 @@ impl SudokuSolver2 {
 			let mut r1 = 0; // exists
 			let mut r2 = 0; // exists twice
 			let mut r3 = 0; // exists thrice or more
-			let mut slice = band;
-			if false {
-				////////////// loop
-				while slice < 27 {
-					let band_mask = self.bands[slice as usize];
 
-					r3 |= r2 & band_mask;
-					r2 |= r1 & band_mask;
-					r1 |= band_mask;
+			///////////// unrolled loop
+			let mut band_mask = self.bands[band as usize];
 
-					slice += 3;
+			macro_rules! unroll_loop {
+				($($offset:expr),*) => {
+					$(
+						band_mask = self.bands[$offset + band as usize];
+						r3 |= r2 & band_mask;
+						r2 |= r1 & band_mask;
+						r1 |= band_mask;
+					)*
 				}
-			} else {
-				///////////// unrolled loop
-				let mut band_mask = self.bands[band as usize];
-				r1 |= band_mask;
-				band_mask = self.bands[3 + band as usize];
-				r2 |= r1 & band_mask;
-				r1 |= band_mask;
-				band_mask = self.bands[6 + band as usize];
-				r3 |= r2 & band_mask;
-				r2 |= r1 & band_mask;
-				r1 |= band_mask;
-				band_mask = self.bands[9 + band as usize];
-				r3 |= r2 & band_mask;
-				r2 |= r1 & band_mask;
-				r1 |= band_mask;
-				band_mask = self.bands[12 + band as usize];
-				r3 |= r2 & band_mask;
-				r2 |= r1 & band_mask;
-				r1 |= band_mask;
-				band_mask = self.bands[15 + band as usize];
-				r3 |= r2 & band_mask;
-				r2 |= r1 & band_mask;
-				r1 |= band_mask;
-				band_mask = self.bands[18 + band as usize];
-				r3 |= r2 & band_mask;
-				r2 |= r1 & band_mask;
-				r1 |= band_mask;
-				band_mask = self.bands[21 + band as usize];
-				r3 |= r2 & band_mask;
-				r2 |= r1 & band_mask;
-				r1 |= band_mask;
-				band_mask = self.bands[24 + band as usize];
-				r3 |= r2 & band_mask;
-				r2 |= r1 & band_mask;
-				r1 |= band_mask;
 			}
 
+			r1 |= band_mask;
+			band_mask = self.bands[3 + band as usize];
+			r2 |= r1 & band_mask;
+			r1 |= band_mask;
+			unroll_loop!(6, 9, 12, 15, 18, 21, 24);
 			///////////////////
+
 			if r1 != ALL {
 				return Err(Unsolvable);
 			}
@@ -470,86 +442,89 @@ impl SudokuSolver2 {
 	}
 
 	#[inline(always)]
-	fn updn(
+	fn updn_upwcl(
 		&mut self,
 		shrink: &mut u32,
-		a: &mut u32,
-		b: &mut u32,
-		c: &mut u32,
 		s: &mut u32,
-		i: u32,
-		[j, k, l]: [u32; 3],
+		digit: u32,
+		// TODO: make sure names are fitting
+		// main slice and neighbor slices... I believe.
+		[ms, ns1, ns2]: [u32; 3],
+		band: usize,
 	) -> Result<(), Unsolvable> {
-		*a = self.bands[(i * 3 + j) as usize];
-		*shrink = shrink_mask(*a & LOW9) | shrink_mask(*a >> 9 & LOW9) << 3 | shrink_mask(*a >> 18 & LOW9) << 6;
-		*a &= complex_mask(*shrink);
-		if *a == 0 {
+		let mut a = self.bands[(digit * 3 + ms) as usize];
+		*shrink = shrink_mask(a & LOW9) | shrink_mask(a >> 9 & LOW9) << 3 | shrink_mask(a >> 18 & LOW9) << 6;
+		a &= complex_mask(*shrink);
+		if a == 0 {
 			return Err(Unsolvable);
 		}
-		*b = self.bands[(i * 3 + k) as usize];
-		*c = self.bands[(i * 3 + l) as usize];
-		*s = (*a | *a >> 9 | *a >> 18) & LOW9;
-		self.bands[(i*3 + l) as usize] &= mask_single(*s);
-		self.bands[(i*3 + k) as usize] &= mask_single(*s);
-		*s = row_uniq(
-			shrink_single(*shrink) & column_single(*s)
-		);
+		*s = (a | a >> 9 | a >> 18) & LOW9;
+		let mask_single = mask_single(*s);
+		self.bands[(digit*3 + ns1) as usize] &= mask_single;
+		self.bands[(digit*3 + ns2) as usize] &= mask_single;
+			*s = row_uniq(
+				shrink_single(*shrink) & column_single(*s)
+			);
 
-		self.prev_bands[(i * 3 + j) as usize] = *a;
-		self.bands[(i * 3 + j) as usize] = *a;
+		self.prev_bands[(digit * 3 + ms) as usize] = a;
+		self.bands[(digit * 3 + ms) as usize] = a;
+
+		// -------------- upwcl code -------------------------------
+		//self.upwcl(a, *s, UPWCL_ARGS[band]);
+		const UPWCL_ARGS: [[usize; 9]; 27] = [
+			[0, 3, 6, 9, 12, 15, 18, 21, 24],
+			[1, 4, 7, 10, 13, 16, 19, 22, 25],
+			[2, 5, 8, 11, 14, 17, 20, 23, 26],
+			[0, 0, 6, 9, 12, 15, 18, 21, 24],
+			[1, 1, 7, 10, 13, 16, 19, 22, 25],
+			[2, 2, 8, 11, 14, 17, 20, 23, 26],
+			[0, 0, 3, 9, 12, 15, 18, 21, 24],
+			[1, 1, 4, 10, 13, 16, 19, 22, 25],
+			[2, 2, 5, 11, 14, 17, 20, 23, 26],
+			[0, 0, 3, 6, 12, 15, 18, 21, 24],
+			[1, 1, 4, 7, 13, 16, 19, 22, 25],
+			[2, 2, 5, 8, 14, 17, 20, 23, 26],
+			[0, 0, 3, 6, 9, 15, 18, 21, 24],
+			[1, 1, 4, 7, 10, 16, 19, 22, 25],
+			[2, 2, 5, 8, 11, 17, 20, 23, 26],
+			[0, 0, 3, 6, 9, 12, 18, 21, 24],
+			[1, 1, 4, 7, 10, 13, 19, 22, 25],
+			[2, 2, 5, 8, 11, 14, 20, 23, 26],
+			[0, 0, 3, 6, 9, 12, 15, 21, 24],
+			[1, 1, 4, 7, 10, 13, 16, 22, 25],
+			[2, 2, 5, 8, 11, 14, 17, 23, 26],
+			[0, 0, 3, 6, 9, 12, 15, 18, 24],
+			[1, 1, 4, 7, 10, 13, 16, 19, 25],
+			[2, 2, 5, 8, 11, 14, 17, 20, 26],
+			[0, 0, 3, 6, 9, 12, 15, 18, 21],
+			[1, 1, 4, 7, 10, 13, 16, 19, 22],
+			[2, 2, 5, 8, 11, 14, 17, 20, 23],
+		];
+
+		let [i, p, q, r, t, u, v, w, x] = UPWCL_ARGS[band];
+		let cl = !(a & row_mask(*s));
+		self.unsolved_cells[i] &= cl;
+		// remove from every entry but the current one
+		self.bands[p] &= cl;
+		self.bands[q] &= cl;
+		self.bands[r] &= cl;
+		self.bands[t] &= cl;
+		self.bands[u] &= cl;
+		self.bands[v] &= cl;
+		self.bands[w] &= cl;
+		self.bands[x] &= cl;
+		// end upwcl
+
 		Ok(())
 	}
 
-	#[inline(always)]
-	fn upwcl(&mut self, cl: &mut u32, a: u32, s: u32, [i, p, q, r, t, u, v, w, x]: [i32; 9]) {
-		*cl = !(a & row_mask(s));
-		self.unsolved_cells[i as usize] &= *cl;
-		self.bands[p as usize] &= *cl;
-		self.bands[q as usize] &= *cl;
-		self.bands[r as usize] &= *cl;
-		self.bands[t as usize] &= *cl;
-		self.bands[u as usize] &= *cl;
-		self.bands[v as usize] &= *cl;
-		self.bands[w as usize] &= *cl;
-		self.bands[x as usize] &= *cl;
-	}
-
 	fn update(&mut self) -> Result<(), Unsolvable> {
-		let mut shrink: u32 = 1;
-		let (mut s, mut a, mut b, mut c, mut cl) = (0, 0, 0, 0, 0);
-		while shrink != 0 {
-			shrink = 0;
-			// ------------------ loop unrolled via macros ------------------------
-
-			const UPWCL_ARGS: [[i32; 9]; 27] = [
-				[0, 3, 6, 9, 12, 15, 18, 21, 24],
-				[1, 4, 7, 10, 13, 16, 19, 22, 25],
-				[2, 5, 8, 11, 14, 17, 20, 23, 26],
-				[0, 0, 6, 9, 12, 15, 18, 21, 24],
-				[1, 1, 7, 10, 13, 16, 19, 22, 25],
-				[2, 2, 8, 11, 14, 17, 20, 23, 26],
-				[0, 0, 3, 9, 12, 15, 18, 21, 24],
-				[1, 1, 4, 10, 13, 16, 19, 22, 25],
-				[2, 2, 5, 11, 14, 17, 20, 23, 26],
-				[0, 0, 3, 6, 12, 15, 18, 21, 24],
-				[1, 1, 4, 7, 13, 16, 19, 22, 25],
-				[2, 2, 5, 8, 14, 17, 20, 23, 26],
-				[0, 0, 3, 6, 9, 15, 18, 21, 24],
-				[1, 1, 4, 7, 10, 16, 19, 22, 25],
-				[2, 2, 5, 8, 11, 17, 20, 23, 26],
-				[0, 0, 3, 6, 9, 12, 18, 21, 24],
-				[1, 1, 4, 7, 10, 13, 19, 22, 25],
-				[2, 2, 5, 8, 11, 14, 20, 23, 26],
-				[0, 0, 3, 6, 9, 12, 15, 21, 24],
-				[1, 1, 4, 7, 10, 13, 16, 22, 25],
-				[2, 2, 5, 8, 11, 14, 17, 23, 26],
-				[0, 0, 3, 6, 9, 12, 15, 18, 24],
-				[1, 1, 4, 7, 10, 13, 16, 19, 25],
-				[2, 2, 5, 8, 11, 14, 17, 20, 26],
-				[0, 0, 3, 6, 9, 12, 15, 18, 21],
-				[1, 1, 4, 7, 10, 13, 16, 19, 22],
-				[2, 2, 5, 8, 11, 14, 17, 20, 23],
-			];
+		let mut s = 0;
+		loop {
+			// repeat until nothing can be found anymore
+			// inner loops are fully unrolled via macros
+			// this is the hottest piece of code in the solver
+			let mut shrink: u32 = 0;
 
 			const UPDN_ARGS: [[u32; 3]; 3] = [
 				[0, 1, 2],
@@ -577,7 +552,7 @@ impl SudokuSolver2 {
 			macro_rules! digit {
 				($ar:expr, $digit_base:expr, $digit_offset:expr) => {
 					let digit_shift = ($digit_offset * 9) as usize;
-					if ($ar >> ($digit_offset * 9)) & LOW9 != 0 {
+					if ($ar >> digit_shift) & LOW9 != 0 {
 						let digit = 3*$digit_base + $digit_offset; // 3*digit_base + offset
 						subband!($ar, digit, digit_shift, 0);
 						subband!($ar, digit, digit_shift, 1);
@@ -590,19 +565,15 @@ impl SudokuSolver2 {
 			// whatever the 3 cases deal with
 			macro_rules! subband {
 				($ar:expr, $digit:expr, $digit_shift:expr, $offset:expr) => {
-					if self.bands[$digit as usize * 3+$offset] != self.prev_bands[$digit as usize * 3+$offset] {
-						self.updn(&mut shrink, &mut a, &mut b, &mut c, &mut s, $digit, UPDN_ARGS[$offset])?;
-						let shift = $digit_shift + $offset*3;
-						if ($ar >> shift) & 0b111 != s {
-							$ar &= (0o777_777_777 ^ (0o7 << shift) ) | (s << shift);
-							self.upwcl(&mut cl, a, s, UPWCL_ARGS[$digit as usize * 3 + $offset]);
-						}
+					let band = ($digit * 3) as usize + $offset;
+					if self.bands[band] != self.prev_bands[band] {
+					self.updn_upwcl(&mut shrink, &mut s, $digit, UPDN_ARGS[$offset], band)?;
+					$ar ^= (0o7 ^ s) << ($digit_shift + $offset*3);
 					}
 				}
 			}
-
 			unroll_loop!(0, 1, 2);
-		// ----------------------------------------------------
+		if shrink == 0 { break }
 		}
 		Ok(())
 	}
@@ -632,9 +603,9 @@ impl SudokuSolver2 {
 	fn guess(&mut self, solver_stack: &mut SolvStack, limit: usize, solutions: &mut Solutions) {
 		if self.is_solved() {
 			debug_assert!(solutions.len() < limit, "too many solutions in guess: limit: {}, len: {}", limit, solutions.len());
-			match *solutions {
-				Solutions::Count(ref mut count) => *count += 1,
-				Solutions::Vector(ref mut vec) => vec.push( self.extract_solution() )
+		match solutions {
+			Solutions::Count(count) => *count += 1,
+			Solutions::Vector(vec) => vec.push( self.extract_solution() )
 			}
 		} else if self.guess_bivalue_in_cell(solver_stack, limit, solutions).is_ok() {
 			// .is_ok() == found nothing
@@ -646,7 +617,7 @@ impl SudokuSolver2 {
 		for band in 0..3 {
 			let mut pairs = self.pairs[band as usize];
 			if pairs != 0 {
-				let cell_mask = pairs & (!pairs + 1);
+				let cell_mask = pairs & !pairs + 1;
 				let mut slice = band;
 				//let mut digit = 0;
 
@@ -778,17 +749,15 @@ fn band_of_cell(cell: u8) -> u8 {
 fn self_mask(cell: u8) -> u32 {
 	// ???
 	static SELF_MASK: [u32; 81] = [
-		0x37E3F001,	0x37E3F002,	0x37E3F004,	0x371F8E08,	0x371F8E10,	0x371F8E20,	0x30FC7E40,	0x30FC7E80,
-		0x30FC7F00,	0x2FE003F8,	0x2FE005F8,	0x2FE009F8,	0x2F1C11C7,	0x2F1C21C7,	0x2F1C41C7,	0x28FC803F,
-		0x28FD003F,	0x28FE003F,	0x1807F1F8,	0x180BF1F8,	0x1813F1F8,	0x18238FC7,	0x18438FC7,	0x18838FC7,
-		0x19007E3F,	0x1A007E3F,	0x1C007E3F,	0x37E3F001,	0x37E3F002,	0x37E3F004,	0x371F8E08,	0x371F8E10,
-		0x371F8E20,	0x30FC7E40,	0x30FC7E80,	0x30FC7F00,	0x2FE003F8,	0x2FE005F8,	0x2FE009F8,	0x2F1C11C7,
-		0x2F1C21C7,	0x2F1C41C7,	0x28FC803F,	0x28FD003F,	0x28FE003F,	0x1807F1F8,	0x180BF1F8,	0x1813F1F8,
-		0x18238FC7,	0x18438FC7,	0x18838FC7,	0x19007E3F,	0x1A007E3F,	0x1C007E3F,	0x37E3F001,	0x37E3F002,
-		0x37E3F004,	0x371F8E08,	0x371F8E10,	0x371F8E20,	0x30FC7E40,	0x30FC7E80,	0x30FC7F00,	0x2FE003F8,
-		0x2FE005F8,	0x2FE009F8,	0x2F1C11C7,	0x2F1C21C7,	0x2F1C41C7,	0x28FC803F,	0x28FD003F,	0x28FE003F,
-		0x1807F1F8,	0x180BF1F8,	0x1813F1F8,	0x18238FC7,	0x18438FC7,	0x18838FC7,	0x19007E3F,	0x1A007E3F,
-		0x1C007E3F,
+		0x37E3F001,	0x37E3F002,	0x37E3F004,	0x371F8E08,	0x371F8E10,	0x371F8E20,	0x30FC7E40,	0x30FC7E80,	0x30FC7F00,
+		0x2FE003F8,	0x2FE005F8,	0x2FE009F8,	0x2F1C11C7,	0x2F1C21C7,	0x2F1C41C7,	0x28FC803F, 0x28FD003F,	0x28FE003F,
+		0x1807F1F8,	0x180BF1F8,	0x1813F1F8,	0x18238FC7,	0x18438FC7,	0x18838FC7, 0x19007E3F,	0x1A007E3F,	0x1C007E3F,
+		0x37E3F001,	0x37E3F002,	0x37E3F004,	0x371F8E08,	0x371F8E10, 0x371F8E20,	0x30FC7E40,	0x30FC7E80,	0x30FC7F00,
+		0x2FE003F8,	0x2FE005F8,	0x2FE009F8,	0x2F1C11C7,	0x2F1C21C7,	0x2F1C41C7,	0x28FC803F,	0x28FD003F,	0x28FE003F,
+		0x1807F1F8,	0x180BF1F8,	0x1813F1F8, 0x18238FC7,	0x18438FC7,	0x18838FC7,	0x19007E3F,	0x1A007E3F,	0x1C007E3F,
+		0x37E3F001,	0x37E3F002,	0x37E3F004,	0x371F8E08,	0x371F8E10,	0x371F8E20,	0x30FC7E40,	0x30FC7E80,	0x30FC7F00,
+		0x2FE003F8, 0x2FE005F8,	0x2FE009F8,	0x2F1C11C7,	0x2F1C21C7,	0x2F1C41C7,	0x28FC803F,	0x28FD003F,	0x28FE003F,
+		0x1807F1F8,	0x180BF1F8,	0x1813F1F8,	0x18238FC7,	0x18438FC7,	0x18838FC7,	0x19007E3F,	0x1A007E3F,	0x1C007E3F,
 	];
 	*index(&SELF_MASK, cell as usize)
 }
@@ -826,20 +795,27 @@ fn index_mut<T>(slice: &mut [T], idx: usize) -> &mut T {
 #[inline]
 fn other_mask(cell: u8) -> u32 {
 	// ???
+	/*
 	static OTHER_MASK: [u32; 81] = [
-		0x3FFBFDFE,	0x3FF7FBFD,	0x3FEFF7FB,	0x3FDFEFF7,	0x3FBFDFEF,	0x3F7FBFDF,	0x3EFF7FBF,	0x3DFEFF7F,
-		0x3BFDFEFF,	0x3FFBFDFE,	0x3FF7FBFD,	0x3FEFF7FB,	0x3FDFEFF7,	0x3FBFDFEF,	0x3F7FBFDF,	0x3EFF7FBF,
-		0x3DFEFF7F,	0x3BFDFEFF,	0x3FFBFDFE,	0x3FF7FBFD,	0x3FEFF7FB,	0x3FDFEFF7,	0x3FBFDFEF,	0x3F7FBFDF,
-		0x3EFF7FBF,	0x3DFEFF7F,	0x3BFDFEFF,	0x3FFBFDFE,	0x3FF7FBFD,	0x3FEFF7FB,	0x3FDFEFF7,	0x3FBFDFEF,
-		0x3F7FBFDF,	0x3EFF7FBF,	0x3DFEFF7F,	0x3BFDFEFF,	0x3FFBFDFE,	0x3FF7FBFD,	0x3FEFF7FB,	0x3FDFEFF7,
-		0x3FBFDFEF,	0x3F7FBFDF,	0x3EFF7FBF,	0x3DFEFF7F,	0x3BFDFEFF,	0x3FFBFDFE,	0x3FF7FBFD,	0x3FEFF7FB,
-		0x3FDFEFF7,	0x3FBFDFEF,	0x3F7FBFDF,	0x3EFF7FBF,	0x3DFEFF7F,	0x3BFDFEFF,	0x3FFBFDFE,	0x3FF7FBFD,
-		0x3FEFF7FB,	0x3FDFEFF7,	0x3FBFDFEF,	0x3F7FBFDF,	0x3EFF7FBF,	0x3DFEFF7F,	0x3BFDFEFF,	0x3FFBFDFE,
-		0x3FF7FBFD,	0x3FEFF7FB,	0x3FDFEFF7,	0x3FBFDFEF,	0x3F7FBFDF,	0x3EFF7FBF,	0x3DFEFF7F,	0x3BFDFEFF,
-		0x3FFBFDFE,	0x3FF7FBFD,	0x3FEFF7FB,	0x3FDFEFF7,	0x3FBFDFEF,	0x3F7FBFDF,	0x3EFF7FBF,	0x3DFEFF7F,
-		0x3BFDFEFF,
+		0x3FFBFDFE,	0x3FF7FBFD,	0x3FEFF7FB,	0x3FDFEFF7,	0x3FBFDFEF,	0x3F7FBFDF,	0x3EFF7FBF,	0x3DFEFF7F, 0x3BFDFEFF,
+		0x3FFBFDFE,	0x3FF7FBFD,	0x3FEFF7FB,	0x3FDFEFF7,	0x3FBFDFEF,	0x3F7FBFDF,	0x3EFF7FBF,	0x3DFEFF7F, 0x3BFDFEFF,
+		0x3FFBFDFE,	0x3FF7FBFD,	0x3FEFF7FB,	0x3FDFEFF7,	0x3FBFDFEF,	0x3F7FBFDF,	0x3EFF7FBF,	0x3DFEFF7F, 0x3BFDFEFF,
+		0x3FFBFDFE,	0x3FF7FBFD,	0x3FEFF7FB,	0x3FDFEFF7,	0x3FBFDFEF,	0x3F7FBFDF,	0x3EFF7FBF,	0x3DFEFF7F, 0x3BFDFEFF,
+		0x3FFBFDFE,	0x3FF7FBFD,	0x3FEFF7FB,	0x3FDFEFF7,	0x3FBFDFEF,	0x3F7FBFDF,	0x3EFF7FBF,	0x3DFEFF7F, 0x3BFDFEFF,
+		0x3FFBFDFE,	0x3FF7FBFD,	0x3FEFF7FB,	0x3FDFEFF7,	0x3FBFDFEF,	0x3F7FBFDF,	0x3EFF7FBF,	0x3DFEFF7F, 0x3BFDFEFF,
+		0x3FFBFDFE,	0x3FF7FBFD,	0x3FEFF7FB,	0x3FDFEFF7,	0x3FBFDFEF,	0x3F7FBFDF,	0x3EFF7FBF,	0x3DFEFF7F, 0x3BFDFEFF,
+		0x3FFBFDFE,	0x3FF7FBFD,	0x3FEFF7FB,	0x3FDFEFF7,	0x3FBFDFEF,	0x3F7FBFDF,	0x3EFF7FBF,	0x3DFEFF7F, 0x3BFDFEFF,
+		0x3FFBFDFE,	0x3FF7FBFD,	0x3FEFF7FB,	0x3FDFEFF7,	0x3FBFDFEF,	0x3F7FBFDF,	0x3EFF7FBF,	0x3DFEFF7F, 0x3BFDFEFF,
 	];
 	*index(&OTHER_MASK, cell as usize)
+	*/
+	/*
+	static OTHER_MASK: [u32; 9] = [
+		0x3FFBFDFE,	0x3FF7FBFD,	0x3FEFF7FB,	0x3FDFEFF7,	0x3FBFDFEF,	0x3F7FBFDF,	0x3EFF7FBF,	0x3DFEFF7F, 0x3BFDFEFF,
+	];
+	*index(&OTHER_MASK, (cell % 9) as usize)
+	*/
+	0o777_777_777 ^ (0o_001_001_001 << cell % 9)
 }
 
 #[inline]

@@ -478,9 +478,7 @@ impl SudokuSolver2 {
 		c: &mut u32,
 		s: &mut u32,
 		i: u32,
-		j: u32,
-		k: u32,
-		l: u32,
+		[j, k, l]: [u32; 3],
 	) -> Result<(), Unsolvable> {
 		*a = self.bands[(i * 3 + j) as usize];
 		*shrink = shrink_mask(*a & LOW9) | shrink_mask(*a >> 9 & LOW9) << 3 | shrink_mask(*a >> 18 & LOW9) << 6;
@@ -503,7 +501,7 @@ impl SudokuSolver2 {
 	}
 
 	#[inline(always)]
-	fn upwcl(&mut self, cl: &mut u32, a: u32, s: u32, i: u32, p: u32, q: u32, r: u32, t: u32, u: u32, v: u32, w: u32, x: u32) {
+	fn upwcl(&mut self, cl: &mut u32, a: u32, s: u32, [i, p, q, r, t, u, v, w, x]: [i32; 9]) {
 		*cl = !(a & row_mask(s));
 		self.unsolved_cells[i as usize] &= *cl;
 		self.bands[p as usize] &= *cl;
@@ -516,434 +514,94 @@ impl SudokuSolver2 {
 		self.bands[x as usize] &= *cl;
 	}
 
-	/*
-	#[inline(always)]
-	fn upwcl_slice(&mut self, cl: &mut u32, a: u32, s: u32, args: [u32; 9]) {
-		*cl = !(a & *index(&ROW_MASK, s as usize));
-		self.unsolved_cells[args[0] as usize] &= *cl;
-		for &idx in &args[1..] {
-			self.bands[idx as usize] &= *cl;
-		}
-	}
-	*/
-
 	fn update(&mut self) -> Result<(), Unsolvable> {
 		let mut shrink: u32 = 1;
 		let (mut s, mut a, mut b, mut c, mut cl) = (0, 0, 0, 0, 0);
 		while shrink != 0 {
 			shrink = 0;
-			// -------------------- loop --------------------------
-			// part is band? maybe, the real bands not's called band elsewhere (as of when the terms band, slice are still used)
-			/*
-			for part in 0..3u32 {
-				if self.unsolved_rows[part as usize] == 0 { continue }
-				let mut ar = self.unsolved_rows[part as usize];
-				for digit_offset in 0..3u32 {
-					let digit = part*3 + digit_offset;
-					if (ar >> (part*3)) & LOW9 == 0 { continue }
-					for slice_offset in 0..3u32 {
-						let idx = (digit * 3 + slice_offset) as usize;
-						if self.bands[idx] != self.prev_bands[idx] {
-							self.updn(&mut shrink, &mut a, &mut b, &mut c, &mut s, digit,
-								slice_offset, (slice_offset + 1) % 3, (slice_offset + 2) % 3)?;
+			// ------------------ loop unrolled via macros ------------------------
 
-							let ar_offset = (digit_offset * 3 + slice_offset)*3;
-							if (ar >> ar_offset) & 0b111 != s {
-								ar &= (ALL ^ (0b111 << ar_offset)) | s;
+			const UPWCL_ARGS: [[i32; 9]; 27] = [
+				[0, 3, 6, 9, 12, 15, 18, 21, 24],
+				[1, 4, 7, 10, 13, 16, 19, 22, 25],
+				[2, 5, 8, 11, 14, 17, 20, 23, 26],
+				[0, 0, 6, 9, 12, 15, 18, 21, 24],
+				[1, 1, 7, 10, 13, 16, 19, 22, 25],
+				[2, 2, 8, 11, 14, 17, 20, 23, 26],
+				[0, 0, 3, 9, 12, 15, 18, 21, 24],
+				[1, 1, 4, 10, 13, 16, 19, 22, 25],
+				[2, 2, 5, 11, 14, 17, 20, 23, 26],
+				[0, 0, 3, 6, 12, 15, 18, 21, 24],
+				[1, 1, 4, 7, 13, 16, 19, 22, 25],
+				[2, 2, 5, 8, 14, 17, 20, 23, 26],
+				[0, 0, 3, 6, 9, 15, 18, 21, 24],
+				[1, 1, 4, 7, 10, 16, 19, 22, 25],
+				[2, 2, 5, 8, 11, 17, 20, 23, 26],
+				[0, 0, 3, 6, 9, 12, 18, 21, 24],
+				[1, 1, 4, 7, 10, 13, 19, 22, 25],
+				[2, 2, 5, 8, 11, 14, 20, 23, 26],
+				[0, 0, 3, 6, 9, 12, 15, 21, 24],
+				[1, 1, 4, 7, 10, 13, 16, 22, 25],
+				[2, 2, 5, 8, 11, 14, 17, 23, 26],
+				[0, 0, 3, 6, 9, 12, 15, 18, 24],
+				[1, 1, 4, 7, 10, 13, 16, 19, 25],
+				[2, 2, 5, 8, 11, 14, 17, 20, 26],
+				[0, 0, 3, 6, 9, 12, 15, 18, 21],
+				[1, 1, 4, 7, 10, 13, 16, 19, 22],
+				[2, 2, 5, 8, 11, 14, 17, 20, 23],
+			];
 
-								// actually, first argument (left out here) is not that special
-								let mut args = [
-									slice_offset,
-									slice_offset + 3,
-									slice_offset + 6,
-									slice_offset + 9,
-									slice_offset + 12,
-									slice_offset + 15,
-									slice_offset + 18,
-									slice_offset + 21,
-								];
-								args[digit as usize..].iter_mut()
-									.for_each(|num| {
-										*num += 3;
-									});
-								self.upwcl(&mut cl, a, s,
-									slice_offset,
-									args[0],
-									args[1],
-									args[2],
-									args[3],
-									args[4],
-									args[5],
-									args[6],
-									args[7],
-								);
-							}
+			const UPDN_ARGS: [[u32; 3]; 3] = [
+				[0, 1, 2],
+				[1, 0, 2],
+				[2, 0, 1],
+			];
+
+			// outermost macro
+			// invoked for idx in 0..3
+			// deals with 3 digits per idx
+			macro_rules! unroll_loop {
+				($($idx:expr),*) => {
+					$(
+						let mut ar = self.unsolved_rows[$idx];
+						if ar != 0 {
+							digit!(ar, $idx, 0); // digit $idx*3 + 0
+							digit!(ar, $idx, 1); // digit $idx*3 + 1
+							digit!(ar, $idx, 2); // digit $idx*3 + 2
+							self.unsolved_rows[$idx] = ar;
 						}
-					}
+					)*
 				}
-				self.unsolved_rows[part as usize] = ar;
-			}
-			*/
-			/*
-			for part in 0..3 {
-				if self.unsolved_rows[part as usize] == 0 { continue }
-				let mut ar = self.unsolved_rows[part as usize];
-				////////////////// DIGIT 0
-				if ar & LOW9 != 0 {
-					let digit = 0 + part*3;
-					if self.bands[digit as usize * 3+0] != self.prev_bands[digit as usize * 3+0] {
-						self.updn(&mut shrink, &mut a, &mut b, &mut c, &mut s, digit, 0, 1, 2)?;
-						if ar & 0b111 != s {
-							ar &= 0o777_777_770 | s;
-							self.upwcl_slice(&mut cl, a, s, UPWCL_ARGS[3*digit as usize + 0]);
-						}
-					}
-
-					if self.bands[digit as usize * 3+1] != self.prev_bands[digit as usize * 3+1] {
-						self.updn(&mut shrink, &mut a, &mut b, &mut c, &mut s, digit, 1, 0, 2)?;
-						if (ar >> 3) & 0b111 != s {
-							ar &= 0o777_777_707 | (s << 3);
-							self.upwcl_slice(&mut cl, a, s, UPWCL_ARGS[3*digit as usize + 1]);
-						}
-					}
-
-					if self.bands[digit as usize * 3+2] != self.prev_bands[digit as usize * 3+2] {
-						self.updn(&mut shrink, &mut a, &mut b, &mut c, &mut s, digit, 2, 0, 1)?;
-						if (ar >> 6) & 0b111 != s {
-							ar &= 0o777_777_077 | (s << 6);
-							self.upwcl_slice(&mut cl, a, s, UPWCL_ARGS[3*digit as usize + 2]);
-						}
-					}
-				}
-
-				////////////////// DIGIT 1
-				if (ar >> 9) & LOW9 != 0 {
-					let digit = 1 + part*3;
-					if self.bands[digit as usize * 3+0] != self.prev_bands[digit as usize * 3+0] {
-						self.updn(&mut shrink, &mut a, &mut b, &mut c, &mut s, digit, 0, 1, 2)?;
-						if (ar >> 9) & 0b111 != s {
-							ar &= 0o777_770_777 | (s << 9);
-							self.upwcl_slice(&mut cl, a, s, UPWCL_ARGS[3*digit as usize + 0]);
-						}
-					}
-
-					if self.bands[digit as usize * 3+1] != self.prev_bands[digit as usize * 3+1] {
-						self.updn(&mut shrink, &mut a, &mut b, &mut c, &mut s, digit, 1, 0, 2)?;
-						if (ar >> 12) & 0b111 != s {
-							ar &= 0o777_707_777 | (s << 12);
-							self.upwcl_slice(&mut cl, a, s, UPWCL_ARGS[3*digit as usize + 1]);
-						}
-					}
-
-					if self.bands[digit as usize * 3+2] != self.prev_bands[digit as usize * 3+2] {
-						self.updn(&mut shrink, &mut a, &mut b, &mut c, &mut s, digit, 2, 0, 1)?;
-						if (ar >> 15) & 0b111 != s {
-							ar &= 0o777_077_777 | (s << 15);
-							self.upwcl_slice(&mut cl, a, s, UPWCL_ARGS[3*digit as usize + 2]);
-						}
-					}
-				}
-
-				////////////////// DIGIT 2
-				if (ar >> 18) & LOW9 != 0 {
-					let digit = 2 + part*3;
-					if self.bands[digit as usize * 3+0] != self.prev_bands[digit as usize * 3+0] {
-						self.updn(&mut shrink, &mut a, &mut b, &mut c, &mut s, digit, 0, 1, 2)?;
-						if (ar >> 18) & 0b111 != s {
-							ar &= 0o770_777_777 | (s << 18);
-							self.upwcl_slice(&mut cl, a, s, UPWCL_ARGS[3*digit as usize + 0]);
-						}
-					}
-
-					if self.bands[digit as usize * 3+1] != self.prev_bands[digit as usize * 3+1] {
-						self.updn(&mut shrink, &mut a, &mut b, &mut c, &mut s, digit, 1, 0, 2)?;
-						if (ar >> 21) & 0b111 != s {
-							ar &= 0o707_777_777 | (s << 21);
-							self.upwcl_slice(&mut cl, a, s, UPWCL_ARGS[3*digit as usize + 1]);
-						}
-					}
-
-					if self.bands[digit as usize * 3+2] != self.prev_bands[digit as usize * 3+2] {
-						self.updn(&mut shrink, &mut a, &mut b, &mut c, &mut s, digit, 2, 0, 1)?;
-						if (ar >> 24) & 0b111 != s {
-							ar &= 0o077_777_777 | (s << 24);
-							self.upwcl_slice(&mut cl, a, s, UPWCL_ARGS[3*digit as usize + 2]);
-						}
-					}
-				}
-
-				self.unsolved_rows[part as usize] = ar;
-			}
-			*/
-			// ------------------ unrolled ------------------------
-
-			if self.unsolved_rows[0] != 0 {
-				let mut ar = self.unsolved_rows[0];
-				////////////////// DIGIT 0
-				if ar & LOW9 != 0 {
-					let digit = 0;
-					if self.bands[digit as usize * 3+0] != self.prev_bands[digit as usize * 3+0] {
-						self.updn(&mut shrink, &mut a, &mut b, &mut c, &mut s, digit, 0, 1, 2)?;
-						if ar & 0b111 != s {
-							ar &= 0o777_777_770 | s;
-							self.upwcl(&mut cl, a, s, 0, 3, 6, 9, 12, 15, 18, 21, 24);
-						}
-					}
-
-					if self.bands[digit as usize * 3+1] != self.prev_bands[digit as usize * 3+1] {
-						self.updn(&mut shrink, &mut a, &mut b, &mut c, &mut s, digit, 1, 0, 2)?;
-						if (ar >> 3) & 0b111 != s {
-							ar &= 0o777_777_707 | (s << 3);
-							self.upwcl(&mut cl, a, s, 1, 4, 7, 10, 13, 16, 19, 22, 25);
-						}
-					}
-
-					if self.bands[digit as usize * 3+2] != self.prev_bands[digit as usize * 3+2] {
-						self.updn(&mut shrink, &mut a, &mut b, &mut c, &mut s, digit, 2, 0, 1)?;
-						if (ar >> 6) & 0b111 != s {
-							ar &= 0o777_777_077 | (s << 6);
-							self.upwcl(&mut cl, a, s, 2, 5, 8, 11, 14, 17, 20, 23, 26);
-						}
-					}
-				}
-
-				////////////////// DIGIT 1
-				if (ar >> 9) & LOW9 != 0 {
-					let digit = 1;
-					if self.bands[digit as usize * 3+0] != self.prev_bands[digit as usize * 3+0] {
-						self.updn(&mut shrink, &mut a, &mut b, &mut c, &mut s, digit, 0, 1, 2)?;
-						if (ar >> 9) & 0b111 != s {
-							ar &= 0o777_770_777 | (s << 9);
-							self.upwcl(&mut cl, a, s, 0, 0, 6, 9, 12, 15, 18, 21, 24);
-						}
-					}
-
-					if self.bands[digit as usize * 3+1] != self.prev_bands[digit as usize * 3+1] {
-						self.updn(&mut shrink, &mut a, &mut b, &mut c, &mut s, digit, 1, 0, 2)?;
-						if (ar >> 12) & 0b111 != s {
-							ar &= 0o777_707_777 | (s << 12);
-							self.upwcl(&mut cl, a, s, 1, 1, 7, 10, 13, 16, 19, 22, 25);
-						}
-					}
-
-					if self.bands[digit as usize * 3+2] != self.prev_bands[digit as usize * 3+2] {
-						self.updn(&mut shrink, &mut a, &mut b, &mut c, &mut s, digit, 2, 0, 1)?;
-						if (ar >> 15) & 0b111 != s {
-							ar &= 0o777_077_777 | (s << 15);
-							self.upwcl(&mut cl, a, s, 2, 2, 8, 11, 14, 17, 20, 23, 26);
-						}
-					}
-				}
-
-				////////////////// DIGIT 2
-				if (ar >> 18) & LOW9 != 0 {
-					let digit = 2;
-					if self.bands[digit as usize * 3+0] != self.prev_bands[digit as usize * 3+0] {
-						self.updn(&mut shrink, &mut a, &mut b, &mut c, &mut s, digit, 0, 1, 2)?;
-						if (ar >> 18) & 0b111 != s {
-							ar &= 0o770_777_777 | (s << 18);
-							self.upwcl(&mut cl, a, s, 0, 0, 3, 9, 12, 15, 18, 21, 24);
-						}
-					}
-
-					if self.bands[digit as usize * 3+1] != self.prev_bands[digit as usize * 3+1] {
-						self.updn(&mut shrink, &mut a, &mut b, &mut c, &mut s, digit, 1, 0, 2)?;
-						if (ar >> 21) & 0b111 != s {
-							ar &= 0o707_777_777 | (s << 21);
-							self.upwcl(&mut cl, a, s, 1, 1, 4, 10, 13, 16, 19, 22, 25);
-						}
-					}
-
-					if self.bands[digit as usize * 3+2] != self.prev_bands[digit as usize * 3+2] {
-						self.updn(&mut shrink, &mut a, &mut b, &mut c, &mut s, digit, 2, 0, 1)?;
-						if (ar >> 24) & 0b111 != s {
-							ar &= 0o077_777_777 | (s << 24);
-							self.upwcl(&mut cl, a, s, 2, 2, 5, 11, 14, 17, 20, 23, 26);
-						}
-					}
-				}
-
-				self.unsolved_rows[0] = ar;
 			}
 
-			if self.unsolved_rows[1] != 0 {
-				let mut ar = self.unsolved_rows[1];
-				////////////////// DIGIT 3
-				if ar & LOW9 != 0 {
-					let digit = 3;
-					if self.bands[digit as usize * 3+0] != self.prev_bands[digit as usize * 3+0] {
-						self.updn(&mut shrink, &mut a, &mut b, &mut c, &mut s, digit, 0, 1, 2)?;
-						if ar & 0b111 != s {
-							ar &= 0o777_777_770 | s;
-							self.upwcl(&mut cl, a, s, 0, 0, 3, 6, 12, 15, 18, 21, 24);
-						}
-					}
-
-					if self.bands[digit as usize * 3+1] != self.prev_bands[digit as usize * 3+1] {
-						self.updn(&mut shrink, &mut a, &mut b, &mut c, &mut s, digit, 1, 0, 2)?;
-						if (ar >> 3) & 0b111 != s {
-							ar &= 0o777_777_707 | (s << 3);
-							self.upwcl(&mut cl, a, s, 1, 1, 4, 7, 13, 16, 19, 22, 25);
-						}
-					}
-
-					if self.bands[digit as usize * 3+2] != self.prev_bands[digit as usize * 3+2] {
-						self.updn(&mut shrink, &mut a, &mut b, &mut c, &mut s, digit, 2, 0, 1)?;
-						if (ar >> 6) & 0b111 != s {
-							ar &= 0o777_777_077 | (s << 6);
-							self.upwcl(&mut cl, a, s, 2, 2, 5, 8, 14, 17, 20, 23, 26);
-						}
+			macro_rules! digit {
+				($ar:expr, $digit_base:expr, $digit_offset:expr) => {
+					let digit_shift = ($digit_offset * 9) as usize;
+					if ($ar >> ($digit_offset * 9)) & LOW9 != 0 {
+						let digit = 3*$digit_base + $digit_offset; // 3*digit_base + offset
+						subband!($ar, digit, digit_shift, 0);
+						subband!($ar, digit, digit_shift, 1);
+						subband!($ar, digit, digit_shift, 2);
 					}
 				}
-
-				////////////////// DIGIT 4
-				if (ar >> 9) & LOW9 != 0 {
-					let digit = 4;
-					if self.bands[digit as usize * 3+0] != self.prev_bands[digit as usize * 3+0] {
-						self.updn(&mut shrink, &mut a, &mut b, &mut c, &mut s, digit, 0, 1, 2)?;
-						if (ar >> 9) & 0b111 != s {
-							ar &= 0o777_770_777 | (s << 9);
-							self.upwcl(&mut cl, a, s, 0, 0, 3, 6, 9, 15, 18, 21, 24);
-						}
-					}
-
-					if self.bands[digit as usize * 3+1] != self.prev_bands[digit as usize * 3+1] {
-						self.updn(&mut shrink, &mut a, &mut b, &mut c, &mut s, digit, 1, 0, 2)?;
-						if (ar >> 12) & 0b111 != s {
-							ar &= 0o777_707_777 | (s << 12);
-							self.upwcl(&mut cl, a, s, 1, 1, 4, 7, 10, 16, 19, 22, 25);
-						}
-					}
-
-					if self.bands[digit as usize * 3+2] != self.prev_bands[digit as usize * 3+2] {
-						self.updn(&mut shrink, &mut a, &mut b, &mut c, &mut s, digit, 2, 0, 1)?;
-						if (ar >> 15) & 0b111 != s {
-							ar &= 0o777_077_777 | (s << 15);
-							self.upwcl(&mut cl, a, s, 2, 2, 5, 8, 11, 17, 20, 23, 26);
-						}
-					}
-				}
-
-				////////////////// DIGIT 5
-				if (ar >> 18) & LOW9 != 0 {
-					let digit = 5;
-					if self.bands[digit as usize * 3+0] != self.prev_bands[digit as usize * 3+0] {
-						self.updn(&mut shrink, &mut a, &mut b, &mut c, &mut s, digit, 0, 1, 2)?;
-						if (ar >> 18) & 0b111 != s {
-							ar &= 0o770_777_777 | (s << 18);
-							self.upwcl(&mut cl, a, s, 0, 0, 3, 6, 9, 12, 18, 21, 24);
-						}
-					}
-
-					if self.bands[digit as usize * 3+1] != self.prev_bands[digit as usize * 3+1] {
-						self.updn(&mut shrink, &mut a, &mut b, &mut c, &mut s, digit, 1, 0, 2)?;
-						if (ar >> 21) & 0b111 != s {
-							ar &= 0o707_777_777 | (s << 21);
-							self.upwcl(&mut cl, a, s, 1, 1, 4, 7, 10, 13, 19, 22, 25);
-						}
-					}
-
-					if self.bands[digit as usize * 3+2] != self.prev_bands[digit as usize * 3+2] {
-						self.updn(&mut shrink, &mut a, &mut b, &mut c, &mut s, digit, 2, 0, 1)?;
-						if (ar >> 24) & 0b111 != s {
-							ar &= 0o077_777_777 | (s << 24);
-							self.upwcl(&mut cl, a, s, 2, 2, 5, 8, 11, 14, 20, 23, 26);
-						}
-					}
-				}
-
-				self.unsolved_rows[1] = ar;
 			}
 
-			if self.unsolved_rows[2] != 0 {
-				let mut ar = self.unsolved_rows[2];
-				////////////////// DIGIT 6
-				if ar & LOW9 != 0 {
-					let digit = 6;
-					if self.bands[digit as usize * 3+0] != self.prev_bands[digit as usize * 3+0] {
-						self.updn(&mut shrink, &mut a, &mut b, &mut c, &mut s, digit, 0, 1, 2)?;
-						if ar & 0b111 != s {
-							ar &= 0o777_777_770 | s;
-							self.upwcl(&mut cl, a, s, 0, 0, 3, 6, 9, 12, 15, 21, 24);
-						}
-					}
-
-					if self.bands[digit as usize * 3+1] != self.prev_bands[digit as usize * 3+1] {
-						self.updn(&mut shrink, &mut a, &mut b, &mut c, &mut s, digit, 1, 0, 2)?;
-						if (ar >> 3) & 0b111 != s {
-							ar &= 0o777_777_707 | (s << 3);
-							self.upwcl(&mut cl, a, s, 1, 1, 4, 7, 10, 13, 16, 22, 25);
-						}
-					}
-
-					if self.bands[digit as usize * 3+2] != self.prev_bands[digit as usize * 3+2] {
-						self.updn(&mut shrink, &mut a, &mut b, &mut c, &mut s, digit, 2, 0, 1)?;
-						if (ar >> 6) & 0b111 != s {
-							ar &= 0o777_777_077 | (s << 6);
-							self.upwcl(&mut cl, a, s, 2, 2, 5, 8, 11, 14, 17, 23, 26);
+			// no idea if this name is correct
+			// whatever the 3 cases deal with
+			macro_rules! subband {
+				($ar:expr, $digit:expr, $digit_shift:expr, $offset:expr) => {
+					if self.bands[$digit as usize * 3+$offset] != self.prev_bands[$digit as usize * 3+$offset] {
+						self.updn(&mut shrink, &mut a, &mut b, &mut c, &mut s, $digit, UPDN_ARGS[$offset])?;
+						let shift = $digit_shift + $offset*3;
+						if ($ar >> shift) & 0b111 != s {
+							$ar &= (0o777_777_777 ^ (0o7 << shift) ) | (s << shift);
+							self.upwcl(&mut cl, a, s, UPWCL_ARGS[$digit as usize * 3 + $offset]);
 						}
 					}
 				}
-
-				////////////////// DIGIT 7
-				if (ar >> 9) & LOW9 != 0 {
-					let digit = 7;
-					if self.bands[digit as usize * 3+0] != self.prev_bands[digit as usize * 3+0] {
-						self.updn(&mut shrink, &mut a, &mut b, &mut c, &mut s, digit, 0, 1, 2)?;
-						if (ar >> 9) & 0b111 != s {
-							ar &= 0o777_770_777 | (s << 9);
-							self.upwcl(&mut cl, a, s, 0, 0, 3, 6, 9, 12, 15, 18, 24);
-						}
-					}
-
-					if self.bands[digit as usize * 3+1] != self.prev_bands[digit as usize * 3+1] {
-						self.updn(&mut shrink, &mut a, &mut b, &mut c, &mut s, digit, 1, 0, 2)?;
-						if (ar >> 12) & 0b111 != s {
-							ar &= 0o777_707_777 | (s << 12);
-							self.upwcl(&mut cl, a, s, 1, 1, 4, 7, 10, 13, 16, 19, 25);
-						}
-					}
-
-					if self.bands[digit as usize * 3+2] != self.prev_bands[digit as usize * 3+2] {
-						self.updn(&mut shrink, &mut a, &mut b, &mut c, &mut s, digit, 2, 0, 1)?;
-						if (ar >> 15) & 0b111 != s {
-							ar &= 0o777_077_777 | (s << 15);
-							self.upwcl(&mut cl, a, s, 2, 2, 5, 8, 11, 14, 17, 20, 26);
-						}
-					}
-				}
-
-				////////////////// DIGIT 8
-				if (ar >> 18) & LOW9 != 0 {
-					let digit = 8;
-					if self.bands[digit as usize * 3+0] != self.prev_bands[digit as usize * 3+0] {
-						self.updn(&mut shrink, &mut a, &mut b, &mut c, &mut s, digit, 0, 1, 2)?;
-						if (ar >> 18) & 0b111 != s {
-							ar &= 0o770_777_777 | (s << 18);
-							self.upwcl(&mut cl, a, s, 0, 0, 3, 6, 9, 12, 15, 18, 21);
-						}
-					}
-
-					if self.bands[digit as usize * 3+1] != self.prev_bands[digit as usize * 3+1] {
-						self.updn(&mut shrink, &mut a, &mut b, &mut c, &mut s, digit, 1, 0, 2)?;
-						if (ar >> 21) & 0b111 != s {
-							ar &= 0o707_777_777 | (s << 21);
-							self.upwcl(&mut cl, a, s, 1, 1, 4, 7, 10, 13, 16, 19, 22);
-						}
-					}
-
-					if self.bands[digit as usize * 3+2] != self.prev_bands[digit as usize * 3+2] {
-						self.updn(&mut shrink, &mut a, &mut b, &mut c, &mut s, digit, 2, 0, 1)?;
-						if (ar >> 24) & 0b111 != s {
-							ar &= 0o077_777_777 | (s << 24);
-							self.upwcl(&mut cl, a, s, 2, 2, 5, 8, 11, 14, 17, 20, 23);
-						}
-					}
-				}
-
-				self.unsolved_rows[2] = ar;
 			}
 
+			unroll_loop!(0, 1, 2);
 		// ----------------------------------------------------
 		}
 		Ok(())
@@ -1536,38 +1194,6 @@ static COLUMN_SINGLE: [u32; 512] = [	// single in column applied to shrinked blo
 	0o0, 0o333, 0o333, 0o222, 0o333, 0o222, 0o222, 0o222, 0o0, 0o111, 0o111, 0o0, 0o111, 0o0, 0o0, 0o0,
 	0o0, 0o111, 0o111, 0o0, 0o111, 0o0, 0o0, 0o0, 0o0, 0o111, 0o111, 0o0, 0o111, 0o0, 0o0, 0o0,
 ];
-
-/*
-static UPWCL_ARGS: [[u32; 9]; 27] = [
-    [0, 3, 6, 9, 12, 15, 18, 21, 24],
-    [1, 4, 7, 10, 13, 16, 19, 22, 25],
-    [2, 5, 8, 11, 14, 17, 20, 23, 26],
-    [0, 0, 6, 9, 12, 15, 18, 21, 24],
-    [1, 1, 7, 10, 13, 16, 19, 22, 25],
-    [2, 2, 8, 11, 14, 17, 20, 23, 26],
-    [0, 0, 3, 9, 12, 15, 18, 21, 24],
-    [1, 1, 4, 10, 13, 16, 19, 22, 25],
-    [2, 2, 5, 11, 14, 17, 20, 23, 26],
-    [0, 0, 3, 6, 12, 15, 18, 21, 24],
-    [1, 1, 4, 7, 13, 16, 19, 22, 25],
-    [2, 2, 5, 8, 14, 17, 20, 23, 26],
-    [0, 0, 3, 6, 9, 15, 18, 21, 24],
-    [1, 1, 4, 7, 10, 16, 19, 22, 25],
-    [2, 2, 5, 8, 11, 17, 20, 23, 26],
-    [0, 0, 3, 6, 9, 12, 18, 21, 24],
-    [1, 1, 4, 7, 10, 13, 19, 22, 25],
-    [2, 2, 5, 8, 11, 14, 20, 23, 26],
-    [0, 0, 3, 6, 9, 12, 15, 21, 24],
-    [1, 1, 4, 7, 10, 13, 16, 22, 25],
-    [2, 2, 5, 8, 11, 14, 17, 23, 26],
-    [0, 0, 3, 6, 9, 12, 15, 18, 24],
-    [1, 1, 4, 7, 10, 13, 16, 19, 25],
-    [2, 2, 5, 8, 11, 14, 17, 20, 26],
-    [0, 0, 3, 6, 9, 12, 15, 18, 21],
-    [1, 1, 4, 7, 10, 13, 16, 19, 22],
-    [2, 2, 5, 8, 11, 14, 17, 20, 23],
-];
-*/
 
 #[inline(always)]
 fn bit_pos(mask: u32) -> u8 {

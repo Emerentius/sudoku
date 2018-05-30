@@ -229,6 +229,48 @@ fn generate_unique_sudoku_uniqueness() {
     }
 }
 
+// this test is probabilistic in nature
+// if an error occurs, note down the sudoku that it generated
+#[test]
+fn shuffle_unsolved() {
+    let sudoku = Sudoku::generate_unique();
+    test_shuffle_sudoku(sudoku);
+}
+
+// this test is probabilistic in nature
+// if an error occurs, note down the sudoku that it generated
+#[test]
+fn shuffle_solved() {
+    let sudoku = Sudoku::generate_filled();
+    test_shuffle_sudoku(sudoku);
+}
+
+// test if any two sudokus are equal
+fn test_shuffle_sudoku(sudoku: Sudoku) {
+    let mut sudokus = vec![sudoku; 1000];
+    sudokus.iter_mut().for_each(Sudoku::shuffle);
+    sudokus.sort();
+
+    let mut duplicates = vec![];
+    for (i, sudokus) in sudokus.windows(2).enumerate() {
+        if let [sudoku1, sudoku2] = sudokus {
+            if sudoku1 == sudoku2 {
+                duplicates.push(i);
+            }
+        } else {
+            unreachable!();
+        }
+    }
+
+    if duplicates.len() > 0 {
+        for i in duplicates {
+            println!("sudoku nr {} and next: {}", i, sudokus[i].to_str_line());
+        }
+
+        panic!("\nRandomly shuffled a sudoku into the above equal sudoku(s). This is possible, but very unlikely. Please save the sudoku(s) for debugging.");
+    }
+}
+
 #[test]
 fn parse_permissive() {
     let sudokus = [

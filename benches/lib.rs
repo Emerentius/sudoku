@@ -73,6 +73,17 @@ fn generate_unique_sudoku(b: &mut test::Bencher) {
 	b.iter(Sudoku::generate_unique)
 }
 
+// this test is probabilistic in nature
+// if an error occurs, note down the sudoku that it generated
+#[bench]
+fn shuffle(b: &mut test::Bencher) {
+    let mut sudoku = Sudoku::generate_filled();
+	b.iter(|| {
+		sudoku.shuffle();
+		test::black_box(sudoku);
+	});
+}
+
 #[bench]
 fn parse_line(b: &mut test::Bencher) {
 	let sudokus = (0..1000).map(|_| Sudoku::generate_unique().to_str_line())

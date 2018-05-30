@@ -43,6 +43,8 @@ Version 0.5.0 (2018-02-14)
 * Added two new functions `count_at_most(limit)` and `is_uniquely_solvable()` which run slightly faster
   than their equivalents that return the solved grid.
 
-Unreleased
-==========
+Version 0.6.0 (2018-05-30)
+==========================
+* Raise minimum Rust version to 1.26
 * Add `generate_unique_from(sudoku)`
+* Add `shuffle()` which transforms a sudoku into a random equivalent sudoku.

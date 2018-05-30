@@ -3,7 +3,8 @@ Sudoku
 
 [![Crates.io Status](http://meritbadge.herokuapp.com/sudoku)](https://crates.io/crates/sudoku) [![Build Status](https://travis-ci.org/Emerentius/sudoku.svg?branch=master)](https://travis-ci.org/Emerentius/sudoku)
 
-> A Rust library with the only goal of solving sudokus
+> A Rust library with ambition to be your one stop shop for all your sudoku logic needs. Currently offering
+  very fast sudoku generation and solving.
 
 # Usage Example
 
@@ -44,11 +45,3 @@ _26|3__|5__
     assert!(sudoku == sudoku2);
 }
 ```
-
-# Planned
-
-- [ ] Sudoku generation
-    - [X] generate uniquely solvable sudokus
-    - [ ] grade difficulty
-- [ ] Step-by-step hinting & solving with pluggable strategies
-- [ ] Detailed errors for invalid sudokus

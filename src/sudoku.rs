@@ -152,6 +152,7 @@ impl fmt::Debug for Sudoku {
 	}
 }
 
+type R = ::rand::rngs::ThreadRng;
 pub type Iter<'a> = iter::Map<slice::Iter<'a, u8>, fn(&u8)->Option<u8>>; // Iter over Sudoku cells
 
 impl Sudoku {
@@ -556,6 +557,11 @@ impl Sudoku {
 		solver.is_solved()
 	}
 
+	/// Returns number of filled cells
+	pub fn n_clues(&self) -> u8 {
+		self.0.iter().filter(|&&num| num != 0).count() as u8
+	}
+
 	/// Perform various transformations that create a different but equivalent sudoku.
 	/// The transformations preserve the sudoku's validity and the amount of solutions
 	/// as well a the applicability of solution strategies.
@@ -572,65 +578,81 @@ impl Sudoku {
 	/// Less permutations exists if the sudoku is symmetrical in respect to some combinations of the transformations
 	/// The vast majority of sudokus do not have any such symmetries (automorphisms). The highest number of automorphisms
 	/// a sudoku can have is 648 and ~99.99% of all non-equivalent sudokus have only 1, the identity transformation.
+
+	// TODO: Deduplicate the shuffle_*lines_or_chutes* functions
+	//		 for some reason the shuffle_bands and shuffle_stacks functions work faster in their current form
+	// 		 rather than with a generic function abstracting over both.
 	pub fn shuffle(&mut self) {
-		self.shuffle_digits();
-		self.shuffle_bands();
-		self.shuffle_stacks();
+		// SmallRng is a good 10% faster, but it uses XorShiftRng which can fail some statistical tests
+		// There are some adaptions that fix this, but I don't know if Rust implements them.
+		//let rng = &mut ::rand::rngs::SmallRng::from_rng(::rand::thread_rng()).unwrap();
+		let rng = &mut ::rand::thread_rng();
+
+		self.shuffle_digits(rng);
+		self.shuffle_bands(rng);
+		self.shuffle_stacks(rng);
 		for i in 0..3 {
-			self.shuffle_cols_of_stack(i);
-			self.shuffle_rows_of_band(i);
+			self.shuffle_cols_of_stack(rng, i);
+			self.shuffle_rows_of_band(rng, i);
 		}
-		if ::rand::random() {
+		if rng.gen() {
 			self.transpose();
 		}
 	}
 
-	fn shuffle_digits(&mut self) {
+	#[inline]
+	fn shuffle_digits(&mut self, rng: &mut R) {
 		// 0 (empty cell) always maps to 0
 		let mut digits = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-		::rand::thread_rng().shuffle(&mut digits[1..]);
+
+		// manual top-down Fisher-Yates shuffle. Needs only 1 ranged random num rather than 9
+		let mut permutation = rng.gen_range(0, 362880u32); // 9!
+		for n_choices in (1..10).rev() {
+			let num = permutation % n_choices;
+			permutation /= n_choices;
+			digits.swap(n_choices as usize, 1 + num as usize);
+		}
 
 		for num in self.0.iter_mut() {
 			*num = digits[*num as usize];
 		}
 	}
 
-	fn shuffle_rows_of_band(&mut self, band: u8) {
+	#[inline]
+	fn shuffle_rows_of_band(&mut self, rng: &mut R, band: u8) {
 		debug_assert!(band < 3);
 		let first_row = band*3;
 
 		// Fisher-Yates-Shuffle
-		self.swap_rows(first_row, gen_range(first_row, first_row+3));
-		self.swap_rows(first_row+1, gen_range(first_row+1, first_row+3));
+		self.swap_rows(first_row, rng.gen_range(first_row, first_row+3));
+		self.swap_rows(first_row+1, rng.gen_range(first_row+1, first_row+3));
 	}
 
-	// TODO: this is identical except for the method to shuffle_band
-	// unify
-	fn shuffle_cols_of_stack(&mut self, stack: u8) {
+	#[inline]
+	fn shuffle_cols_of_stack(&mut self, rng: &mut R, stack: u8) {
 		debug_assert!(stack < 3);
 		let first_col = stack*3;
 
 		// Fisher-Yates-Shuffle
-		self.swap_cols(first_col, gen_range(first_col, first_col+3));
-		self.swap_cols(first_col+1, gen_range(first_col+1, first_col+3));
+		self.swap_cols(first_col, rng.gen_range(first_col, first_col+3));
+		self.swap_cols(first_col+1, rng.gen_range(first_col+1, first_col+3));
 	}
 
-	// TODO: this is almost identical except for the method to shuffle_band
-	// unify
-	fn shuffle_bands(&mut self) {
+	#[inline]
+	fn shuffle_bands(&mut self, rng: &mut R) {
 		// Fisher-Yates-Shuffle
-		self.swap_bands(0, gen_range(0, 3));
-		self.swap_bands(1, gen_range(1, 3));
+		self.swap_bands(0, rng.gen_range(0, 3));
+		self.swap_bands(1, rng.gen_range(1, 3));
 	}
 
-	// TODO: this is almost identical except for the method to shuffle_band
-	// unify
-	fn shuffle_stacks(&mut self) {
+	#[inline]
+	fn shuffle_stacks(&mut self, rng: &mut R) {
 		// Fisher-Yates-Shuffle
-		self.swap_stacks(0, gen_range(0, 3));
-		self.swap_stacks(1, gen_range(1, 3));
+		self.swap_stacks(0, rng.gen_range(0, 3));
+		self.swap_stacks(1, rng.gen_range(1, 3));
 	}
 
+	#[inline]
 	fn swap_rows(&mut self, row1: u8, row2: u8) {
 		if row1 == row2 { return }
 		let start1 = (row1*9) as usize;
@@ -640,6 +662,7 @@ impl Sudoku {
 		)
 	}
 
+	#[inline]
 	fn swap_cols(&mut self, col1: u8, col2: u8) {
 		if col1 == col2 { return }
 		debug_assert!(col1 < 9);
@@ -649,6 +672,7 @@ impl Sudoku {
 		)
 	}
 
+	#[inline]
 	fn swap_stacks(&mut self, stack1: u8, stack2: u8) {
 		if stack1 == stack2 { return }
 		debug_assert!(stack1 < 3);
@@ -658,6 +682,7 @@ impl Sudoku {
 		}
 	}
 
+	#[inline]
 	fn swap_bands(&mut self, band1: u8, band2: u8) {
 		if band1 == band2 { return }
 		debug_assert!(band1 < 3);
@@ -667,6 +692,7 @@ impl Sudoku {
 		}
 	}
 
+	#[inline]
 	fn transpose(&mut self) {
 		use ::std::iter::repeat;
 		self.swap_cells(
@@ -677,6 +703,7 @@ impl Sudoku {
 	}
 
 	// takes iter of cell index pairs and swaps the corresponding cells
+	#[inline]
 	fn swap_cells(&mut self, iter: impl Iterator<Item=(usize, usize)>) {
 		for (idx1, idx2) in iter {
 			debug_assert!(idx1 != idx2);
@@ -812,8 +839,4 @@ impl ::core::fmt::Display for SudokuLine {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		write!(f, "{}", self.deref())
 	}
-}
-
-fn gen_range(low: u8, high: u8) -> u8 {
-	::rand::thread_rng().gen_range(low, high)
 }

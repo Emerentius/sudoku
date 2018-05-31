@@ -246,14 +246,17 @@ fn shuffle_solved() {
 }
 
 // test if any two sudokus are equal
+// also asserts that the number of clues don't change
 fn test_shuffle_sudoku(sudoku: Sudoku) {
     let mut sudokus = vec![sudoku; 1000];
+    let n_clues = sudoku.n_clues();
     sudokus.iter_mut().for_each(Sudoku::shuffle);
     sudokus.sort();
 
     let mut duplicates = vec![];
     for (i, sudokus) in sudokus.windows(2).enumerate() {
         if let [sudoku1, sudoku2] = sudokus {
+            assert_eq!(sudoku1.n_clues(), n_clues);
             if sudoku1 == sudoku2 {
                 duplicates.push(i);
             }

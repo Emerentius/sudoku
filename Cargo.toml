@@ -8,8 +8,8 @@ version = "0.6.0"
 authors = ["Emerentius"]
 
 [dependencies]
-rand = "0.4.2"
-serde = { version = "1.0.27", optional = true }
+rand = "0.5.0"
+serde = { version = "1.0.64", optional = true }
 
 [features]
 # The solver does enough indexing that the performance impact can be significant

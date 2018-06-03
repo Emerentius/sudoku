@@ -462,9 +462,9 @@ impl SudokuSolver2 {
 		let mask_single = mask_single(*s);
 		self.bands[(digit*3 + ns1) as usize] &= mask_single;
 		self.bands[(digit*3 + ns2) as usize] &= mask_single;
-			*s = row_uniq(
-				shrink_single(*shrink) & column_single(*s)
-			);
+		*s = row_uniq(
+			shrink_single(*shrink) & column_single(*s)
+		);
 
 		self.prev_bands[(digit * 3 + ms) as usize] = a;
 		self.bands[(digit * 3 + ms) as usize] = a;
@@ -567,8 +567,8 @@ impl SudokuSolver2 {
 				($ar:expr, $digit:expr, $digit_shift:expr, $offset:expr) => {
 					let band = ($digit * 3) as usize + $offset;
 					if self.bands[band] != self.prev_bands[band] {
-					self.updn_upwcl(&mut shrink, &mut s, $digit, UPDN_ARGS[$offset], band)?;
-					$ar ^= (0o7 ^ s) << ($digit_shift + $offset*3);
+						self.updn_upwcl(&mut shrink, &mut s, $digit, UPDN_ARGS[$offset], band)?;
+						$ar ^= (0o7 ^ s) << ($digit_shift + $offset*3);
 					}
 				}
 			}
@@ -609,7 +609,7 @@ impl SudokuSolver2 {
 			}
 		} else if self.guess_bivalue_in_cell(solver_stack, limit, solutions).is_ok() {
 			// .is_ok() == found nothing
-			self.guess_first_cell(solver_stack, limit, solutions);
+			self.guess_some_cell(solver_stack, limit, solutions);
 		}
 	}
 
@@ -674,31 +674,44 @@ impl SudokuSolver2 {
 	// iterates through every possibility and calls guess()
 	// guess() short circuits when enough solutions were found and therefore
 	// so does this
-	fn guess_first_cell(&mut self, solver_stack: &mut SolvStack, limit: usize, solutions: &mut Solutions) {
-		// guess all possibilities in the first unsolved cell encountered
-		for band in 0..3 {
-			let mut unsolved_cells = self.unsolved_cells[band as usize];
-			if unsolved_cells == 0 {
-				continue
-			}
-			let one_unsolved_cell = unsolved_cells & (!unsolved_cells + 1);
-			let mut slice = band;
-			// check every digit
-			for _ in 0..9 {
-				if self.bands[slice as usize] & one_unsolved_cell != 0 {
-					let mut solver = self.clone();
-
-                    // FIXME: find out whether it's possible for this to err
-					let _ = solver._set_solved_mask(slice, one_unsolved_cell);
-					if solver.full_update(limit, solutions).is_ok() {
-						solver.guess(solver_stack, limit, solutions);
-					}
-					self.bands[slice as usize] ^= one_unsolved_cell;
+	fn guess_some_cell(&mut self, solver_stack: &mut SolvStack, limit: usize, solutions: &mut Solutions) {
+		let (_, band, unsolved_cell) = match (0..3)
+			.flat_map(|band| {
+				let mut unsolved_cells = self.unsolved_cells[band as usize];
+				if unsolved_cells == 0 {
+					return None;
 				}
+				let one_unsolved_cell = unsolved_cells & (!unsolved_cells + 1);
+				//unsolved_cells ^= one_unsolved_cell;
+				let n_poss = (0..9)
+					.map(|offset| band + 3*offset)
+					.filter(|&slice| self.bands[slice as usize] & one_unsolved_cell != 0)
+					.count();
+				Some((n_poss, band, one_unsolved_cell))
+			})
+			.min()
+		{
+			Some(min) => min,
+			None => return,
+		};
 
-				slice += 3;
+
+		let mut slice = band;
+		// check every digit
+		for _ in 0..9 {
+			if self.bands[slice as usize] & unsolved_cell != 0 {
+				let mut solver = self.clone();
+
+				// FIXME: find out whether it's possible for this to err
+				let _ = solver._set_solved_mask(slice, unsolved_cell);
+				if solver.full_update(limit, solutions).is_ok() {
+					solver.guess(solver_stack, limit, solutions);
+				}
+				if solutions.len() == limit { return }
+				self.bands[slice as usize] ^= unsolved_cell;
 			}
-			break
+
+			slice += 3;
 		}
 	}
 

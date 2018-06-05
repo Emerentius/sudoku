@@ -137,7 +137,7 @@ impl SudokuSolver {
 
 				if let Ok(maybe_unique) = (mask & singles).unique_num() {
 					let num = maybe_unique.ok_or(Unsolvable)?;
-					stack.push(Entry{ cell: cell, num: num } );
+					stack.push(Entry{ cell, num } );
 
 					// mark num as found
 					singles.remove(Mask::from_num(num));
@@ -188,7 +188,7 @@ impl SudokuSolver {
 		let poss_digits = self.cell_poss_digits[best_cell as usize];
 		let choice = ::rand::thread_rng().gen_range(0, poss_digits.n_possibilities());
 		let num = poss_digits.iter().nth(choice as usize).unwrap();
-		Entry{ num: num, cell: best_cell }
+		Entry{ num, cell: best_cell }
 	}
 
 	// remove impossible digits from masks for given cell
@@ -197,7 +197,7 @@ impl SudokuSolver {
 		let cell_mask = &mut self.cell_poss_digits[cell as usize];
 		cell_mask.remove(impossible);
 		if let Some(num) = cell_mask.unique_num()? {
-			stack.push(Entry{ cell: cell, num: num });
+			stack.push(Entry{ cell, num });
 		}
 		Ok(())
 	}
@@ -672,7 +672,7 @@ impl SudokuSolver2 {
 	fn guess_some_cell(&mut self, solver_stack: &mut SolvStack, limit: usize, solutions: &mut Solutions) {
 		let (_, band, unsolved_cell) = match (0..3)
 			.flat_map(|band| {
-				let mut unsolved_cells = self.unsolved_cells[band as usize];
+				let unsolved_cells = self.unsolved_cells[band as usize];
 				if unsolved_cells == 0 {
 					return None;
 				}

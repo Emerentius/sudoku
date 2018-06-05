@@ -1,8 +1,14 @@
 #![warn(missing_docs)]
 #![cfg_attr(feature = "cargo-clippy",
-    allow(inline_always, match_bool, needless_pass_by_value,
-        wrong_self_convention, identity_op, unreadable_literal,
-        too_many_arguments, needless_range_loop, cyclomatic_complexity))]
+    allow(
+        clippy_complexity,
+        match_bool,
+        unreadable_literal,
+        needless_pass_by_value,
+        wrong_self_convention,
+        write_with_newline,
+    )
+)]
 //! The Sudoku library
 //!
 //! ## Overview

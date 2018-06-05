@@ -49,3 +49,7 @@ Version 0.6.0 (2018-05-30)
 * Add `generate_unique_from(sudoku)`
 * Add `shuffle()` which transforms a sudoku into a random equivalent sudoku.
 * Add `n_clues()` for the number of filled cells
+
+Unreleased
+==========
+* Allow semicolons and commas (';', ',') as comment delimiters in line sudokus

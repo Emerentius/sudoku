@@ -321,7 +321,7 @@ impl Sudoku {
 		if let Some(&ch) = chars.get(81) {
 			match ch {
 				// delimiters, end of sudoku
-				b'\t' | b' ' | b'\r' | b'\n' => (),
+				b'\t' | b' ' | b'\r' | b'\n' | b';' | b',' => (),
 				// valid cell entry => too long
 				b'_' | b'.' | b'0'...b'9' => {
 					return Err(LineFormatParseError::TooManyCells)

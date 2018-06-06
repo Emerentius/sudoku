@@ -58,6 +58,7 @@ mod consts;
 mod types;
 mod sudoku;
 mod solver;
+mod generator;
 mod positions;
 
 pub use sudoku::Sudoku;

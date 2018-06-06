@@ -2,7 +2,8 @@ use rand::Rng;
 
 use consts::*;
 use types::{Entry, PubEntry, BlockFormatParseError, LineFormatParseError, NotEnoughRows};
-use solver::{SudokuSolver, SudokuSolver2};
+use solver::SudokuSolver;
+use generator::SudokuGenerator;
 
 use std::{fmt, slice, iter, hash, cmp};
 #[cfg(feature="serde")] use ::serde::{de, Serialize, Serializer, Deserialize, Deserializer};
@@ -158,20 +159,7 @@ pub type Iter<'a> = iter::Map<slice::Iter<'a, u8>, fn(&u8)->Option<u8>>; // Iter
 impl Sudoku {
 	/// Generate a random, solved sudoku
 	pub fn generate_filled() -> Self {
-		// fill first row with a permutation of 1...9
-		// not necessary, but ~15% faster
-		let mut stack = Vec::with_capacity(81);
-		let mut perm = [1, 2, 3, 4, 5, 6, 7, 8, 9];
-		::rand::thread_rng().shuffle(&mut perm);
-
-		stack.extend(
-			(0..9).zip(perm.iter())
-				.map(|(cell, &num)| Entry { cell, num })
-		);
-
-		SudokuSolver::new()
-			.randomized_solve_one(&mut stack)
-			.unwrap()
+		SudokuGenerator::generate_filled()
 	}
 
 	/// Generate a random, uniquely solvable sudoku
@@ -517,7 +505,7 @@ impl Sudoku {
 	/// Counts number of solutions to sudoku up to `limit`
 	/// This solves the sudoku but does not return the solutions which allows for slightly faster execution.
 	pub fn count_at_most(self, limit: usize) -> usize {
-		SudokuSolver2::from_sudoku(self)
+		SudokuSolver::from_sudoku(self)
 			.ok()
 			.map_or(0, |solver| solver.count_at_most(limit))
 	}
@@ -531,30 +519,17 @@ impl Sudoku {
 	/// Solve sudoku and return the first `limit` solutions it finds. If less solutions exist, return only those. Return `None` if no solution exists.
 	/// No specific ordering of solutions is promised. It can change across versions.
     pub fn solve_at_most(self, limit: usize) -> Vec<Sudoku> {
-		/*
-		let solver = SudokuSolver::new();
-		let stack = SudokuSolver::stack_from_sudoku(self);
-		solver.solve_at_most(stack, limit)
-		*/
-		SudokuSolver2::from_sudoku(self)
+		SudokuSolver::from_sudoku(self)
 			.ok()
 			.map_or(vec![], |solver| solver.solve_at_most(limit))
-			//.map_or_else(|| panic!("valid sudoku marked invalid"), |solver| solver.solve_at_most(limit))
-			// FIXME: remove ^^
 	}
 
 	/// Check whether the sudoku is solved.
 	pub fn is_solved(&self) -> bool {
-		let mut solver = SudokuSolver::new();
-		let mut entries = self.iter()
-			.enumerate()
-			.flat_map(|(i, num)| num.map(|n| Entry { cell: i as u8, num: n }))
-			.collect();
-		// if sudoku contains an error, batch_insert_entries returns Err(Unsolvable) and
-		// will not insert all 81 entries. Consequently solver.is_solved() will
-		// return false
-		let _ = solver.batch_insert_entries(&mut entries);
-		solver.is_solved()
+		SudokuSolver::from_sudoku(*self)
+			.ok()
+			.as_ref()
+			.map_or(false, SudokuSolver::is_solved)
 	}
 
 	/// Returns number of filled cells

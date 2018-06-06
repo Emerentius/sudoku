@@ -90,9 +90,9 @@ impl SudokuSolver {
 
 	// SetSolvedDigit equivalent
 	fn _insert_entry(&mut self, entry: Entry) -> Result<(), Unsolvable> {
-		let band = band_of_cell(entry.cell);
-		let slice = digit_to_base(entry.num) + band;
-		let cell_mask = mask_of_cell(entry.cell);
+		let band = entry.cell / 27;
+		let slice = (entry.num - 1)*3 + band;
+		let cell_mask = 1 << (entry.cell % 27);
 
 		if self.bands[slice as usize] & cell_mask == 0 {
 			return Err(Unsolvable)
@@ -106,8 +106,8 @@ impl SudokuSolver {
 
 		let mask = !cell_mask;
 		self.unsolved_cells[band as usize] &= mask;
-		let row_bit = (entry.num()-1)*9 + row_of_cell(entry.cell); //entry.row();
-		self.unsolved_rows[row_bit as usize /27] &= !(1 << mod27(row_bit));
+		let row_bit = (entry.num()-1)*9 + entry.row();
+		self.unsolved_rows[row_bit as usize /27] &= !(1 << (row_bit % 27));
 
 		let mut band = band as usize;
 		for _ in 0..9 {
@@ -125,11 +125,11 @@ impl SudokuSolver {
 		for (slice, &mask) in (0u8..27).zip(self.bands.0.iter()) {
 			let mut mask = mask;
 			let digit = slice / 3;
-			let base_cell_in_band = mod3(slice)*27;
+			let base_cell_in_band = slice % 3 * 27;
 			while mask != 0 {
 				let lowest_bit = mask & (!mask + 1);
 				// lowest bit == cell mask == 1 << (cell % 27)
-				let cell_in_band = bit_pos(lowest_bit) as u8;
+				let cell_in_band = bit_pos(lowest_bit);
 				*index_mut(&mut sudoku, (cell_in_band + base_cell_in_band) as usize) = digit + 1;
 
 				// guaranteed no overlap between mask and lowest_bit
@@ -139,15 +139,12 @@ impl SudokuSolver {
 		Sudoku(sudoku)
 	}
 
-	fn _set_solved_mask(&mut self, slice: u8, mask: u32) -> Result<(), Unsolvable> {
-		if self.bands[slice as usize] & mask == 0 {
-			return Err(Unsolvable);
-		}
-		let band = mod3(slice);
+	fn _set_solved_mask(&mut self, slice: u8, mask: u32) {
+		debug_assert!(self.bands[slice as usize] & mask != 0);
+		let band = slice % 3;
 		let cell = band*27 + bit_pos(mask);
 
 		self.bands[slice as usize] &= self_mask(cell);
-		Ok(())
 	}
 
 	// hidden? naked?
@@ -161,6 +158,10 @@ impl SudokuSolver {
 
 			///////////// unrolled loop
 			let mut band_mask = self.bands[band as usize];
+			r1 |= band_mask;
+			band_mask = self.bands[3 + band as usize];
+			r2 |= r1 & band_mask;
+			r1 |= band_mask;
 
 			macro_rules! unroll_loop {
 				($($offset:expr),*) => {
@@ -173,10 +174,6 @@ impl SudokuSolver {
 				}
 			}
 
-			r1 |= band_mask;
-			band_mask = self.bands[3 + band as usize];
-			r2 |= r1 & band_mask;
-			r1 |= band_mask;
 			unroll_loop!(6, 9, 12, 15, 18, 21, 24);
 			///////////////////
 
@@ -199,10 +196,7 @@ impl SudokuSolver {
 				r1 ^= lowest_bit;
 				for digit in 0..9 {
 					if self.bands[(digit*3 + band) as usize] & lowest_bit != 0 {
-
-                        // FIXME: find out whether it's possible for this to err
-                        // ORIGBUG: no early return? 2 other places
-						let _ = self._set_solved_mask(digit*3 + band, lowest_bit);
+						self._set_solved_mask(digit*3 + band, lowest_bit);
 						continue 'r1;
 					}
 				}
@@ -220,8 +214,7 @@ impl SudokuSolver {
 		shrink: &mut u32,
 		s: &mut u32,
 		digit: u32,
-		// TODO: make sure names are fitting
-		// main slice and neighbor slices... I believe.
+		// offsets of main slice (ms) and neighbor slices (ns)
 		[ms, ns1, ns2]: [u32; 3],
 		band: usize,
 	) -> Result<(), Unsolvable> {
@@ -371,9 +364,9 @@ impl SudokuSolver {
 	fn guess(&mut self, solver_stack: &mut SolvStack, limit: usize, solutions: &mut Solutions) {
 		if self.is_solved() {
 			debug_assert!(solutions.len() < limit, "too many solutions in guess: limit: {}, len: {}", limit, solutions.len());
-		match solutions {
-			Solutions::Count(count) => *count += 1,
-			Solutions::Vector(vec) => vec.push( self.extract_solution() )
+			match solutions {
+				Solutions::Count(count) => *count += 1,
+				Solutions::Vector(vec) => vec.push( self.extract_solution() )
 			}
 		} else if self.guess_bivalue_in_cell(solver_stack, limit, solutions).is_ok() {
 			// .is_ok() == found nothing
@@ -381,57 +374,54 @@ impl SudokuSolver {
 		}
 	}
 
-	fn guess_bivalue_in_cell(&mut self, solver_stack: &mut SolvStack, limit: usize, solutions: &mut Solutions) -> Result<(), Unsolvable> {
+	fn guess_bivalue_in_cell(
+		&mut self,
+		solver_stack: &mut SolvStack,
+		limit: usize,
+		solutions: &mut Solutions
+	) -> Result<(), Unsolvable> {
 		for band in 0..3 {
 			let mut pairs = self.pairs[band as usize];
-			if pairs != 0 {
-				let cell_mask = pairs & !pairs + 1;
-				let mut slice = band;
-				//let mut digit = 0;
+			if pairs == 0 {
+				continue
+			}
+			let cell_mask = pairs & !pairs + 1;
+			let mut slice = band;
 
-				// Both of the next two loops repeat until they find
-				// a digit in the cell
-				// by construction there are guaranteed to be exactly 2 digits
-				// the first loop will try the digit on a clone of the current state
-				// the second one will try on the current state
-				// because all possibilities will be exhausted after that
-				loop {
-					if self.bands[slice as usize] & cell_mask != 0 {
-						let mut solver = self.clone();
-
-                        // FIXME: find out whether it's possible for this to err
-                        let _ = solver._set_solved_mask(slice, cell_mask);
-						if solver.full_update(limit, solutions).is_ok() {
-							solver.guess(solver_stack, limit, solutions);
-						}
-						self.bands[slice as usize] ^= cell_mask;
-						break
+			// Both of the next two loops repeat until they find
+			// a digit in the cell
+			// by construction there are guaranteed to be exactly 2 digits
+			// the first loop will try the digit on a clone of the current state
+			// the second one will try on the current state
+			// because all possibilities will be exhausted after that
+			loop {
+				if self.bands[slice as usize] & cell_mask != 0 {
+					let mut solver = self.clone();
+					solver._set_solved_mask(slice, cell_mask);
+					if solver.full_update(limit, solutions).is_ok() {
+						solver.guess(solver_stack, limit, solutions);
 					}
-
-					//digit += 1;
-					slice += 3;
-					//debug_assert!(digit < 8);
-					debug_assert!(slice < 24);
+					self.bands[slice as usize] ^= cell_mask;
+					break
 				}
 
-				// No need to backtrack on second number. Possibilities are exhausted
-				loop {
-					// increment immediately because previous loop
-					// ended without incrementation
-					//digit += 1;
-					slice += 3;
-					//debug_assert!(digit < 9);
-					debug_assert!(slice < 27);
-					if self.bands[slice as usize] & cell_mask != 0 {
+				slice += 3;
+				debug_assert!(slice < 24);
+			}
 
-                        // FIXME: find out whether it's possible for this to err
-						let _ = self._set_solved_mask(slice, cell_mask);
-						if self.full_update(limit, solutions).is_ok() {
-							self.guess(solver_stack, limit, solutions);
-						}
-						// no possibilities left
-						return Err(Unsolvable);
+			// No need to backtrack on second number. Possibilities are exhausted
+			loop {
+				// increment immediately because previous loop
+				// ended without incrementation
+				slice += 3;
+				debug_assert!(slice < 27);
+				if self.bands[slice as usize] & cell_mask != 0 {
+					self._set_solved_mask(slice, cell_mask);
+					if self.full_update(limit, solutions).is_ok() {
+						self.guess(solver_stack, limit, solutions);
 					}
+					// no possibilities left
+					return Err(Unsolvable);
 				}
 			}
 		}
@@ -439,9 +429,14 @@ impl SudokuSolver {
 		Ok(())
 	}
 
-	// iterates through every possibility and calls guess()
-	// guess() short circuits when enough solutions were found and therefore
-	// so does this
+	// find an unsolved cell and attempt to solve sudoku with all possibilities
+	// in the vast majority of cases there is a cell with only 2 possibilities
+	// which means that guess_bivalue() will be called instead of this
+	// It comes up only with harder sudokus, typically early during the solving
+	// finding a cell with fewer possibilities is very valuable in those cases
+	// but an exhaustive search is too expensive
+	// as a compromise, up to 3 cells are searched and the one with the least
+	// possibilities is used
 	fn guess_some_cell(&mut self, solver_stack: &mut SolvStack, limit: usize, solutions: &mut Solutions) {
 		let (_, band, unsolved_cell) = match (0..3)
 			.flat_map(|band| {
@@ -463,15 +458,12 @@ impl SudokuSolver {
 			None => return,
 		};
 
-
 		let mut slice = band;
 		// check every digit
 		for _ in 0..9 {
 			if self.bands[slice as usize] & unsolved_cell != 0 {
 				let mut solver = self.clone();
-
-				// FIXME: find out whether it's possible for this to err
-				let _ = solver._set_solved_mask(slice, unsolved_cell);
+				solver._set_solved_mask(slice, unsolved_cell);
 				if solver.full_update(limit, solutions).is_ok() {
 					solver.guess(solver_stack, limit, solutions);
 				}
@@ -492,12 +484,14 @@ impl SudokuSolver {
 		self.guess(&mut vec![], limit, solutions);
 	}
 
+	// find and return up to `limit` solutions
 	pub fn solve_at_most(self, limit: usize) -> Vec<Sudoku> {
 		let mut solutions = Solutions::Vector(vec![]);
 		self._solve_at_most(limit, &mut solutions);
 		solutions.into_vec().unwrap()
 	}
 
+	// find up to `limit` solutions and return count
 	pub fn count_at_most(self, limit: usize) -> usize {
 		let mut solutions = Solutions::Count(0);
 		self._solve_at_most(limit, &mut solutions);
@@ -506,29 +500,7 @@ impl SudokuSolver {
 }
 
 #[inline]
-fn mask_of_cell(cell: u8) -> u32 {
-	1 << mod27(cell)
-}
-
-#[inline]
-fn digit_to_base(digit: u8) -> u8 {
-	(digit - 1) * 3
-}
-
-#[inline]
-fn row_of_cell(cell: u8) -> u8 {
-	cell / 9
-}
-
-
-#[inline]
-fn band_of_cell(cell: u8) -> u8 {
-	cell / 27
-}
-
-#[inline]
 fn self_mask(cell: u8) -> u32 {
-	// ???
 	static SELF_MASK: [u32; 81] = [
 		0x37E3F001,	0x37E3F002,	0x37E3F004,	0x371F8E08,	0x371F8E10,	0x371F8E20,	0x30FC7E40,	0x30FC7E80,	0x30FC7F00,
 		0x2FE003F8,	0x2FE005F8,	0x2FE009F8,	0x2F1C11C7,	0x2F1C21C7,	0x2F1C41C7,	0x28FC803F, 0x28FD003F,	0x28FE003F,
@@ -575,31 +547,14 @@ fn index_mut<T>(slice: &mut [T], idx: usize) -> &mut T {
 
 #[inline]
 fn other_mask(cell: u8) -> u32 {
-	// ???
-	/*
-	static OTHER_MASK: [u32; 81] = [
-		0x3FFBFDFE,	0x3FF7FBFD,	0x3FEFF7FB,	0x3FDFEFF7,	0x3FBFDFEF,	0x3F7FBFDF,	0x3EFF7FBF,	0x3DFEFF7F, 0x3BFDFEFF,
-		0x3FFBFDFE,	0x3FF7FBFD,	0x3FEFF7FB,	0x3FDFEFF7,	0x3FBFDFEF,	0x3F7FBFDF,	0x3EFF7FBF,	0x3DFEFF7F, 0x3BFDFEFF,
-		0x3FFBFDFE,	0x3FF7FBFD,	0x3FEFF7FB,	0x3FDFEFF7,	0x3FBFDFEF,	0x3F7FBFDF,	0x3EFF7FBF,	0x3DFEFF7F, 0x3BFDFEFF,
-		0x3FFBFDFE,	0x3FF7FBFD,	0x3FEFF7FB,	0x3FDFEFF7,	0x3FBFDFEF,	0x3F7FBFDF,	0x3EFF7FBF,	0x3DFEFF7F, 0x3BFDFEFF,
-		0x3FFBFDFE,	0x3FF7FBFD,	0x3FEFF7FB,	0x3FDFEFF7,	0x3FBFDFEF,	0x3F7FBFDF,	0x3EFF7FBF,	0x3DFEFF7F, 0x3BFDFEFF,
-		0x3FFBFDFE,	0x3FF7FBFD,	0x3FEFF7FB,	0x3FDFEFF7,	0x3FBFDFEF,	0x3F7FBFDF,	0x3EFF7FBF,	0x3DFEFF7F, 0x3BFDFEFF,
-		0x3FFBFDFE,	0x3FF7FBFD,	0x3FEFF7FB,	0x3FDFEFF7,	0x3FBFDFEF,	0x3F7FBFDF,	0x3EFF7FBF,	0x3DFEFF7F, 0x3BFDFEFF,
-		0x3FFBFDFE,	0x3FF7FBFD,	0x3FEFF7FB,	0x3FDFEFF7,	0x3FBFDFEF,	0x3F7FBFDF,	0x3EFF7FBF,	0x3DFEFF7F, 0x3BFDFEFF,
-		0x3FFBFDFE,	0x3FF7FBFD,	0x3FEFF7FB,	0x3FDFEFF7,	0x3FBFDFEF,	0x3F7FBFDF,	0x3EFF7FBF,	0x3DFEFF7F, 0x3BFDFEFF,
-	];
-	*index(&OTHER_MASK, cell as usize)
-	*/
-	/*
-	static OTHER_MASK: [u32; 9] = [
-		0x3FFBFDFE,	0x3FF7FBFD,	0x3FEFF7FB,	0x3FDFEFF7,	0x3FBFDFEF,	0x3F7FBFDF,	0x3EFF7FBF,	0x3DFEFF7F, 0x3BFDFEFF,
-	];
-	*index(&OTHER_MASK, (cell % 9) as usize)
-	*/
-	0o777_777_777 ^ (0o_001_001_001 << cell % 9)
+	ALL ^ (0o_001_001_001 << cell % 9)
 }
 
 #[inline]
+// compress the 3 bit groups into 3 bits
+// 0b_abc_def_geh => 0b_xyz
+// x = any(abc) = a | b | c
+// etc.
 fn shrink_mask(thing: u32) -> u32 {
 	*index(&SHRINK_MASK, thing as usize) as u32
 }
@@ -636,16 +591,6 @@ fn row_mask(thing: u32) -> u32 {
 	];
 	*index(&ROW_MASK, thing as usize)
 	//(!thing & 0b1) * 511 + (!thing & 0b10) * 130816 + (!thing & 0b100) * 33488896
-}
-
-#[inline]
-fn mod3(num: u8) -> u8 {
-	num % 3
-}
-
-#[inline]
-fn mod27(num: u8) -> u8 {
-	num % 27
 }
 
 #[inline]

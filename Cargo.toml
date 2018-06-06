@@ -4,7 +4,7 @@ description = "A sudoku solver library"
 license = "AGPL-3.0"
 repository = "https://github.com/emerentius/sudoku"
 documentation = "https://docs.rs/sudoku"
-version = "0.6.0"
+version = "0.6.1"
 authors = ["Emerentius"]
 
 [dependencies]

@@ -50,6 +50,7 @@ Version 0.6.0 (2018-05-30)
 * Add `shuffle()` which transforms a sudoku into a random equivalent sudoku.
 * Add `n_clues()` for the number of filled cells
 
-Unreleased
-==========
+VErsion 0.6.1 (2018-06-6)
+-------------------------
+* Improve upon jczsolve and raise performance by ~15-20%
 * Allow semicolons and commas (';', ',') as comment delimiters in line sudokus

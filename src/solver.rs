@@ -389,54 +389,49 @@ impl SudokuSolver {
 		}
 	}
 
+	// Find some cell with only 2 possible values and try both in order
+	// Whenever a guess has to be taken, there is virtually always a cell
+	// with only 2 possibilities. These positions are found and saved when
+	// looking for naked singles.
+	// For that reason, finding such a cell is practically just a lookup.
 	fn guess_bivalue_in_cell(
 		&mut self,
 		limit: usize,
         solutions: &mut Solutions,
 	) -> Result<(), Unsolvable> {
 		for band in 0..3 {
-			let mut pairs = self.pairs[band as usize];
+			let mut pairs = self.pairs[band];
 			if pairs == NONE {
                 continue;
 			}
 			let cell_mask = pairs & !pairs + 1;
 			let mut subband = band;
 
-			// Both of the next two loops repeat until they find
-			// a digit in the cell
-			// by construction there are guaranteed to be exactly 2 digits
-			// the first loop will try the digit on a clone of the current state
-			// the second one will try on the current state
-			// because all possibilities will be exhausted after that
+			// loop through all 9 digits and check if that digit is possible in
+			// the cell set in cell_mask. If so, try it.
+			let mut first = true;
 			loop {
-				if self.poss_cells[subband as usize] & cell_mask != NONE {
-					let mut solver = self.clone();
-					solver.insert_entry_by_mask(subband, cell_mask);
-					if solver.full_update(limit, solutions).is_ok() {
-						solver.guess(limit, solutions);
-					}
-					self.poss_cells[subband as usize] ^= cell_mask;
-                    break;
-				}
-
-				subband += 3;
-				debug_assert!(subband < 24);
-			}
-
-			// No need to backtrack on second number. Possibilities are exhausted
-			loop {
-				// increment immediately because previous loop
-				// ended without incrementation
-				subband += 3;
 				debug_assert!(subband < 27);
-				if self.poss_cells[subband as usize] & cell_mask != NONE {
-					self.insert_entry_by_mask(subband, cell_mask);
-					if self.full_update(limit, solutions).is_ok() {
-						self.guess(limit, solutions);
+
+				if self.poss_cells[subband] & cell_mask != NONE {
+					if first {
+						first = false;
+						let mut solver = *self;
+						solver.insert_entry_by_mask(subband as u8, cell_mask);
+						if solver.full_update(limit, solutions).is_ok() {
+							solver.guess(limit, solutions);
+						}
+						self.poss_cells[subband] ^= cell_mask;
+					} else {
+						self.insert_entry_by_mask(subband as u8, cell_mask);
+						if self.full_update(limit, solutions).is_ok() {
+							self.guess(limit, solutions);
+						}
+						return Err(Unsolvable);
 					}
-					// no possibilities left
-					return Err(Unsolvable);
 				}
+
+				subband += 3;
 			}
 		}
 		// no pairs found

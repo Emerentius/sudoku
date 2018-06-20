@@ -805,7 +805,7 @@ impl fmt::Debug for SudokuLine {
 impl ::core::ops::Deref for SudokuLine {
 	type Target = str;
 	fn deref(&self) -> &Self::Target {
-		unsafe { ::core::str::from_utf8_unchecked(&self.0) }
+		::core::str::from_utf8(&self.0).unwrap()
 	}
 }
 

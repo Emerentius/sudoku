@@ -1,42 +1,15 @@
-use types::{Entry, Unsolvable};
 use sudoku::Sudoku;
+use types::{Entry, Unsolvable};
 
-// 27 bits set
+// masks of 27 bits
+const NONE: u32 = 0;
 const ALL: u32 = 0o777_777_777;
 const LOW9: u32 = 0o000_000_777;
 
-#[derive(Clone, Copy)]
-struct UnsafeArray3([u32; 3]);
-
-impl ::std::ops::Index<usize> for UnsafeArray3 {
-	type Output = u32;
-	fn index(&self, idx: usize) -> &Self::Output {
-		index(&self.0, idx)
-	}
-}
-
-impl ::std::ops::IndexMut<usize> for UnsafeArray3 {
-	fn index_mut(&mut self, idx: usize) -> &mut Self::Output {
-		index_mut(&mut self.0, idx)
-	}
-}
-
-#[derive(Clone, Copy)]
-struct UnsafeArray27([u32; 27]);
-
-impl ::std::ops::Index<usize> for UnsafeArray27 {
-	type Output = u32;
-	fn index(&self, idx: usize) -> &Self::Output {
-		index(&self.0, idx)
-	}
-}
-
-impl ::std::ops::IndexMut<usize> for UnsafeArray27 {
-	fn index_mut(&mut self, idx: usize) -> &mut Self::Output {
-		index_mut(&mut self.0, idx)
-	}
-}
-
+// When the solver finds a solution it can save it or just count
+// the latter is marginally faster
+// the inner types should really be mutable references
+// but reborrowing doesn't work with that
 #[derive(Debug)]
 enum Solutions {
 	Count(usize),
@@ -58,118 +31,180 @@ impl Solutions {
 		}
 	}
 }
-
+// Bands  Rows                   Columns
+//
+//               0    1    2    3    4    5    6    7    8
+//            ┏━━━━┯━━━━┯━━━━┳━━━━┯━━━━┯━━━━┳━━━━┯━━━━┯━━━━┓
+//     ┏   0  ┃ 00 │ 01 │ 02 ┃ 03 │ 04 │ 05 ┃ 06 │ 07 │ 08 ┃
+//     ┃      ┠────┼────┼────╂────┼────┼────╂────┼────┼────┨
+//   0 ┫   1  ┃ 09 │ 10 │ 11 ┃ 12 │ 13 │ 14 ┃ 15 │ 16 │ 17 ┃
+//     ┃      ┠────┼────┼────╂────┼────┼────╂────┼────┼────┨
+//     ┗   2  ┃ 18 │ 19 │ 20 ┃ 21 │ 22 │ 23 ┃ 24 │ 25 │ 26 ┃
+//            ┣━━━━┿━━━━┿━━━━╋━━━━┿━━━━┿━━━━╋━━━━┿━━━━┿━━━━┫
+//     ┏   3  ┃ 27 │ 28 │ 29 ┃ 30 │ 31 │ 32 ┃ 33 │ 34 │ 35 ┃
+//     ┃      ┠────┼────┼────╂────┼────┼────╂────┼────┼────┨
+//   1 ┫   4  ┃ 36 │ 37 │ 38 ┃ 39 │ 40 │ 41 ┃ 42 │ 43 │ 44 ┃
+//     ┃      ┠────┼────┼────╂────┼────┼────╂────┼────┼────┨
+//     ┗   5  ┃ 45 │ 46 │ 47 ┃ 48 │ 49 │ 50 ┃ 51 │ 52 │ 53 ┃
+//            ┣━━━━┿━━━━┿━━━━╋━━━━┿━━━━┿━━━━╋━━━━┿━━━━┿━━━━┫
+//     ┏   6  ┃ 54 │ 55 │ 56 ┃ 57 │ 58 │ 59 ┃ 60 │ 61 │ 62 ┃
+//     ┃      ┠────┼────┼────╂────┼────┼────╂────┼────┼────┨
+//   2 ┫   7  ┃ 63 │ 64 │ 65 ┃ 66 │ 67 │ 68 ┃ 69 │ 70 │ 71 ┃
+//     ┃      ┠────┼────┼────╂────┼────┼────╂────┼────┼────┨
+//     ┗   8  ┃ 72 │ 73 │ 74 ┃ 75 │ 76 │ 77 ┃ 78 │ 79 │ 80 ┃
+//            ┗━━━━┷━━━━┷━━━━┻━━━━┷━━━━┷━━━━┻━━━━┷━━━━┷━━━━┛
+//
+// The solver is based on a band-oriented data structure
+//
+// Except for `unsolved_rows`, all bitmasks are laid out as
+// 1 bit per cell for each of the 27 cells in a band
+// counting from least to most significant, the nth bit corresponds
+// to the nth cell in the band (see diagram above for cell ordering)
+// this forms 3 groups of 9 bits each, 1 group per row. This is useful
+// for the strategy of Locked Candidates.
+//
+// A subband is the set of possible cells in a band for a single digit
+// represented by one u32 with up to 27 bits set.
+// they are enumerated as
+// subband = digit * 3 + band
 #[derive(Clone, Copy)]
 pub(crate) struct SudokuSolver {
-	bands: UnsafeArray27, // 9 digits, 3 rows each
-	prev_bands: UnsafeArray27,
-	unsolved_cells: UnsafeArray3, // 81 bits used
-	unsolved_rows: UnsafeArray3, // 27 slices, 3 bits per slice
-	pairs: UnsafeArray3, // cells with only 2 possibilites, 81 bits used
+	// possible_cells_in_subband = subbands[digit*3 + band]
+	poss_cells: UncheckedIndexArray27,
+	prev_poss_cells: UncheckedIndexArray27,
+	// empty_cells = unsolved_cells[band]
+	unsolved_cells: UncheckedIndexArray3,
+	// masks of unsolved rows separated by digit
+	// For each 3 digits (0..3, 3..6, 6..9), the possible rows
+	// are stored together in one 27 bit mask
+	//
+	// unsolved_rows[digit % 3] = 0b_digit2_digit1_digit0
+	// bit placement: row8_row7_row6_row5 etc
+	unsolved_rows: UncheckedIndexArray3,
+	// bivalue_cells = pairs[band]
+	pairs: UncheckedIndexArray3,
 }
 
-type SolvStack = Vec<SudokuSolver>;
-
 impl SudokuSolver {
-	// InitSudoku equivalent
+	// jczsolve equivalent: InitSudoku
 	pub fn from_sudoku(sudoku: Sudoku) -> Result<Self, Unsolvable> {
 		let mut solver = SudokuSolver {
-			bands: UnsafeArray27([ALL; 27]),
-			prev_bands: UnsafeArray27([0; 27]),
-			unsolved_cells: UnsafeArray3([ALL; 3]),
-			unsolved_rows: UnsafeArray3([ALL; 3]),
-			pairs: UnsafeArray3([0; 3]),
+			poss_cells: UncheckedIndexArray27([ALL; 27]),
+			prev_poss_cells: UncheckedIndexArray27([0; 27]),
+			unsolved_cells: UncheckedIndexArray3([ALL; 3]),
+			unsolved_rows: UncheckedIndexArray3([ALL; 3]),
+			pairs: UncheckedIndexArray3([0; 3]),
 		};
 		for (cell, num) in (0..81).zip(sudoku.iter()) {
 			if let Some(num) = num {
-				solver._insert_entry(Entry { cell, num })?;
+				solver.insert_entry(Entry { cell, num })?;
 			}
 		}
 		Ok(solver)
 	}
 
-	// SetSolvedDigit equivalent
-	fn _insert_entry(&mut self, entry: Entry) -> Result<(), Unsolvable> {
-		let band = entry.cell / 27;
-		let slice = (entry.num - 1)*3 + band;
+	// jczsolve equivalent: SetSolvedDigit
+	fn insert_entry(&mut self, entry: Entry) -> Result<(), Unsolvable> {
+		let band = (entry.cell / 27) as usize;
+        let subband = (entry.num as usize - 1) * 3 + band;
 		let cell_mask = 1 << (entry.cell % 27);
 
-		if self.bands[slice as usize] & cell_mask == 0 {
-			return Err(Unsolvable)
+		if self.poss_cells[subband] & cell_mask == NONE {
+            return Err(Unsolvable);
 		}
 
-		self.bands[slice as usize] &= self_mask(entry.cell);
-		let other_mask = other_mask(entry.cell);
-		let (ns1, ns2) = neighbour_slices(slice);
-		self.bands[ns1 as usize] &= other_mask;
-		self.bands[ns2 as usize] &= other_mask;
+		// set cell and row of digit to solved
+		self.unsolved_cells[band] &= !cell_mask;
+        let row_bit = (entry.num() - 1) * 9 + entry.row();
+        self.unsolved_rows[row_bit as usize / 27] &= !(1 << (row_bit % 27));
 
-		let mask = !cell_mask;
-		self.unsolved_cells[band as usize] &= mask;
-		let row_bit = (entry.num()-1)*9 + entry.row();
-		self.unsolved_rows[row_bit as usize /27] &= !(1 << (row_bit % 27));
+		// remove digit possibility from cell neighbors by row, column and box
+		self.poss_cells[subband] &= nonconflicting_cells_same_band(entry.cell);
+		let nonconflicting_other = nonconflicting_cells_neighbor_bands(entry.cell);
+		let (ns1, ns2) = neighbor_subbands(subband);
+		self.poss_cells[ns1] &= nonconflicting_other;
+		self.poss_cells[ns2] &= nonconflicting_other;
 
-		let mut band = band as usize;
-		for _ in 0..9 {
-			self.bands[band] &= mask;
-			band += 3;
+		// remove possibilities of other digits in same cell
+		{
+			// first, remove cell possibility for all digits
+			let mut subband = band;
+			while subband < 27 {
+				self.poss_cells[subband] &= !cell_mask;
+				subband += 3;
+			}
 		}
-
-		// add solution back
-		self.bands[slice as usize] |= cell_mask;
+		// then, add correct digit back
+		self.poss_cells[subband] |= cell_mask;
 		Ok(())
 	}
 
+	// jczsolve equivalent: ExtractSolution
 	fn extract_solution(&self) -> Sudoku {
 		let mut sudoku = [0; 81];
-		for (slice, &mask) in (0u8..27).zip(self.bands.0.iter()) {
+		for (subband, &mask) in (0u8..27).zip(self.poss_cells.0.iter()) {
 			let mut mask = mask;
-			let digit = slice / 3;
-			let base_cell_in_band = slice % 3 * 27;
-			while mask != 0 {
+			let digit = subband / 3;
+			let base_cell_in_band = subband % 3 * 27;
+			while mask != NONE {
 				let lowest_bit = mask & (!mask + 1);
+				mask ^= lowest_bit;
 				// lowest bit == cell mask == 1 << (cell % 27)
 				let cell_in_band = bit_pos(lowest_bit);
 				*index_mut(&mut sudoku, (cell_in_band + base_cell_in_band) as usize) = digit + 1;
 
 				// guaranteed no overlap between mask and lowest_bit
-				mask ^= lowest_bit;
 			}
 		}
 		Sudoku(sudoku)
 	}
 
-	fn _set_solved_mask(&mut self, slice: u8, mask: u32) {
-		debug_assert!(self.bands[slice as usize] & mask != 0);
-		let band = slice % 3;
-		let cell = band*27 + bit_pos(mask);
+	// This is called when the digit corresponding to the subband
+	// is entered at the position given by the mask (must have 1 position only)
+	// all conflicting cells (row and box neighbors) in the same band
+	// are set to impossible for the digit
+	//
+	// Possibilities for other digits and other bands are not touched (too expensive)
+	//
+	// jczsolve equivalent: SetSolvedMask
+	fn insert_entry_by_mask(&mut self, subband: u8, mask: u32) {
+		debug_assert!(mask.count_ones() == 1);
+		debug_assert!(self.poss_cells[subband as usize] & mask != 0);
+		let band = subband % 3;
+        let cell = band * 27 + bit_pos(mask);
 
-		self.bands[slice as usize] &= self_mask(cell);
+		self.poss_cells[subband as usize] &= nonconflicting_cells_same_band(cell);
 	}
 
-	// hidden? naked?
-	fn find_singles(&mut self) -> Result<bool, Unsolvable> {
+	// Search for cells that can contain only 1 digit and enter them
+	// also search for cells that have a possibilities count of 0 (sudoku unsolvable)
+	// 2 (good guess locations) or >=3 (bad guess locations)
+	//
+	// jczsolve equivalent: ApplySingleOrEmptyCells
+	fn find_naked_singles(&mut self) -> Result<bool, Unsolvable> {
 		let mut single_applied = false;
 
 		for band in 0..3 {
-			let mut r1 = 0; // exists
-			let mut r2 = 0; // exists twice
-			let mut r3 = 0; // exists thrice or more
+			// mask of cells with >= 1, >= 2 or >= 3 candidates
+			let mut cells1 = NONE;
+			let mut cells2 = NONE;
+			let mut cells3 = NONE;
 
 			///////////// unrolled loop
-			let mut band_mask = self.bands[band as usize];
-			r1 |= band_mask;
-			band_mask = self.bands[3 + band as usize];
-			r2 |= r1 & band_mask;
-			r1 |= band_mask;
+			let mut band_mask = self.poss_cells[band as usize];
+			cells1 |= band_mask;
+
+			band_mask = self.poss_cells[3 + band as usize];
+			cells2 |= cells1 & band_mask;
+			cells1 |= band_mask;
 
 			macro_rules! unroll_loop {
 				($($offset:expr),*) => {
 					$(
-						band_mask = self.bands[$offset + band as usize];
-						r3 |= r2 & band_mask;
-						r2 |= r1 & band_mask;
-						r1 |= band_mask;
+						band_mask = self.poss_cells[$offset + band as usize];
+						cells3 |= cells2 & band_mask;
+						cells2 |= cells1 & band_mask;
+						cells1 |= band_mask;
 					)*
 				}
 			}
@@ -177,27 +212,25 @@ impl SudokuSolver {
 			unroll_loop!(6, 9, 12, 15, 18, 21, 24);
 			///////////////////
 
-			if r1 != ALL {
+			if cells1 != ALL {
 				return Err(Unsolvable);
 			}
 
 			// store doubles
-			// equivalent to `r2 & !r3` because every bit in r3 is also in r2
-			self.pairs[band as usize] = r2 ^ r3;
+			// equivalent to `cells2 & !cells3` because every bit in cells3 is also in cells2
+			self.pairs[band as usize] = cells2 ^ cells3;
 
-			// singles
-			r1 ^= r2;
 			// new singles, ignore previously solved ones
-			r1 &= self.unsolved_cells[band as usize];
+			let mut singles = (cells1 ^ cells2) & self.unsolved_cells[band as usize];
 
-			'r1: while r1 != 0 {
+			'singles: while singles != NONE {
 				single_applied = true;
-				let lowest_bit = r1 & (!r1 + 1);
-				r1 ^= lowest_bit;
+				let lowest_bit = singles & (!singles + 1);
+				singles ^= lowest_bit;
 				for digit in 0..9 {
-					if self.bands[(digit*3 + band) as usize] & lowest_bit != 0 {
-						self._set_solved_mask(digit*3 + band, lowest_bit);
-						continue 'r1;
+                    if self.poss_cells[(digit * 3 + band) as usize] & lowest_bit != NONE {
+                        self.insert_entry_by_mask(digit * 3 + band, lowest_bit);
+						continue 'singles;
 					}
 				}
 				// forced empty cell
@@ -208,137 +241,113 @@ impl SudokuSolver {
 		Ok(single_applied)
 	}
 
+	// jczsolve equivalent: updn and upwcl macros
+	//                      where upwcl is called conditionally only if needed
+	//                      here, it's unconditional to avoid hard to predict branches
 	#[inline(always)]
-	fn updn_upwcl(
-		&mut self,
-		shrink: &mut u32,
-		s: &mut u32,
-		digit: u32,
-		// offsets of main slice (ms) and neighbor slices (ns)
-		[ms, ns1, ns2]: [u32; 3],
-		band: usize,
-	) -> Result<(), Unsolvable> {
-		let mut a = self.bands[(digit * 3 + ms) as usize];
-		*shrink = shrink_mask(a & LOW9) | shrink_mask(a >> 9 & LOW9) << 3 | shrink_mask(a >> 18 & LOW9) << 6;
-		a &= complex_mask(*shrink);
-		if a == 0 {
+    fn updn_upwcl(&mut self, shrink: &mut u32, subband: usize) -> Result<u32, Unsolvable> {
+		let mut poss_cells = self.poss_cells[subband];
+
+		// find out which row-box intersections (slices) can contain the digit
+		// using a LUT to condense each row of 9 bits down to 3 bits, 1 for each slice
+		// note: shrink_mask() only takes the lower 9 bits (1 row) into account
+		// saving the results in a 9 bit mask for another LUT to find impossible entries
+        *shrink = shrink_mask(poss_cells)
+            | shrink_mask(poss_cells >> 9) << 3
+            | shrink_mask(poss_cells >> 18) << 6;
+		poss_cells &= complex_mask(*shrink);
+		if poss_cells == NONE {
 			return Err(Unsolvable);
 		}
-		*s = (a | a >> 9 | a >> 18) & LOW9;
-		let mask_single = mask_single(*s);
-		self.bands[(digit*3 + ns1) as usize] &= mask_single;
-		self.bands[(digit*3 + ns2) as usize] &= mask_single;
-		*s = row_uniq(
-			shrink_single(*shrink) & column_single(*s)
+
+		let mut s = (poss_cells | poss_cells >> 9 | poss_cells >> 18) & LOW9;
+
+		// check for locked candidates of the columns (pointing type)
+		let mask_single = mask_single(s);
+		let (ns1, ns2) = neighbor_subbands(subband);
+		self.poss_cells[ns1] &= mask_single;
+		self.poss_cells[ns2] &= mask_single;
+
+		s = row_uniq(
+			locked_slices(*shrink) & column_single(s)
 		);
 
-		self.prev_bands[(digit * 3 + ms) as usize] = a;
-		self.bands[(digit * 3 + ms) as usize] = a;
+		self.prev_poss_cells[subband] = poss_cells;
+		self.poss_cells[subband] = poss_cells;
 
-		// -------------- upwcl code -------------------------------
-		//self.upwcl(a, *s, UPWCL_ARGS[band]);
-		const UPWCL_ARGS: [(usize, [usize; 8]); 27] = [
-			(0, [3, 6, 9, 12, 15, 18, 21, 24]),
-			(1, [4, 7, 10, 13, 16, 19, 22, 25]),
-			(2, [5, 8, 11, 14, 17, 20, 23, 26]),
-			(0, [0, 6, 9, 12, 15, 18, 21, 24]),
-			(1, [1, 7, 10, 13, 16, 19, 22, 25]),
-			(2, [2, 8, 11, 14, 17, 20, 23, 26]),
-			(0, [0, 3, 9, 12, 15, 18, 21, 24]),
-			(1, [1, 4, 10, 13, 16, 19, 22, 25]),
-			(2, [2, 5, 11, 14, 17, 20, 23, 26]),
-			(0, [0, 3, 6, 12, 15, 18, 21, 24]),
-			(1, [1, 4, 7, 13, 16, 19, 22, 25]),
-			(2, [2, 5, 8, 14, 17, 20, 23, 26]),
-			(0, [0, 3, 6, 9, 15, 18, 21, 24]),
-			(1, [1, 4, 7, 10, 16, 19, 22, 25]),
-			(2, [2, 5, 8, 11, 17, 20, 23, 26]),
-			(0, [0, 3, 6, 9, 12, 18, 21, 24]),
-			(1, [1, 4, 7, 10, 13, 19, 22, 25]),
-			(2, [2, 5, 8, 11, 14, 20, 23, 26]),
-			(0, [0, 3, 6, 9, 12, 15, 21, 24]),
-			(1, [1, 4, 7, 10, 13, 16, 22, 25]),
-			(2, [2, 5, 8, 11, 14, 17, 23, 26]),
-			(0, [0, 3, 6, 9, 12, 15, 18, 24]),
-			(1, [1, 4, 7, 10, 13, 16, 19, 25]),
-			(2, [2, 5, 8, 11, 14, 17, 20, 26]),
-			(0, [0, 3, 6, 9, 12, 15, 18, 21]),
-			(1, [1, 4, 7, 10, 13, 16, 19, 22]),
-			(2, [2, 5, 8, 11, 14, 17, 20, 23]),
-		];
-
-		let (i, slices) = UPWCL_ARGS[band];
-		let cl = !(a & row_mask(*s));
-		self.unsolved_cells[i] &= cl;
+		// -------------- jczsolve equivalent: upwcl ---------------------------
+		let band = subband % 3;
+		let cl = !(poss_cells & row_mask(s));
+		self.unsolved_cells[band] &= cl;
 		// remove from every entry but the current one
-		for &slice in &slices {
-			self.bands[slice] &= cl;
+		let mut other_subband = band;
+		while other_subband < 27 {
+			if other_subband != subband {
+				self.poss_cells[other_subband] &= cl;
+			}
+			other_subband += 3;
 		}
-		// end upwcl
+		// ----------------------- end upwcl -----------------------------------
 
-		Ok(())
+		Ok(s)
 	}
 
+	// jczsolve equivalent: Update
 	fn update(&mut self) -> Result<(), Unsolvable> {
-		let mut s = 0;
 		loop {
 			// repeat until nothing can be found anymore
 			// inner loops are fully unrolled via macros
 			// this is the hottest piece of code in the solver
-			let mut shrink: u32 = 0;
-
-			const UPDN_ARGS: [[u32; 3]; 3] = [
-				[0, 1, 2],
-				[1, 0, 2],
-				[2, 0, 1],
-			];
+			let mut shrink: u32 = NONE;
 
 			// outermost macro
-			// invoked for idx in 0..3
-			// deals with 3 digits per idx
+			// for each digit in this group do...
 			macro_rules! unroll_loop {
-				($($idx:expr),*) => {
+				($($digit_group:expr),*) => {
 					$(
-						let mut ar = self.unsolved_rows[$idx];
-						if ar != 0 {
-							digit!(ar, $idx, 0); // digit $idx*3 + 0
-							digit!(ar, $idx, 1); // digit $idx*3 + 1
-							digit!(ar, $idx, 2); // digit $idx*3 + 2
-							self.unsolved_rows[$idx] = ar;
+						let mut ur = self.unsolved_rows[$digit_group];
+						if ur != NONE {
+							let digit_base = $digit_group * 3;
+							digit_in_group!(0, digit_base, ur); // digit: base
+							digit_in_group!(1, digit_base, ur); // digit: base + 1
+							digit_in_group!(2, digit_base, ur); // digit: base + 2
+							self.unsolved_rows[$digit_group] = ur;
 						}
 					)*
 				}
 			}
 
-			macro_rules! digit {
-				($ar:expr, $digit_base:expr, $digit_offset:expr) => {
-					let digit_shift = ($digit_offset * 9) as usize;
-					if ($ar >> digit_shift) & LOW9 != 0 {
-						let digit = 3*$digit_base + $digit_offset; // 3*digit_base + offset
-						subband!($ar, digit, digit_shift, 0);
-						subband!($ar, digit, digit_shift, 1);
-						subband!($ar, digit, digit_shift, 2);
+			// for this digit, do for each band...
+			macro_rules! digit_in_group {
+				($digit_in_group:expr, $digit_base:expr, $ur:expr) => {
+					let digit_shift = ($digit_in_group * 9) as usize;
+					if ($ur >> digit_shift) & LOW9 != NONE {
+						let digit = ($digit_base + $digit_in_group) as usize;
+						subband!(digit, 0, $ur, digit_shift);
+						subband!(digit, 1, $ur, digit_shift);
+						subband!(digit, 2, $ur, digit_shift);
 					}
 				}
 			}
 
-			// no idea if this name is correct
-			// whatever the 3 cases deal with
+			// for each subband do...
 			macro_rules! subband {
-				($ar:expr, $digit:expr, $digit_shift:expr, $offset:expr) => {
-					let band = ($digit * 3) as usize + $offset;
-					if self.bands[band] != self.prev_bands[band] {
-						self.updn_upwcl(&mut shrink, &mut s, $digit, UPDN_ARGS[$offset], band)?;
-						$ar ^= (0o7 ^ s) << ($digit_shift + $offset*3);
+				($digit:expr, $band:expr, $ur:expr, $digit_shift:expr) => {
+					let subband = $digit * 3 + $band;
+					if self.poss_cells[subband] != self.prev_poss_cells[subband] {
+						let s = self.updn_upwcl(&mut shrink, subband)?;
+                        $ur ^= (0o7 ^ s) << ($digit_shift + $band * 3);
 					}
 				}
 			}
 			unroll_loop!(0, 1, 2);
-		if shrink == 0 { break }
+
+			if shrink == NONE { break }
 		}
 		Ok(())
 	}
 
+	// jczsolve equivalent: FullUpdate
 	fn full_update(&mut self, limit: usize, solutions: &mut Solutions) -> Result<(), Unsolvable> {
 		debug_assert!(solutions.len() <= limit);
 		if solutions.len() == limit {
@@ -350,43 +359,48 @@ impl SudokuSolver {
 				return Ok(());
 			}
 			// if singles found, go again
-			if self.find_singles()? {
-				continue
+			if self.find_naked_singles()? {
+                continue;
 			}
-			return Ok(())
+            return Ok(());
 		}
 	}
 
 	pub(crate) fn is_solved(&self) -> bool {
-		self.unsolved_cells.0 == [0; 3]
+		self.unsolved_cells.0 == [NONE; 3]
 	}
 
-	fn guess(&mut self, solver_stack: &mut SolvStack, limit: usize, solutions: &mut Solutions) {
+	// jczsolve equivalent: Guess
+	fn guess(&mut self, limit: usize, solutions: &mut Solutions) {
 		if self.is_solved() {
-			debug_assert!(solutions.len() < limit, "too many solutions in guess: limit: {}, len: {}", limit, solutions.len());
+            debug_assert!(
+                solutions.len() < limit,
+                "too many solutions in guess: limit: {}, len: {}",
+                limit,
+                solutions.len()
+            );
 			match solutions {
 				Solutions::Count(count) => *count += 1,
-				Solutions::Vector(vec) => vec.push( self.extract_solution() )
+                Solutions::Vector(vec) => vec.push(self.extract_solution()),
 			}
-		} else if self.guess_bivalue_in_cell(solver_stack, limit, solutions).is_ok() {
+		} else if self.guess_bivalue_in_cell(limit, solutions).is_ok() {
 			// .is_ok() == found nothing
-			self.guess_some_cell(solver_stack, limit, solutions);
+			self.guess_some_cell(limit, solutions);
 		}
 	}
 
 	fn guess_bivalue_in_cell(
 		&mut self,
-		solver_stack: &mut SolvStack,
 		limit: usize,
-		solutions: &mut Solutions
+        solutions: &mut Solutions,
 	) -> Result<(), Unsolvable> {
 		for band in 0..3 {
 			let mut pairs = self.pairs[band as usize];
-			if pairs == 0 {
-				continue
+			if pairs == NONE {
+                continue;
 			}
 			let cell_mask = pairs & !pairs + 1;
-			let mut slice = band;
+			let mut subband = band;
 
 			// Both of the next two loops repeat until they find
 			// a digit in the cell
@@ -395,30 +409,30 @@ impl SudokuSolver {
 			// the second one will try on the current state
 			// because all possibilities will be exhausted after that
 			loop {
-				if self.bands[slice as usize] & cell_mask != 0 {
+				if self.poss_cells[subband as usize] & cell_mask != NONE {
 					let mut solver = self.clone();
-					solver._set_solved_mask(slice, cell_mask);
+					solver.insert_entry_by_mask(subband, cell_mask);
 					if solver.full_update(limit, solutions).is_ok() {
-						solver.guess(solver_stack, limit, solutions);
+						solver.guess(limit, solutions);
 					}
-					self.bands[slice as usize] ^= cell_mask;
-					break
+					self.poss_cells[subband as usize] ^= cell_mask;
+                    break;
 				}
 
-				slice += 3;
-				debug_assert!(slice < 24);
+				subband += 3;
+				debug_assert!(subband < 24);
 			}
 
 			// No need to backtrack on second number. Possibilities are exhausted
 			loop {
 				// increment immediately because previous loop
 				// ended without incrementation
-				slice += 3;
-				debug_assert!(slice < 27);
-				if self.bands[slice as usize] & cell_mask != 0 {
-					self._set_solved_mask(slice, cell_mask);
+				subband += 3;
+				debug_assert!(subband < 27);
+				if self.poss_cells[subband as usize] & cell_mask != NONE {
+					self.insert_entry_by_mask(subband, cell_mask);
 					if self.full_update(limit, solutions).is_ok() {
-						self.guess(solver_stack, limit, solutions);
+						self.guess(limit, solutions);
 					}
 					// no possibilities left
 					return Err(Unsolvable);
@@ -429,28 +443,31 @@ impl SudokuSolver {
 		Ok(())
 	}
 
-	// find an unsolved cell and attempt to solve sudoku with all possibilities
-	// in the vast majority of cases there is a cell with only 2 possibilities
+	// find an unsolved cell and attempt to solve sudoku with all remaining candidates
+	// in the vast majority of cases there is a cell with only 2 candidates
 	// which means that guess_bivalue() will be called instead of this
 	// It comes up only with harder sudokus, typically early during the solving
-	// finding a cell with fewer possibilities is very valuable in those cases
+	// finding a cell with fewer candidates is very valuable in those cases
 	// but an exhaustive search is too expensive
-	// as a compromise, up to 3 cells are searched and the one with the least
-	// possibilities is used
-	fn guess_some_cell(&mut self, solver_stack: &mut SolvStack, limit: usize, solutions: &mut Solutions) {
+	// as a compromise, up to 3 cells are searched and the one with the fewest
+	// candidates is used
+	// jczsolve_equivalent: GuessFirstCell, sort of
+	//                      jczsolve picks the first unsolved cell it can find
+	//                      This fn checks up to 3 cells as explained above
+	fn guess_some_cell(&mut self, limit: usize, solutions: &mut Solutions) {
 		let (_, band, unsolved_cell) = match (0..3)
 			.flat_map(|band| {
-				let unsolved_cells = self.unsolved_cells[band as usize];
-				if unsolved_cells == 0 {
+				let unsolved_cells = self.unsolved_cells[band];
+				if unsolved_cells == NONE {
 					return None;
 				}
 				let one_unsolved_cell = unsolved_cells & (!unsolved_cells + 1);
 				//unsolved_cells ^= one_unsolved_cell;
-				let n_poss = (0..9)
-					.map(|offset| band + 3*offset)
-					.filter(|&slice| self.bands[slice as usize] & one_unsolved_cell != 0)
+				let n_candidates = (0..9)
+                    .map(|offset| band + 3 * offset)
+					.filter(|&subband| self.poss_cells[subband] & one_unsolved_cell != NONE)
 					.count();
-				Some((n_poss, band, one_unsolved_cell))
+				Some((n_candidates, band, one_unsolved_cell))
 			})
 			.min()
 		{
@@ -458,30 +475,35 @@ impl SudokuSolver {
 			None => return,
 		};
 
-		let mut slice = band;
+		let mut subband = band;
 		// check every digit
-		for _ in 0..9 {
-			if self.bands[slice as usize] & unsolved_cell != 0 {
+		while subband < 27 {
+			if self.poss_cells[subband] & unsolved_cell != NONE {
 				let mut solver = self.clone();
-				solver._set_solved_mask(slice, unsolved_cell);
+				solver.insert_entry_by_mask(subband as u8, unsolved_cell);
 				if solver.full_update(limit, solutions).is_ok() {
-					solver.guess(solver_stack, limit, solutions);
+					solver.guess(limit, solutions);
 				}
-				if solutions.len() == limit { return }
-				self.bands[slice as usize] ^= unsolved_cell;
+                if solutions.len() == limit {
+                    return;
+                }
+				self.poss_cells[subband] ^= unsolved_cell;
 			}
 
-			slice += 3;
+			subband += 3;
 		}
 	}
 
 	fn _solve_at_most(mut self, limit: usize, solutions: &mut Solutions) {
-		if self.find_singles().is_err() { return }
+        if self.find_naked_singles().is_err() {
+            return;
+        }
 
 		// either solved or impossible
-		// ORIGBUG: jczsolver fails on solved sudokus?
-		if self.full_update(limit, solutions).is_err() { return }
-		self.guess(&mut vec![], limit, solutions);
+        if self.full_update(limit, solutions).is_err() {
+            return;
+        }
+		self.guess(limit, solutions);
 	}
 
 	// find and return up to `limit` solutions
@@ -497,22 +519,6 @@ impl SudokuSolver {
 		self._solve_at_most(limit, &mut solutions);
 		solutions.len()
 	}
-}
-
-#[inline]
-fn self_mask(cell: u8) -> u32 {
-	static SELF_MASK: [u32; 81] = [
-		0x37E3F001,	0x37E3F002,	0x37E3F004,	0x371F8E08,	0x371F8E10,	0x371F8E20,	0x30FC7E40,	0x30FC7E80,	0x30FC7F00,
-		0x2FE003F8,	0x2FE005F8,	0x2FE009F8,	0x2F1C11C7,	0x2F1C21C7,	0x2F1C41C7,	0x28FC803F, 0x28FD003F,	0x28FE003F,
-		0x1807F1F8,	0x180BF1F8,	0x1813F1F8,	0x18238FC7,	0x18438FC7,	0x18838FC7, 0x19007E3F,	0x1A007E3F,	0x1C007E3F,
-		0x37E3F001,	0x37E3F002,	0x37E3F004,	0x371F8E08,	0x371F8E10, 0x371F8E20,	0x30FC7E40,	0x30FC7E80,	0x30FC7F00,
-		0x2FE003F8,	0x2FE005F8,	0x2FE009F8,	0x2F1C11C7,	0x2F1C21C7,	0x2F1C41C7,	0x28FC803F,	0x28FD003F,	0x28FE003F,
-		0x1807F1F8,	0x180BF1F8,	0x1813F1F8, 0x18238FC7,	0x18438FC7,	0x18838FC7,	0x19007E3F,	0x1A007E3F,	0x1C007E3F,
-		0x37E3F001,	0x37E3F002,	0x37E3F004,	0x371F8E08,	0x371F8E10,	0x371F8E20,	0x30FC7E40,	0x30FC7E80,	0x30FC7F00,
-		0x2FE003F8, 0x2FE005F8,	0x2FE009F8,	0x2F1C11C7,	0x2F1C21C7,	0x2F1C41C7,	0x28FC803F,	0x28FD003F,	0x28FE003F,
-		0x1807F1F8,	0x180BF1F8,	0x1813F1F8,	0x18238FC7,	0x18438FC7,	0x18838FC7,	0x19007E3F,	0x1A007E3F,	0x1C007E3F,
-	];
-	*index(&SELF_MASK, cell as usize)
 }
 
 // ----------------------------------------------------------------
@@ -545,45 +551,87 @@ fn index_mut<T>(slice: &mut [T], idx: usize) -> &mut T {
 }
 // ----------------------------------------------------------------
 
+// jczsolve equivalent: TblSelfMask
 #[inline]
-fn other_mask(cell: u8) -> u32 {
+fn nonconflicting_cells_same_band(cell: u8) -> u32 {
+	static SELF_MASK: [u32; 81] = [
+		0x37E3F001,	0x37E3F002,	0x37E3F004,	0x371F8E08,	0x371F8E10,	0x371F8E20,	0x30FC7E40,	0x30FC7E80,	0x30FC7F00,
+		0x2FE003F8,	0x2FE005F8,	0x2FE009F8,	0x2F1C11C7,	0x2F1C21C7,	0x2F1C41C7,	0x28FC803F, 0x28FD003F,	0x28FE003F,
+		0x1807F1F8,	0x180BF1F8,	0x1813F1F8,	0x18238FC7,	0x18438FC7,	0x18838FC7, 0x19007E3F,	0x1A007E3F,	0x1C007E3F,
+		0x37E3F001,	0x37E3F002,	0x37E3F004,	0x371F8E08,	0x371F8E10, 0x371F8E20,	0x30FC7E40,	0x30FC7E80,	0x30FC7F00,
+		0x2FE003F8,	0x2FE005F8,	0x2FE009F8,	0x2F1C11C7,	0x2F1C21C7,	0x2F1C41C7,	0x28FC803F,	0x28FD003F,	0x28FE003F,
+		0x1807F1F8,	0x180BF1F8,	0x1813F1F8, 0x18238FC7,	0x18438FC7,	0x18838FC7,	0x19007E3F,	0x1A007E3F,	0x1C007E3F,
+		0x37E3F001,	0x37E3F002,	0x37E3F004,	0x371F8E08,	0x371F8E10,	0x371F8E20,	0x30FC7E40,	0x30FC7E80,	0x30FC7F00,
+		0x2FE003F8, 0x2FE005F8,	0x2FE009F8,	0x2F1C11C7,	0x2F1C21C7,	0x2F1C41C7,	0x28FC803F,	0x28FD003F,	0x28FE003F,
+		0x1807F1F8,	0x180BF1F8,	0x1813F1F8,	0x18238FC7,	0x18438FC7,	0x18838FC7,	0x19007E3F,	0x1A007E3F,	0x1C007E3F,
+	];
+	*index(&SELF_MASK, cell as usize)
+}
+
+// jczsolve equivalent: TblOtherfMask
+#[inline]
+fn nonconflicting_cells_neighbor_bands(cell: u8) -> u32 {
+	// only 3 cells in a column conflict with an entry in another band
 	ALL ^ (0o_001_001_001 << cell % 9)
 }
 
-#[inline]
 // compress the 3 bit groups into 3 bits
 // 0b_abc_def_geh => 0b_xyz
 // x = any(abc) = a | b | c
 // etc.
+// jczsolve equivalent: TblShrinkMask (without the built-in masking of course)
+#[inline]
 fn shrink_mask(thing: u32) -> u32 {
-	*index(&SHRINK_MASK, thing as usize) as u32
+	*index(&SHRINK_MASK, (thing & LOW9) as usize)
 }
 
+// jczsolve equivalent: TblComplexMask
 #[inline]
 fn complex_mask(thing: u32) -> u32 {
 	*index(&COMPLEX_MASK, thing as usize)
 }
 
+// mask to remove impossible entries that conflict with a locked column/box
+// jczsolve equivalent: TblMaskSingle
 #[inline]
 fn mask_single(thing: u32) -> u32 {
 	*index(&MASK_SINGLE, thing as usize)
 }
 
+// takes mask of possible columns in band: abc def geh
+// and maps it to mask of slices with unique column
+//     x y z
+//     x y z
+//     x y z
+// where
+// x = true iff one and only one of (a, b, c)
+// same with y, z and def, geh
+//
+// if not at least 1 possibility exists in each box, the sudoku is impossible and
+// this table maps to 0
+// jczsolve equivalent: TblColumnSingle
 #[inline]
 fn column_single(thing: u32) -> u32 {
 	*index(&COLUMN_SINGLE, thing as usize) as u32
 }
 
+// maps from mask of possible slices to mask of locked slices (locked candidates)
+// both claiming and pointing type
+// includes locked candidates that would only appear after applying the other locked candidates
+// jczsolve equivalent: TblShrinkSingle
 #[inline]
-fn shrink_single(thing: u32) -> u32 {
-	*index(&SHRINK_SINGLE, thing as usize)
+fn locked_slices(thing: u32) -> u32 {
+	*index(&LOCKED_CANDIDATES, thing as usize)
 }
 
+// 1 is row not defined in block mode 1 to 111
+// jczsolve equivalent: TblRowUniq
 #[inline]
 fn row_uniq(thing: u32) -> u32 {
-	*index(&ROW_UNIQ, thing as usize)  as u32
+    *index(&ROW_UNIQ, thing as usize) as u32
 }
 
+// jczsolve equivalent: TblRowMask
 #[inline]
 fn row_mask(thing: u32) -> u32 {
 	static ROW_MASK: [u32; 8] = [	// rows where single  found _000 to 111
@@ -593,9 +641,10 @@ fn row_mask(thing: u32) -> u32 {
 	//(!thing & 0b1) * 511 + (!thing & 0b10) * 130816 + (!thing & 0b100) * 33488896
 }
 
+// jczsolve equivalent: TblAnother1 and TblAnother2
 #[inline]
-fn neighbour_slices(slice: u8) -> (u8, u8) {
-	static NEIGHBOUR_SLICES: [(u8, u8); 27] = [
+fn neighbor_subbands(subband: usize) -> (usize, usize) {
+	static NEIGHBOR_SUBBANDS: [(usize, usize); 27] = [
 		(1, 2), (2, 0), (0, 1),
 		(4, 5), (5, 3), (3, 4),
 		(7, 8), (8, 6), (6, 7),
@@ -606,7 +655,13 @@ fn neighbour_slices(slice: u8) -> (u8, u8) {
 		(22, 23), (23, 21), (21, 22),
 		(25, 26), (26, 24), (24, 25),
 	];
-	*index(&NEIGHBOUR_SLICES, slice as usize)
+	*index(&NEIGHBOR_SUBBANDS, subband)
+}
+
+// jczsolve equivalent: BitPos
+#[inline(always)]
+fn bit_pos(mask: u32) -> u8 {
+	mask.trailing_zeros() as u8
 }
 
 static SHRINK_MASK: [u32; 512] = [
@@ -696,7 +751,6 @@ static COMPLEX_MASK: [u32; 512] = [
 	0o0000000000, 0o7770770777, 0o7707707777, 0o7777777777, 0o7077077777, 0o7777777777, 0o7777777777, 0o7777777777,
 ];
 
-// kill in other blocks locked column /box
 static MASK_SINGLE: [u32; 512] = [
 	0o7777777777, 0o7776776776, 0o7775775775, 0o7777777777, 0o7773773773, 0o7777777777, 0o7777777777, 0o7777777777,
 	0o7767767767, 0o7766766766, 0o7765765765, 0o7767767767, 0o7763763763, 0o7767767767, 0o7767767767, 0o7767767767,
@@ -764,8 +818,7 @@ static MASK_SINGLE: [u32; 512] = [
 	0o7777777777, 0o7776776776, 0o7775775775, 0o7777777777, 0o7773773773, 0o7777777777, 0o7777777777, 0o7777777777,
 ];
 
-// keep only rows with single
-static SHRINK_SINGLE: [u32; 512] = [
+static LOCKED_CANDIDATES: [u32; 512] = [
 	0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000,
 	0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000,
 	0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000,
@@ -800,7 +853,6 @@ static SHRINK_SINGLE: [u32; 512] = [
 	0o000, 0o001, 0o142, 0o000, 0o124, 0o000, 0o100, 0o000, 0o000, 0o001, 0o002, 0o000, 0o004, 0o000, 0o000, 0o000,
 ];
 
-// 1 is row not defined in block  mode  1 to 111
 static ROW_UNIQ: [u8; 512] = [
 	7, 6, 6, 6, 6, 6, 6, 6, 5, 4, 4, 4, 4, 4, 4, 4, 5, 4, 4, 4, 4, 4, 4, 4, 5, 4, 4, 4, 4, 4, 4, 4,
 	5, 4, 4, 4, 4, 4, 4, 4, 5, 4, 4, 4, 4, 4, 4, 4, 5, 4, 4, 4, 4, 4, 4, 4, 5, 4, 4, 4, 4, 4, 4, 4,
@@ -820,7 +872,6 @@ static ROW_UNIQ: [u8; 512] = [
 	1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0,
 ];
 
-// single in column applied to shrinked block
 static COLUMN_SINGLE: [u32; 512] = [
 	0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000,
 	0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000,
@@ -856,7 +907,33 @@ static COLUMN_SINGLE: [u32; 512] = [
 	0o000, 0o111, 0o111, 0o000, 0o111, 0o000, 0o000, 0o000, 0o000, 0o111, 0o111, 0o000, 0o111, 0o000, 0o000, 0o000,
 ];
 
-#[inline(always)]
-fn bit_pos(mask: u32) -> u8 {
-	mask.trailing_zeros() as u8
+#[derive(Clone, Copy)]
+struct UncheckedIndexArray3([u32; 3]);
+#[derive(Clone, Copy)]
+struct UncheckedIndexArray27([u32; 27]);
+
+impl ::std::ops::Index<usize> for UncheckedIndexArray3 {
+	type Output = u32;
+	fn index(&self, idx: usize) -> &Self::Output {
+		index(&self.0, idx)
+	}
+}
+
+impl ::std::ops::IndexMut<usize> for UncheckedIndexArray3 {
+	fn index_mut(&mut self, idx: usize) -> &mut Self::Output {
+		index_mut(&mut self.0, idx)
+	}
+}
+
+impl ::std::ops::Index<usize> for UncheckedIndexArray27 {
+	type Output = u32;
+	fn index(&self, idx: usize) -> &Self::Output {
+		index(&self.0, idx)
+	}
+}
+
+impl ::std::ops::IndexMut<usize> for UncheckedIndexArray27 {
+	fn index_mut(&mut self, idx: usize) -> &mut Self::Output {
+		index_mut(&mut self.0, idx)
+	}
 }

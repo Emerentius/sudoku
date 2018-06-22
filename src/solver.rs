@@ -190,27 +190,14 @@ impl SudokuSolver {
 			let mut cells2 = NONE;
 			let mut cells3 = NONE;
 
-			///////////// unrolled loop
-			let mut band_mask = self.poss_cells[band as usize];
-			cells1 |= band_mask;
-
-			band_mask = self.poss_cells[3 + band as usize];
-			cells2 |= cells1 & band_mask;
-			cells1 |= band_mask;
-
-			macro_rules! unroll_loop {
-				($($offset:expr),*) => {
-					$(
-						band_mask = self.poss_cells[$offset + band as usize];
-						cells3 |= cells2 & band_mask;
-						cells2 |= cells1 & band_mask;
-						cells1 |= band_mask;
-					)*
-				}
+			let mut subband = band;
+			for _ in 0..9 {
+				let band_mask = self.poss_cells[subband];
+				cells3 |= cells2 & band_mask;
+				cells2 |= cells1 & band_mask;
+				cells1 |= band_mask;
+				subband += 3;
 			}
-
-			unroll_loop!(6, 9, 12, 15, 18, 21, 24);
-			///////////////////
 
 			if cells1 != ALL {
 				return Err(Unsolvable);
@@ -229,7 +216,7 @@ impl SudokuSolver {
 				singles ^= lowest_bit;
 				for digit in 0..9 {
                     if self.poss_cells[(digit * 3 + band) as usize] & lowest_bit != NONE {
-                        self.insert_entry_by_mask(digit * 3 + band, lowest_bit);
+                        self.insert_entry_by_mask((digit * 3 + band) as u8, lowest_bit);
 						continue 'singles;
 					}
 				}

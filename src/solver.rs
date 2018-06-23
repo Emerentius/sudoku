@@ -115,8 +115,6 @@ impl SudokuSolver {
 
 		// set cell and row of digit to solved
 		self.unsolved_cells[band] &= !cell_mask;
-        let row_bit = (entry.num() - 1) * 9 + entry.row();
-        self.unsolved_rows[row_bit as usize / 27] &= !(1 << (row_bit % 27));
 
 		// remove digit possibility from cell neighbors by row, column and box
 		self.poss_cells[subband] &= nonconflicting_cells_same_band(entry.cell);
@@ -231,23 +229,25 @@ impl SudokuSolver {
 	//                      where upwcl is called conditionally only if needed
 	//                      here, it's unconditional to avoid hard to predict branches
 	#[inline(always)]
-    fn updn_upwcl(&mut self, shrink: &mut u32, subband: usize) -> Result<u32, Unsolvable> {
-		let mut poss_cells = self.poss_cells[subband];
+    fn _find_locked_candidates_and_update(&mut self, subband: usize) -> Result<(), Unsolvable> {
+		let old_poss_cells = self.poss_cells[subband];
 
 		// find all locked candidates in the band, both claiming and pointing type
-		// using a LUT to condense each row of 9 bits down to 3 bits, 1 for each slice
+		// using a LUT to condense each row of 9 bits down to 3 bits, 1 for each minirow
 		// note: shrink_mask() only takes the lower 9 bits (1 row) into account
 		// saving the results in a 9 bit mask for another LUT to find impossible entries
-        *shrink = shrink_mask(poss_cells)
-            | shrink_mask(poss_cells >> 9) << 3
-            | shrink_mask(poss_cells >> 18) << 6;
-		poss_cells &= nonconflicting_cells_same_band_by_locked_candidates(*shrink);
+        let shrink = shrink_mask(old_poss_cells & LOW9)
+            | shrink_mask(old_poss_cells >> 9 & LOW9) << 3
+            | shrink_mask(old_poss_cells >> 18) << 6;
+		let poss_cells = old_poss_cells & nonconflicting_cells_same_band_by_locked_candidates(shrink);
 		if poss_cells == NONE {
 			return Err(Unsolvable);
 		}
+		self.prev_poss_cells[subband] = poss_cells;
+		self.poss_cells[subband] = poss_cells;
 
-		// possible columns in subband
-		let mut s = (poss_cells | poss_cells >> 9 | poss_cells >> 18) & LOW9;
+		// possible columns in subband, including already solved ones
+		let s = (poss_cells | poss_cells >> 9 | poss_cells >> 18) & LOW9;
 
 		// check for locked candidates of the columns (pointing type)
 		let nonconflicting_other = nonconflicting_cells_neighbor_bands_by_locked_candidates(s);
@@ -255,84 +255,91 @@ impl SudokuSolver {
 		self.poss_cells[ns1] &= nonconflicting_other;
 		self.poss_cells[ns2] &= nonconflicting_other;
 
-		s = row_uniq(
-			locked_slices(*shrink) & column_single(s)
+		// minirows that are locked have no neighboring minirows in the same
+		// row or the same box
+		// if are inside a box where only 1 column is possible, then only 1 cell is possible
+		// and the row is solved
+		// solved_rows is a 3-bit mask of the rows in the subband
+		// mapping from solved minirows to solved rows happens
+		// to need the same mask as shrinking
+		// jczsolve equivalent: s , but lower 3 bits inversed
+		//                      s_jczsolve = 7 ^ solved_rows
+		//                      jczsolve used a 2nd, inverted lookup table
+		let solved_rows = shrink_mask(
+			locked_minirows(shrink) & column_single(s)
 		);
 
-		self.prev_poss_cells[subband] = poss_cells;
-		self.poss_cells[subband] = poss_cells;
-
 		// -------------- jczsolve equivalent: upwcl ---------------------------
-		// FIXME: comment correct?
 		// delete other digit candidates from all cells in band
 		// that are guaranteed to be the current digit
 		let band = subband % 3;
-		let cl = !(poss_cells & row_mask(s));
-		self.unsolved_cells[band] &= cl;
+		let nonconflicting_cells = !(poss_cells & row_mask(solved_rows));
+		self.unsolved_cells[band] &= nonconflicting_cells;
 		// remove from every entry but the current one
 		let mut other_subband = band;
 		while other_subband < 27 {
 			if other_subband != subband {
-				self.poss_cells[other_subband] &= cl;
+				self.poss_cells[other_subband] &= nonconflicting_cells;
 			}
 			other_subband += 3;
 		}
 		// ----------------------- end upwcl -----------------------------------
 
-		Ok(s)
+		Ok(())
 	}
 
 	// jczsolve equivalent: Update
-	fn update(&mut self) -> Result<(), Unsolvable> {
+	fn find_locked_candidates_and_update(&mut self) -> Result<(), Unsolvable> {
 		loop {
 			// repeat until nothing can be found anymore
 			// inner loops are fully unrolled via macros
 			// this is the hottest piece of code in the solver
-			let mut shrink: u32 = NONE;
+			let mut found_nothing = true;
 
 			// outermost macro
 			// for each digit in this group do...
 			macro_rules! unroll_loop {
 				($($digit_group:expr),*) => {
 					$(
-						let mut ur = self.unsolved_rows[$digit_group];
-						if ur != NONE {
-							let digit_base = $digit_group * 3;
-							digit_in_group!(0, digit_base, ur); // digit: base
-							digit_in_group!(1, digit_base, ur); // digit: base + 1
-							digit_in_group!(2, digit_base, ur); // digit: base + 2
-							self.unsolved_rows[$digit_group] = ur;
-						}
+						// ur is part of a very weird optimization but has no bearing
+						// on the sudoku logic
+						let ur = self.unsolved_rows[0];
+						let base = $digit_group * 3;
+						digit_in_group!(base, ur);
+						digit_in_group!(base + 1, ur);
+						digit_in_group!(base + 2, ur);
 					)*
 				}
 			}
 
 			// for this digit, do for each band...
 			macro_rules! digit_in_group {
-				($digit_in_group:expr, $digit_base:expr, $ur:expr) => {
-					let digit_shift = $digit_in_group * 9;
-					if ($ur >> digit_shift) & LOW9 != NONE {
-						let digit = $digit_base + $digit_in_group;
-						subband!(digit, 0, $ur, digit_shift);
-						subband!(digit, 1, $ur, digit_shift);
-						subband!(digit, 2, $ur, digit_shift);
+				($digit:expr, $ur:expr) => {
+					// this is always true
+					// but the optimizer doesn't get that
+					// which in this rare circumstance actually produces BETTER code
+					// (don't ask me why)
+					if ($ur >> $digit) & LOW9 != NONE {
+						let subband = $digit * 3;
+						subband!(subband);
+						subband!(subband + 1);
+						subband!(subband + 2);
 					}
 				}
 			}
 
 			// for each subband do...
 			macro_rules! subband {
-				($digit:expr, $band:expr, $ur:expr, $digit_shift:expr) => {
-					let subband = $digit * 3 + $band;
-					if self.poss_cells[subband] != self.prev_poss_cells[subband] {
-						let s = self.updn_upwcl(&mut shrink, subband)?;
-                        $ur ^= s << ($digit_shift + $band * 3);
+				($subband:expr) => {
+					if self.poss_cells[$subband] != self.prev_poss_cells[$subband] {
+						found_nothing = false;
+						self._find_locked_candidates_and_update($subband)?;
 					}
 				}
 			}
 			unroll_loop!(0, 1, 2);
 
-			if shrink == NONE { break }
+			if found_nothing { break }
 		}
 		Ok(())
 	}
@@ -344,7 +351,7 @@ impl SudokuSolver {
 			return Err(Unsolvable); // not really, but it forces a recursion stop
 		}
 		loop {
-			self.update()?;
+			self.find_locked_candidates_and_update()?;
 			if self.is_solved() {
 				return Ok(());
 			}
@@ -564,15 +571,16 @@ fn nonconflicting_cells_neighbor_bands(cell: u8) -> u32 {
 // 0b_abc_def_geh => 0b_xyz
 // x = any(abc) = a | b | c
 // etc.
-// jczsolve equivalent: TblShrinkMask (without the built-in masking of course)
+// jczsolve equivalent: TblShrinkMask, TblRowUniq (inversed TblShrinkMask)
+//                      TblRowUniq was replaced by shrink_mask here
 #[inline]
 fn shrink_mask(cell_mask: u32) -> u32 {
-	*index(&SHRINK_MASK, (cell_mask & LOW9) as usize)
+	*index(&SHRINK_MASK, (cell_mask) as usize) as u32
 }
 
 // returns mask of cells that are compatible with locked candidates
 // in shrunk mask, both claiming and pointing type
-// masks without at least 1 possible slice in each row and column
+// masks without at least 1 possible minirow in each row and column
 // are mapped to 0 (unsolvable sudoku)
 // jczsolve equivalent: TblComplexMask
 #[inline]
@@ -590,7 +598,7 @@ fn nonconflicting_cells_neighbor_bands_by_locked_candidates(row_shrink: u32) -> 
 // takes mask of possible columns in band:
 //        876 543 210  column numbers
 //     0b_ihg_fed_cba  bits
-// and maps it to mask of slices in box with unique column
+// and maps it to mask of minirows in box with unique column
 //     0b_zyxzyxzyx
 //
 //     0..3  3..6  6..9            cols
@@ -609,22 +617,17 @@ fn column_single(row_shrink: u32) -> u32 {
 	*index(&COLUMN_SINGLE, row_shrink as usize) as u32
 }
 
-// maps from mask of possible slices to mask of locked slices (locked candidates)
+// maps from mask of possible minirows to mask of locked minirows (locked candidates)
 // both claiming and pointing type
 // includes locked candidates that would only appear after applying the other locked candidates
 // jczsolve equivalent: TblShrinkSingle
 #[inline]
-fn locked_slices(shrink: u32) -> u32 {
-	*index(&LOCKED_SLICES, shrink as usize)
+fn locked_minirows(shrink: u32) -> u32 {
+	*index(&LOCKED_MINIROWS, shrink as usize)
 }
 
-// 1 is row not defined in block mode 1 to 111
-// jczsolve equivalent: TblRowUniq
-#[inline]
-fn row_uniq(shrink: u32) -> u32 {
-    *index(&ROW_UNIQ, shrink as usize) as u32
-}
-
+// expands the mask of slices with solved cells to a cell mask
+// of possible locations
 // jczsolve equivalent: reversed TblRowMask
 #[inline]
 fn row_mask(thing: u32) -> u32 {
@@ -812,7 +815,7 @@ static LOCKED_CANDIDATES_MASK_NEIGHBOR_BAND: [u32; 512] = [
 	0o777777777, 0o776776776, 0o775775775, 0o777777777, 0o773773773, 0o777777777, 0o777777777, 0o777777777,
 ];
 
-static LOCKED_SLICES: [u32; 512] = [
+static LOCKED_MINIROWS: [u32; 512] = [
 	0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000,
 	0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000,
 	0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000,
@@ -845,27 +848,6 @@ static LOCKED_SLICES: [u32; 512] = [
 	0o000, 0o421, 0o000, 0o421, 0o124, 0o020, 0o124, 0o020, 0o000, 0o421, 0o412, 0o400, 0o004, 0o000, 0o000, 0o000,
 	0o000, 0o241, 0o142, 0o040, 0o000, 0o241, 0o142, 0o040, 0o000, 0o241, 0o002, 0o000, 0o214, 0o200, 0o000, 0o000,
 	0o000, 0o001, 0o142, 0o000, 0o124, 0o000, 0o100, 0o000, 0o000, 0o001, 0o002, 0o000, 0o004, 0o000, 0o000, 0o000,
-];
-
-// jczsolve equivalent: none directly, but based on TblRowUniq
-//                      but every entry is xor'ed with 7
-static ROW_UNIQ: [u8; 512] = [
-	0, 1, 1, 1, 1, 1, 1, 1, 2, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3,
-	2, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3,
-	4, 5, 5, 5, 5, 5, 5, 5, 6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7,
-	6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7,
-	4, 5, 5, 5, 5, 5, 5, 5, 6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7,
-	6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7,
-	4, 5, 5, 5, 5, 5, 5, 5, 6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7,
-	6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7,
-	4, 5, 5, 5, 5, 5, 5, 5, 6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7,
-	6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7,
-	4, 5, 5, 5, 5, 5, 5, 5, 6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7,
-	6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7,
-	4, 5, 5, 5, 5, 5, 5, 5, 6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7,
-	6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7,
-	4, 5, 5, 5, 5, 5, 5, 5, 6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7,
-	6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7,
 ];
 
 static COLUMN_SINGLE: [u32; 512] = [

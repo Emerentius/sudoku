@@ -144,14 +144,9 @@ impl SudokuSolver {
 			let mut mask = mask;
 			let digit = subband / 3;
 			let base_cell_in_band = subband % 3 * 27;
-			while mask != NONE {
-				let lowest_bit = mask & (!mask + 1);
-				mask ^= lowest_bit;
-				// lowest bit == cell mask == 1 << (cell % 27)
-				let cell_in_band = bit_pos(lowest_bit);
+			for cell_mask in mask_iter(mask) {
+				let cell_in_band = bit_pos(cell_mask);
 				*index_mut(&mut sudoku, (cell_in_band + base_cell_in_band) as usize) = digit + 1;
-
-				// guaranteed no overlap between mask and lowest_bit
 			}
 		}
 		Sudoku(sudoku)
@@ -202,18 +197,16 @@ impl SudokuSolver {
 
 			// store doubles
 			// equivalent to `cells2 & !cells3` because every bit in cells3 is also in cells2
-			self.pairs[band as usize] = cells2 ^ cells3;
+			self.pairs[band] = cells2 ^ cells3;
 
 			// new singles, ignore previously solved ones
-			let mut singles = (cells1 ^ cells2) & self.unsolved_cells[band as usize];
+			let mut singles = (cells1 ^ cells2) & self.unsolved_cells[band];
 
-			'singles: while singles != NONE {
+			'singles: for cell_mask_single in mask_iter(singles) {
 				single_applied = true;
-				let lowest_bit = singles & (!singles + 1);
-				singles ^= lowest_bit;
 				for digit in 0..9 {
-                    if self.poss_cells[(digit * 3 + band) as usize] & lowest_bit != NONE {
-                        self.insert_entry_by_mask((digit * 3 + band) as u8, lowest_bit);
+                    if self.poss_cells[digit * 3 + band] & cell_mask_single != NONE {
+                        self.insert_entry_by_mask((digit * 3 + band) as u8, cell_mask_single);
 						continue 'singles;
 					}
 				}
@@ -370,12 +363,7 @@ impl SudokuSolver {
 	// jczsolve equivalent: Guess
 	fn guess(&mut self, limit: usize, solutions: &mut Solutions) {
 		if self.is_solved() {
-            debug_assert!(
-                solutions.len() < limit,
-                "too many solutions in guess: limit: {}, len: {}",
-                limit,
-                solutions.len()
-            );
+            debug_assert!(solutions.len() < limit);
 			match solutions {
 				Solutions::Count(count) => *count += 1,
                 Solutions::Vector(vec) => vec.push(self.extract_solution()),
@@ -397,11 +385,11 @@ impl SudokuSolver {
         solutions: &mut Solutions,
 	) -> Result<(), Unsolvable> {
 		for band in 0..3 {
-			let mut pairs = self.pairs[band];
-			if pairs == NONE {
-                continue;
-			}
-			let cell_mask = pairs & !pairs + 1;
+			// get first bivalue cell, if it exists
+			let cell_mask = match mask_iter(self.pairs[band]).next() {
+				Some(mask) => mask,
+				None => continue,
+			};
 			let mut subband = band;
 
 			// loop through all 9 digits and check if that digit is possible in
@@ -449,12 +437,8 @@ impl SudokuSolver {
 	fn guess_some_cell(&mut self, limit: usize, solutions: &mut Solutions) {
 		let (_, band, unsolved_cell) = match (0..3)
 			.flat_map(|band| {
-				let unsolved_cells = self.unsolved_cells[band];
-				if unsolved_cells == NONE {
-					return None;
-				}
-				let one_unsolved_cell = unsolved_cells & (!unsolved_cells + 1);
-				//unsolved_cells ^= one_unsolved_cell;
+				// get first unsolved cell, if it exists
+				let one_unsolved_cell = mask_iter(self.unsolved_cells[band]).next()?;
 				let n_candidates = (0..9)
                     .map(|offset| band + 3 * offset)
 					.filter(|&subband| self.poss_cells[subband] & one_unsolved_cell != NONE)
@@ -914,4 +898,15 @@ impl ::std::ops::IndexMut<usize> for UncheckedIndexArray27 {
 	fn index_mut(&mut self, idx: usize) -> &mut Self::Output {
 		index_mut(&mut self.0, idx)
 	}
+}
+
+// for each set bit in mask, return a mask with only that bit set
+fn mask_iter(mask: u32) -> impl Iterator<Item=u32> {
+	::std::iter::repeat(())
+		.scan(mask, |mask, ()| {
+			if *mask == 0 { return None }
+			let lowest_bit = *mask & !*mask + 1;
+			*mask ^= lowest_bit;
+			Some(lowest_bit)
+		})
 }

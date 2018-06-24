@@ -10,17 +10,18 @@ const LOW9: u32 = 0o000_000_777;
 // the latter is marginally faster
 // the inner types should really be mutable references
 // but reborrowing doesn't work with that
-#[derive(Debug)]
-enum Solutions {
+enum Solutions<'a> {
 	Count(usize),
 	Vector(Vec<Sudoku>),
+	Buffer(&'a mut [[u8; 81]], usize),
 }
 
-impl Solutions {
+impl<'a> Solutions<'a> {
 	fn len(&self) -> usize {
 		match self {
-			Solutions::Count(len) => *len,
 			Solutions::Vector(v) => v.len(),
+			Solutions::Count(len) => *len,
+			Solutions::Buffer(_, len) => *len,
 		}
 	}
 
@@ -28,6 +29,7 @@ impl Solutions {
 		match self {
 			Solutions::Vector(v) => Some(v),
 			Solutions::Count(_) => None,
+			_ => panic!("Internal error: Illegal method call 'into_vec' on Solutions::Buffer"),
 		}
 	}
 }
@@ -367,6 +369,12 @@ impl SudokuSolver {
 			match solutions {
 				Solutions::Count(count) => *count += 1,
                 Solutions::Vector(vec) => vec.push(self.extract_solution()),
+				Solutions::Buffer(buf, len) => {
+					if let Some(sudoku_slot) = buf.get_mut(*len) {
+						*sudoku_slot = self.extract_solution().to_bytes();
+					}
+					*len += 1;
+				}
 			}
 		} else if self.guess_bivalue_in_cell(limit, solutions).is_ok() {
 			// .is_ok() == found nothing
@@ -487,6 +495,14 @@ impl SudokuSolver {
 		let mut solutions = Solutions::Vector(vec![]);
 		self._solve_at_most(limit, &mut solutions);
 		solutions.into_vec().unwrap()
+	}
+
+	// count up to `limit` solutions and save up to buffer.len() of them
+	// in `buffer`. Return number of solutions.
+	pub fn solve_at_most_buffer(self, buffer: &mut [[u8; 81]], limit: usize) -> usize {
+		let mut solutions = Solutions::Buffer(buffer, 0);
+		self._solve_at_most(limit, &mut solutions);
+		solutions.len()
 	}
 
 	// find up to `limit` solutions and return count

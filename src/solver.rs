@@ -263,12 +263,13 @@ impl SudokuSolver {
 		let solved_rows = shrink_mask(
 			locked_minirows(shrink) & column_single(s)
 		);
+		let solved_cells = row_mask(solved_rows) & poss_cells;
 
 		// -------------- jczsolve equivalent: upwcl ---------------------------
 		// delete other digit candidates from all cells in band
 		// that are guaranteed to be the current digit
 		let band = subband % 3;
-		let nonconflicting_cells = !(poss_cells & row_mask(solved_rows));
+		let nonconflicting_cells = !solved_cells;
 		self.unsolved_cells[band] &= nonconflicting_cells;
 		// remove from every entry but the current one
 		let mut other_subband = band;
@@ -443,7 +444,7 @@ impl SudokuSolver {
 	//                      jczsolve picks the first unsolved cell it can find
 	//                      This fn checks up to 3 cells as explained above
 	fn guess_some_cell(&mut self, limit: usize, solutions: &mut Solutions) {
-		let (_, band, unsolved_cell) = match (0..3)
+		let best_guess = (0..3)
 			.flat_map(|band| {
 				// get first unsolved cell, if it exists
 				let one_unsolved_cell = mask_iter(self.unsolved_cells[band]).next()?;
@@ -453,8 +454,8 @@ impl SudokuSolver {
 					.count();
 				Some((n_candidates, band, one_unsolved_cell))
 			})
-			.min()
-		{
+			.min();
+		let (_, band, unsolved_cell) = match best_guess {
 			Some(min) => min,
 			None => return,
 		};

@@ -12,7 +12,7 @@ const LOW9: u32 = 0o000_000_777;
 // but reborrowing doesn't work with that
 enum Solutions<'a> {
 	Count(usize),
-	Vector(Vec<Sudoku>),
+	Vector(&'a mut Vec<Sudoku>),
 	Buffer(&'a mut [[u8; 81]], usize),
 }
 
@@ -24,15 +24,7 @@ impl<'a> Solutions<'a> {
 			Solutions::Buffer(_, len) => *len,
 		}
 	}
-
-	fn into_vec(self) -> Option<Vec<Sudoku>> {
-		match self {
-			Solutions::Vector(v) => Some(v),
-			Solutions::Count(_) => None,
-			_ => panic!("Internal error: Illegal method call 'into_vec' on Solutions::Buffer"),
 		}
-	}
-}
 // Bands  Rows                   Columns
 //
 //               0    1    2    3    4    5    6    7    8
@@ -58,7 +50,7 @@ impl<'a> Solutions<'a> {
 //
 // The solver is based on a band-oriented data structure
 //
-// Except for `unsolved_rows`, all bitmasks are laid out as
+// All bitmasks are laid out as
 // 1 bit per cell for each of the 27 cells in a band
 // counting from least to most significant, the nth bit corresponds
 // to the nth cell in the band (see diagram above for cell ordering)
@@ -76,13 +68,7 @@ pub(crate) struct SudokuSolver {
 	prev_poss_cells: UncheckedIndexArray27,
 	// empty_cells = unsolved_cells[band]
 	unsolved_cells: UncheckedIndexArray3,
-	// masks of unsolved rows separated by digit
-	// For each 3 digits (0..3, 3..6, 6..9), the possible rows
-	// are stored together in one 27 bit mask
-	//
-	// unsolved_rows[digit % 3] = 0b_digit2_digit1_digit0
-	// bit placement: row8_row7_row6_row5 etc
-	unsolved_rows: UncheckedIndexArray3,
+	requirement_for_weird_optimization: UncheckedIndexArray3,
 	// bivalue_cells = pairs[band]
 	pairs: UncheckedIndexArray3,
 }
@@ -94,7 +80,7 @@ impl SudokuSolver {
 			poss_cells: UncheckedIndexArray27([ALL; 27]),
 			prev_poss_cells: UncheckedIndexArray27([0; 27]),
 			unsolved_cells: UncheckedIndexArray3([ALL; 3]),
-			unsolved_rows: UncheckedIndexArray3([ALL; 3]),
+			requirement_for_weird_optimization: UncheckedIndexArray3([ALL; 3]),
 			pairs: UncheckedIndexArray3([0; 3]),
 		};
 		for (cell, num) in (0..81).zip(sudoku.iter()) {
@@ -119,7 +105,7 @@ impl SudokuSolver {
 		self.unsolved_cells[band] &= !cell_mask;
 
 		// remove digit possibility from cell neighbors by row, column and box
-		self.poss_cells[subband] &= nonconflicting_cells_same_band(entry.cell);
+		self.poss_cells[subband] &= nonconflicting_cells_same_band(entry.cell as _);
 		let nonconflicting_other = nonconflicting_cells_neighbor_bands(entry.cell);
 		let (ns1, ns2) = neighbor_subbands(subband);
 		self.poss_cells[ns1] &= nonconflicting_other;
@@ -142,13 +128,13 @@ impl SudokuSolver {
 	// jczsolve equivalent: ExtractSolution
 	fn extract_solution(&self) -> Sudoku {
 		let mut sudoku = [0; 81];
-		for (subband, &mask) in (0u8..27).zip(self.poss_cells.0.iter()) {
+		for (subband, &mask) in (0..27).zip(self.poss_cells.0.iter()) {
 			let mut mask = mask;
 			let digit = subband / 3;
 			let base_cell_in_band = subband % 3 * 27;
 			for cell_mask in mask_iter(mask) {
 				let cell_in_band = bit_pos(cell_mask);
-				*index_mut(&mut sudoku, (cell_in_band + base_cell_in_band) as usize) = digit + 1;
+				*index_mut(&mut sudoku, cell_in_band + base_cell_in_band) = digit as u8 + 1;
 			}
 		}
 		Sudoku(sudoku)
@@ -161,13 +147,13 @@ impl SudokuSolver {
 	// Other digit candidates digits and other bands are not touched (too expensive)
 	//
 	// jczsolve equivalent: SetSolvedMask
-	fn insert_entry_by_mask(&mut self, subband: u8, mask: u32) {
+	fn insert_entry_by_mask(&mut self, subband: usize, mask: u32) {
 		debug_assert!(mask.count_ones() == 1);
-		debug_assert!(self.poss_cells[subband as usize] & mask != 0);
+		debug_assert!(self.poss_cells[subband] & mask != 0);
 		let band = subband % 3;
         let cell = band * 27 + bit_pos(mask);
 
-		self.poss_cells[subband as usize] &= nonconflicting_cells_same_band(cell);
+		self.poss_cells[subband] &= nonconflicting_cells_same_band(cell);
 	}
 
 	// Search for cells that can contain only 1 digit and enter them
@@ -208,7 +194,7 @@ impl SudokuSolver {
 				single_applied = true;
 				for digit in 0..9 {
                     if self.poss_cells[digit * 3 + band] & cell_mask_single != NONE {
-                        self.insert_entry_by_mask((digit * 3 + band) as u8, cell_mask_single);
+                        self.insert_entry_by_mask(digit * 3 + band, cell_mask_single);
 						continue 'singles;
 					}
 				}
@@ -245,6 +231,8 @@ impl SudokuSolver {
 		let s = (poss_cells | poss_cells >> 9 | poss_cells >> 18) & LOW9;
 
 		// check for locked candidates of the columns (pointing type)
+		// this is also what's enforcing that a column cannot contain
+		// more than once
 		let nonconflicting_other = nonconflicting_cells_neighbor_bands_by_locked_candidates(s);
 		let (ns1, ns2) = neighbor_subbands(subband);
 		self.poss_cells[ns1] &= nonconflicting_other;
@@ -287,57 +275,27 @@ impl SudokuSolver {
 	// jczsolve equivalent: Update
 	fn find_locked_candidates_and_update(&mut self) -> Result<(), Unsolvable> {
 		loop {
-			// repeat until nothing can be found anymore
-			// inner loops are fully unrolled via macros
+			// repeat until nothing can be found / updated anymore
 			// this is the hottest piece of code in the solver
 			let mut found_nothing = true;
 
-			// outermost macro
-			// for each digit in this group do...
-			macro_rules! unroll_loop {
-				($($digit_group:expr),*) => {
-					$(
-						// ur is part of a very weird optimization but has no bearing
-						// on the sudoku logic
-						let ur = self.unsolved_rows[0];
-						let base = $digit_group * 3;
-						digit_in_group!(base, ur);
-						digit_in_group!(base + 1, ur);
-						digit_in_group!(base + 2, ur);
-					)*
-				}
-			}
-
-			// for this digit, do for each band...
-			macro_rules! digit_in_group {
-				($digit:expr, $ur:expr) => {
+			unroll!{
+				for subband in 0..27 {
 					// this is always true
 					// but the optimizer doesn't get that
 					// which in this rare circumstance actually produces BETTER code
 					// (don't ask me why)
-					if ($ur >> $digit) & LOW9 != NONE {
-						let subband = $digit * 3;
-						subband!(subband);
-						subband!(subband + 1);
-						subband!(subband + 2);
+					if (self.requirement_for_weird_optimization[0] >> subband / 3) & LOW9 != NONE {
+						if self.poss_cells[subband] != self.prev_poss_cells[subband] {
+							found_nothing = false;
+							self._find_locked_candidates_and_update(subband)?;
+			}
 					}
 				}
 			}
 
-			// for each subband do...
-			macro_rules! subband {
-				($subband:expr) => {
-					if self.poss_cells[$subband] != self.prev_poss_cells[$subband] {
-						found_nothing = false;
-						self._find_locked_candidates_and_update($subband)?;
-					}
-				}
-			}
-			unroll_loop!(0, 1, 2);
-
-			if found_nothing { break }
+			if found_nothing { return Ok(()) }
 		}
-		Ok(())
 	}
 
 	// jczsolve equivalent: FullUpdate
@@ -411,13 +369,13 @@ impl SudokuSolver {
 					if first {
 						first = false;
 						let mut solver = *self;
-						solver.insert_entry_by_mask(subband as u8, cell_mask);
+						solver.insert_entry_by_mask(subband, cell_mask);
 						if solver.full_update(limit, solutions).is_ok() {
 							solver.guess(limit, solutions);
 						}
 						self.poss_cells[subband] ^= cell_mask;
 					} else {
-						self.insert_entry_by_mask(subband as u8, cell_mask);
+						self.insert_entry_by_mask(subband, cell_mask);
 						if self.full_update(limit, solutions).is_ok() {
 							self.guess(limit, solutions);
 						}
@@ -465,7 +423,7 @@ impl SudokuSolver {
 		while subband < 27 {
 			if self.poss_cells[subband] & unsolved_cell != NONE {
 				let mut solver = self.clone();
-				solver.insert_entry_by_mask(subband as u8, unsolved_cell);
+				solver.insert_entry_by_mask(subband, unsolved_cell);
 				if solver.full_update(limit, solutions).is_ok() {
 					solver.guess(limit, solutions);
 				}
@@ -493,9 +451,9 @@ impl SudokuSolver {
 
 	// find and return up to `limit` solutions
 	pub fn solve_at_most(self, limit: usize) -> Vec<Sudoku> {
-		let mut solutions = Solutions::Vector(vec![]);
-		self._solve_at_most(limit, &mut solutions);
-		solutions.into_vec().unwrap()
+		let mut solutions = vec![];
+		self._solve_at_most(limit, &mut Solutions::Vector(&mut solutions));
+		solutions
 	}
 
 	// count up to `limit` solutions and save up to buffer.len() of them
@@ -546,7 +504,7 @@ fn index_mut<T>(slice: &mut [T], idx: usize) -> &mut T {
 
 // jczsolve equivalent: TblSelfMask
 #[inline]
-fn nonconflicting_cells_same_band(cell: u8) -> u32 {
+fn nonconflicting_cells_same_band(cell: usize) -> u32 {
 	static SELF_MASK: [u32; 81] = [
 		0x37E3F001,	0x37E3F002,	0x37E3F004,	0x371F8E08,	0x371F8E10,	0x371F8E20,	0x30FC7E40,	0x30FC7E80,	0x30FC7F00,
 		0x2FE003F8,	0x2FE005F8,	0x2FE009F8,	0x2F1C11C7,	0x2F1C21C7,	0x2F1C41C7,	0x28FC803F, 0x28FD003F,	0x28FE003F,
@@ -558,13 +516,14 @@ fn nonconflicting_cells_same_band(cell: u8) -> u32 {
 		0x2FE003F8, 0x2FE005F8,	0x2FE009F8,	0x2F1C11C7,	0x2F1C21C7,	0x2F1C41C7,	0x28FC803F,	0x28FD003F,	0x28FE003F,
 		0x1807F1F8,	0x180BF1F8,	0x1813F1F8,	0x18238FC7,	0x18438FC7,	0x18838FC7,	0x19007E3F,	0x1A007E3F,	0x1C007E3F,
 	];
-	*index(&SELF_MASK, cell as usize)
+	*index(&SELF_MASK, cell)
 }
 
 // jczsolve equivalent: TblOtherfMask
 #[inline]
 fn nonconflicting_cells_neighbor_bands(cell: u8) -> u32 {
 	// only 3 cells in a column conflict with an entry in another band
+	// and they are all in one column, each 9 steps apart in the mask
 	ALL ^ (0o_001_001_001 << cell % 9)
 }
 
@@ -659,8 +618,8 @@ fn neighbor_subbands(subband: usize) -> (usize, usize) {
 
 // jczsolve equivalent: BitPos
 #[inline(always)]
-fn bit_pos(mask: u32) -> u8 {
-	mask.trailing_zeros() as u8
+fn bit_pos(mask: u32) -> usize {
+	mask.trailing_zeros() as usize
 }
 
 static SHRINK_MASK: [u32; 512] = [

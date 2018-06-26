@@ -10,6 +10,7 @@ authors = ["Emerentius"]
 [dependencies]
 rand = "0.5.2"
 serde = { version = "1.0.66", optional = true }
+crunchy = "0.2.1"
 
 [features]
 # The solver does enough indexing that the performance impact can be significant

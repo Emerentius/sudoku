@@ -1,3 +1,43 @@
+//	This solver is based on JCZsolve,
+//  which is currently (2018-06-26) and to the best of my (emerentius) knowledge the
+//  fastest sudoku solver algorithm.
+//
+//  The first version of jczsolve was published by original author zhouyundong_2012 in:
+//      http://forum.enjoysudoku.com/3-77us-solver-2-8g-cpu-testcase-17sodoku-t30470.html
+//
+//  It was then further improved in collaboration with champagne and JasonLion
+//  (these are usernames on forum.enjoysudoku.com)
+//
+//  The source code used as base for the port was the version by JasonLion from this post:
+//      http://forum.enjoysudoku.com/3-77us-solver-2-8g-cpu-testcase-17sodoku-t30470-210.html#p249309
+//
+//	The main insights and contributions lie in:
+//  (First three as stated in the original C source)
+//
+//	zhouyundong_2012:
+//		Original authorship
+//  	Key insights:
+//      	Storing bands by digit and the Update routine
+//			  (here named find_locked_candidates_and_update)
+//
+//  champagne:
+//		Update for 128 bit registers and speed optimization
+//		Key insights:
+//			Pairing of ApplySingleOrEmptyCells and GuessBiValueInCell
+//
+//  JasonLion:
+//		Conversion back to 32 bit data with further speed optimizations
+//
+//  emerentius:
+//		Ported to Rust, simplified, commented and further optimized, ~10-30%
+//		Key insights:
+//			Checking up to three cells if no bivalue cell exists
+//			Avoid unpredictable branch before UPWCL
+//
+// 	zhouyundong, champagne and JasonLion have all given permission
+//  for a port under the AGPLv3 license in the forum thread
+//		http://forum.enjoysudoku.com/3-77us-solver-2-8g-cpu-testcase-17sodoku-t30470-270.html#p262718
+
 use sudoku::Sudoku;
 use types::{Entry, Unsolvable};
 

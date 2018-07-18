@@ -9,59 +9,41 @@ fn read_sudokus(sudokus_str: &str) -> Vec<Sudoku> {
         .collect()
 }
 
-#[bench]
-fn easy_sudokus_solve_one(b: &mut test::Bencher) {
-    let sudokus = read_sudokus( include_str!("../sudokus/Lines/easy_sudokus.txt") );
-    let sudokus_1000 = sudokus.iter().cycle().cloned().take(100).collect::<Vec<_>>();;
-	b.iter(|| {
-		for sudoku in sudokus_1000.iter().cloned() { sudoku.solve_one(); }
-	})
+macro_rules! make_benches {
+	( $sudokus_folder:expr; $($name:ident, $f:expr, $file_name:expr);* ) => {
+		$(
+			#[bench]
+			fn $name (b: &mut test::Bencher) {
+				let sudokus = read_sudokus(
+					include_str!( concat!($sudokus_folder, $file_name) )
+				);
+				let mut sudokus = sudokus.iter().cloned().cycle();
+				b.iter(|| {
+					for sudoku in sudokus.by_ref().take(100) {
+						$f(sudoku);
+					}
+				})
+			}
+		)*
+	};
 }
 
-#[bench]
-fn easy_sudokus_solve_all(b: &mut test::Bencher) {
-    let sudokus = read_sudokus( include_str!("../sudokus/Lines/easy_sudokus.txt") );
-    let sudokus_1000 = sudokus.iter().cycle().cloned().take(100).collect::<Vec<_>>();;
-	b.iter(|| {
-		for sudoku in sudokus_1000.iter().cloned() { sudoku.is_uniquely_solvable(); }
-	})
-}
+make_benches!(
+	"../sudokus/Lines/";
+	sudoku_solve_one_1_easy,     Sudoku::solve_one, "easy_sudokus.txt";
+	sudoku_solve_one_2_medium,   Sudoku::solve_one, "medium_sudokus.txt";
+	sudoku_solve_one_3_hard,     Sudoku::solve_one, "hard_sudokus.txt";
 
-#[bench]
-fn medium_sudokus_solve_one(b: &mut test::Bencher) {
-    let sudokus = read_sudokus( include_str!("../sudokus/Lines/medium_sudokus.txt") );
-    let sudokus_1000 = sudokus.iter().cycle().cloned().take(100).collect::<Vec<_>>();;
-	b.iter(|| {
-		for sudoku in sudokus_1000.iter().cloned() { sudoku.solve_one(); }
-	})
-}
+	sudoku_is_solvable_1_easy,   Sudoku::is_uniquely_solvable, "easy_sudokus.txt";
+	sudoku_is_solvable_2_medium, Sudoku::is_uniquely_solvable, "medium_sudokus.txt";
+	sudoku_is_solvable_3_hard,   Sudoku::is_uniquely_solvable, "hard_sudokus.txt";
 
-#[bench]
-fn medium_sudokus_solve_all(b: &mut test::Bencher) {
-    let sudokus = read_sudokus( include_str!("../sudokus/Lines/medium_sudokus.txt") );
-    let sudokus_1000 = sudokus.iter().cycle().cloned().take(100).collect::<Vec<_>>();;
-	b.iter(|| {
-		for sudoku in sudokus_1000.iter().cloned() { sudoku.is_uniquely_solvable(); }
-	})
-}
-
-#[bench]
-fn hard_sudokus_solve_one(b: &mut test::Bencher) {
-    let sudokus = read_sudokus( include_str!("../sudokus/Lines/hard_sudokus.txt") );
-    let sudokus_1000 = sudokus.iter().cycle().cloned().take(100).collect::<Vec<_>>();;
-	b.iter(|| {
-		for sudoku in sudokus_1000.iter().cloned() { sudoku.solve_one(); }
-	})
-}
-
-#[bench]
-fn hard_sudokus_solve_all(b: &mut test::Bencher) {
-    let sudokus = read_sudokus( include_str!("../sudokus/Lines/hard_sudokus.txt") );
-    let sudokus_1000 = sudokus.iter().cycle().cloned().take(100).collect::<Vec<_>>();;
-	b.iter(|| {
-		for sudoku in sudokus_1000.iter().cloned() { sudoku.is_uniquely_solvable(); }
-	})
-}
+	// the sudokus are proper so this will exhaust the entire search tree
+	// trying to find a 2nd solution
+	sudoku_solve_all_1_easy,   |s: Sudoku| s.solve_at_most(2), "easy_sudokus.txt";
+	sudoku_solve_all_2_medium, |s: Sudoku| s.solve_at_most(2), "medium_sudokus.txt";
+	sudoku_solve_all_3_hard,   |s: Sudoku| s.solve_at_most(2), "hard_sudokus.txt"
+);
 
 #[bench]
 fn generate_filled_sudoku(b: &mut test::Bencher) {

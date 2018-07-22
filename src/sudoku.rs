@@ -252,6 +252,20 @@ impl Sudoku {
 		sudoku
 	}
 
+	/// Grade difficulty of sudoku. Score is compatible with SudokuExplainer.
+	pub fn se_grade(self) -> Result<u8, u8> {
+		let mut solver = ::strategy::StrategySolver::from_sudoku(self);
+		let strategies = ::strategy::all_strategies();
+		match solver.solve(&strategies) {
+			Ok((solution, deductions)) => {
+				Ok(deductions.se_difficulty().unwrap())
+			}
+			Err((partial_solution, deductions)) => {
+				Err(54)
+			}
+		}
+	}
+
 	/// Creates a sudoku from a byte slice.
 	/// All numbers must be below 10. Empty cells are denoted by 0, clues by the numbers 1-9.
 	/// The slice must be of length 81.

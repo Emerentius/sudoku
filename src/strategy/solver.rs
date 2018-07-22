@@ -1119,6 +1119,12 @@ impl<'a> Iterator for DeductionsIter<'a> {
 }
 
 impl Deductions {
+	pub fn se_difficulty(&self) -> Option<u8> {
+		self.employed_strategies.iter()
+			.map(StrategyResult::se_difficulty)
+			.max()
+	}
+
 	fn print_deductions(&self) {
 		for strategy_result in &self.employed_strategies {
 			print!("{:25?}: ", strategy_result.strategy());
@@ -1205,6 +1211,40 @@ impl StrategyResult {
 		)
 	}
 
+	// SudokuExplainer compatible difficulty of deduction
+	// FIXME: correct numbers and do the right analysis
+	fn se_difficulty(&self) -> u8 {
+		use self::StrategyResult::*;
+		match self {
+			NakedSingles(_) => 23,
+			HiddenSingles(_, ZoneType::Block) => 12,
+			HiddenSingles(_, _) => 15,
+			LockedCandidates(_, _, _) => 28,
+			NakedSubsets { cells, .. } => {
+				match cells.len() {
+					2 => 30,
+					3 => 36,
+					4 => 50,
+					_ => unreachable!(),
+				}
+			}
+			HiddenSubsets { num_offsets, .. } => {
+				// fixme: direct hidden pairs and triplets are lower
+				match num_offsets.len() {
+					2 => 34,
+					3 => 40,
+					4 => 54,
+					_ => unreachable!(),
+				}
+			}
+			XWing { .. } => 32,
+			Swordfish { .. } => 38,
+			Jellyfish { .. } => 52,
+			SinglesChain(DeductionRange) => unimplemented!(),
+			__NonExhaustive => unreachable!(),
+		}
+	}
+
 	fn deductions<'e>(&self, eliminated: &'e [Entry]) -> DeductionResult<'e> {
 		use self::StrategyResult::*;
 		match self {
@@ -1283,6 +1323,21 @@ fn find_unique<I: Iterator<Item=Mask<Digit>>>(possibilities: I) -> (Mask<Digit>,
 	(unsolved, multiple_unsolved, unsolved & !multiple_unsolved)
 }
 
+pub fn all_strategies() -> Vec<Strategy> {
+	use super::Strategy::*;
+	vec![
+		NakedSingles,
+		HiddenSingles,
+		LockedCandidates,
+		NakedSubsets,
+		HiddenSubsets,
+		XWing,
+		Swordfish,
+		Jellyfish,
+		//SinglesChain,
+	]
+}
+
 #[cfg(test)]
 mod test {
     extern crate test;
@@ -1292,22 +1347,6 @@ mod test {
             .map(|line| Sudoku::from_str_line(line).unwrap_or_else(|err| panic!("{:?}", err)))
             .collect()
     }
-
-    fn all_strategies() -> Vec<Strategy> {
-		use super::Strategy::*;
-        vec![
-            NakedSingles,
-            HiddenSingles,
-            LockedCandidates,
-            NakedSubsets,
-            HiddenSubsets,
-            XWing,
-            Swordfish,
-            Jellyfish,
-            //SinglesChain,
-        ]
-    }
-
 
     fn strategy_solver_correct_solution<F>(sudokus: Vec<Sudoku>, solved_sudokus: Vec<Sudoku>, solver: F)
         where F: Fn(StrategySolver, &[Strategy]) -> Result<(Sudoku, Deductions), (Sudoku, Deductions)>,

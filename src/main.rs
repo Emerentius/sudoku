@@ -10,8 +10,8 @@ fn main() {
                     println!("{}", sudoku.to_str_line());
                     break
                 }
-                Ok(grade) => {
-                    //println!("too low: {}", grade);
+                Ok(_grade) => {
+                    //println!("too low: {}", _grade);
                 }
                 Err(_grade) => {
                     //println!("too high");

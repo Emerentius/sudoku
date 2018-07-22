@@ -7,4 +7,4 @@
 //! be at least an order of magnitude slower than the fast solver.
 
 mod solver;
-pub use self::solver::{Strategy, StrategySolver, Deductions, Deduction, DeductionResult, all_strategies};
+pub use self::solver::{Strategy, StrategySolver, Deductions, Deduction, DeductionResult, DeductionsIter};

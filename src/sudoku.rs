@@ -255,7 +255,7 @@ impl Sudoku {
 	/// Grade difficulty of sudoku. Score is compatible with SudokuExplainer.
 	pub fn se_grade(self) -> Result<u8, u8> {
 		let solver = ::strategy::StrategySolver::from_sudoku(self);
-		let strategies = ::strategy::all_strategies();
+		let strategies = ::strategy::Strategy::ALL;
 		match solver.solve(&strategies) {
 			Ok((_, deductions)) => {
 				Ok(deductions.se_difficulty().unwrap())

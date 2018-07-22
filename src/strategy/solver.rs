@@ -11,13 +11,13 @@ use positions::{
 
 type DeductionRange = ::std::ops::Range<usize>;
 
-/// The `StrategySolver` is the struct that allows applying human style strategies
-/// for the solution of sudokus.
+/// The `StrategySolver` is the struct for solving sudokus with
+/// strategies that humans commonly apply.
 ///
-/// It is built from single `Sudoku` for which it for which it allows
-/// the efficient strategy application. It can find hints or solve the
-/// `Sudoku` completely and return the sequence of logical steps taken.
-/// By weighting the difficulty of each strategy, it can also grade sudoku difficulties.
+/// It is built from a single `Sudoku` for which it stores the current
+/// state and the history of applied strategies. It can find hints
+/// or solve the `Sudoku` completely and return the solution path.
+/// From the solving path, the difficulty can be graded.
 
 // To allow for the above functionality, this struct contains caches
 // of various properties of the sudoku grid. The caches are lazily updated
@@ -25,17 +25,18 @@ type DeductionRange = ::std::ops::Range<usize>;
 //
 // Two histories are kept:
 // 1. A list of all strategies that were successfully used to deduce or eliminate entries
-// 2. Two lists for all deduced (or entered) and eliminated entries
+// 2. Two lists for all entered and all eliminated digit-cell-entries
+//    The former also includes initial clues.
 //
-// The 1st is for reporting the sequence of strategies applied
-// The 2nd is for the updating of internal caches. It is kept simple to offer an easy interface
-// and can contain duplicates.
+// The 1st list is for reporting the sequence of strategies applied
+// The 2nd list is for the updating of internal caches.
+// It is kept simple to offer an easy interface and can contain duplicates.
 //
-// These two histories can contain overlapping information and the 1st one can also contain references
-// to the 2nd but not vice versa.
+// These two histories can contain overlapping information and the
+// 1st one can also contain references to the 2nd but not vice versa.
 #[derive(Debug, Clone)]
 pub struct StrategySolver {
-	pub(crate) employed_strategies: Vec<StrategyResult>,
+	pub(crate) deductions: Vec<_Deduction>,
 	pub(crate) deduced_entries: Vec<Entry>,
 	pub(crate) eliminated_entries: Vec<Entry>,
 	pub(crate) n_solved: u8, // deduced_entries can contain duplicates so a separate counter is necessary
@@ -60,7 +61,7 @@ impl StrategySolver {
 				opt_num.map(|num| Entry { cell: cell as u8, num })
 			}).collect();
 		StrategySolver {
-			employed_strategies: vec![],
+			deductions: vec![],
 			deduced_entries,
 			eliminated_entries: vec![],
 			n_solved: 0,
@@ -80,7 +81,7 @@ impl StrategySolver {
 
 	fn into_deductions(self) -> Deductions {
 		Deductions {
-			employed_strategies: self.employed_strategies,
+			deductions: self.deductions,
 			deduced_entries: self.deduced_entries,
 			eliminated_entries: self.eliminated_entries,
 		}
@@ -172,7 +173,7 @@ impl StrategySolver {
 
 				// deductions made here may conflict with entries already in the queue
 				// in the queue. In that case the sudoku is impossible.
-				Self::remove_impossibilities(&mut self.grid.state, cell_poss, entry.cell, impossibles, &mut self.deduced_entries, &mut self.employed_strategies, find_naked_singles)?;
+				Self::remove_impossibilities(&mut self.grid.state, cell_poss, entry.cell, impossibles, &mut self.deduced_entries, &mut self.deductions, find_naked_singles)?;
 			}
 			*le_cp = self.eliminated_entries.len() as _;
 		}
@@ -289,7 +290,7 @@ impl StrategySolver {
 			Self::_insert_entry_cp_zs(entry, &mut self.n_solved, cell_poss_digits, zone_solved_digits);
 			for &cell in neighbours(entry.cell) {
 				if entry_mask & cell_poss_digits[cell as usize] != Mask::NONE {
-					Self::remove_impossibilities(&mut self.grid.state, cell_poss_digits, cell, entry_mask, &mut self.deduced_entries, &mut self.employed_strategies, find_naked_singles)?;
+					Self::remove_impossibilities(&mut self.grid.state, cell_poss_digits, cell, entry_mask, &mut self.deduced_entries, &mut self.deductions, find_naked_singles)?;
 				};
 			}
 
@@ -345,7 +346,7 @@ impl StrategySolver {
 				| zone_solved_digits[col_zone(cell)]
 				| zone_solved_digits[field_zone(cell)];
 
-			Self::remove_impossibilities(&mut self.grid.state, cell_poss_digits, cell, zones_mask, &mut self.deduced_entries, &mut self.employed_strategies, find_naked_singles)?;
+			Self::remove_impossibilities(&mut self.grid.state, cell_poss_digits, cell, zones_mask, &mut self.deduced_entries, &mut self.deductions, find_naked_singles)?;
 		}
 		Ok(())
 	}
@@ -358,7 +359,7 @@ impl StrategySolver {
 		cell: u8,
 		impossible: Mask<Digit>,
 		deduced_entries: &mut Vec<Entry>,
-		employed_strategies: &mut Vec<StrategyResult>,
+		deductions: &mut Vec<_Deduction>,
 		find_naked_singles: bool,
 	) -> Result<(), Unsolvable> {
 		let cell_mask = &mut cell_poss_digits[cell as usize];
@@ -367,7 +368,7 @@ impl StrategySolver {
 		if find_naked_singles {
 			if let Some(num) = cell_mask.unique_num()? {
 				let entry = Entry { cell, num };
-				Self::push_new_entry(sudoku, deduced_entries, entry, employed_strategies, StrategyResult::NakedSingles(entry))?;
+				Self::push_new_entry(sudoku, deduced_entries, entry, deductions, _Deduction::NakedSingles(entry))?;
 			}
 		} else {
 			if *cell_mask == Mask::NONE {
@@ -380,13 +381,13 @@ impl StrategySolver {
 	fn push_new_entry(sudoku: &mut Sudoku,
 		deduced_entries: &mut Vec<Entry>,
 		entry: Entry,
-		employed_strategies: &mut Vec<StrategyResult>,
-		strategy: StrategyResult // either naked or hidden singles
+		deductions: &mut Vec<_Deduction>,
+		strategy: _Deduction // either naked or hidden singles
 	) -> Result<(), Unsolvable> {
 
 		#[cfg(debug_assertions)]
 		{
-			use self::StrategyResult::*;
+			use self::_Deduction::*;
 			match strategy {
 				NakedSingles(..) | HiddenSingles(..) => (),
 				_ => panic!("Internal error: Called push_new_entry with wrong strategy type")
@@ -401,7 +402,7 @@ impl StrategySolver {
 		}
 		*old_num = entry.num;
 		deduced_entries.push(entry);
-		employed_strategies.push(strategy);
+		deductions.push(strategy);
 		Ok(())
 	}
 
@@ -418,8 +419,8 @@ impl StrategySolver {
 			if let Some(num) = poss_digits.unique_num().unwrap_or(None) {
 				let entry = Entry { cell, num };
 
-				Self::push_new_entry(&mut self.grid.state, &mut self.deduced_entries, entry, &mut self.employed_strategies, StrategyResult::NakedSingles(entry))?;
-				//Self::push_new_entry(sudoku, deduced_entries, entry, employed_strategies, StrategyResult::NakedSingles(entry))?;
+				Self::push_new_entry(&mut self.grid.state, &mut self.deduced_entries, entry, &mut self.deductions, _Deduction::NakedSingles(entry))?;
+				//Self::push_new_entry(sudoku, deduced_entries, entry, deductions, _Deduction::NakedSingles(entry))?;
 				self.deduced_entries.push(entry);
 				if stop_after_first {
 					break
@@ -457,8 +458,8 @@ impl StrategySolver {
 				if let Ok(maybe_unique) = (mask & singles).unique_num() {
 					let num = maybe_unique.ok_or(Unsolvable)?;
 					let entry = Entry { cell, num };
-					let strat_res = StrategyResult::HiddenSingles(entry, zone_type(zone));
-					Self::push_new_entry(&mut self.grid.state, &mut self.deduced_entries, entry, &mut self.employed_strategies, strat_res)?;
+					let strat_res = _Deduction::HiddenSingles(entry, zone_type(zone));
+					Self::push_new_entry(&mut self.grid.state, &mut self.deduced_entries, entry, &mut self.deductions, strat_res)?;
 
 					// mark num as found
 					singles.remove(Mask::from_num(num));
@@ -553,7 +554,7 @@ impl StrategySolver {
 					let rg_eliminations = find_impossibles(uniques, neighbours);
 					if rg_eliminations.len() > 0 {
 						// TODO: If stop_after_first is true, only enter the number whose conflicts were eliminated
-						self.employed_strategies.push(StrategyResult::LockedCandidates(slice, uniques, rg_eliminations));
+						self.deductions.push(_Deduction::LockedCandidates(slice, uniques, rg_eliminations));
 
 						if stop_after_first {
 							return Ok(());
@@ -590,7 +591,7 @@ impl StrategySolver {
 				}
 				let rg_eliminations = n_eliminated..state.eliminated_entries.len();
 				if rg_eliminations.len() > 0 {
-					state.employed_strategies.push(StrategyResult::NakedSubsets {
+					state.deductions.push(_Deduction::NakedSubsets {
 						zone,
 						cells: stack.clone(),
 						digits: total_poss_digs,
@@ -659,7 +660,7 @@ impl StrategySolver {
 				}
 				let rg_eliminations = n_eliminated..state.eliminated_entries.len();
 				if rg_eliminations.len() > 0 {
-					state.employed_strategies.push(StrategyResult::HiddenSubsets {
+					state.deductions.push(_Deduction::HiddenSubsets {
 						zone: Zone(zone),
 						num_offsets: stack.clone(),
 						positions: total_poss_pos,
@@ -900,14 +901,14 @@ fn basic_fish_walk_combinations(
 			let num = num_off as u8 + 1;
 			let conflicts = rg_eliminations;
 
-			sudoku.employed_strategies.push( match goal_depth {
-				2 => StrategyResult::XWing {
+			sudoku.deductions.push( match goal_depth {
+				2 => _Deduction::XWing {
 					lines, positions, num, conflicts
 				},
-				3 => StrategyResult::Swordfish {
+				3 => _Deduction::Swordfish {
 					lines, positions, num, conflicts
 				},
-				4 => StrategyResult::Jellyfish {
+				4 => _Deduction::Jellyfish {
 					lines, positions, num, conflicts
 				},
 				_ => unreachable!(),
@@ -981,6 +982,24 @@ pub enum Strategy {
 }
 
 impl Strategy {
+	pub const ALL: [Strategy; 12] = [
+		                            // difficulty as assigned by
+									// SudokuExplainer
+		Strategy::NakedSingles,     // 23
+		Strategy::HiddenSingles,    // 15
+		Strategy::LockedCandidates, // 28
+		Strategy::NakedPairs,       // 30
+		Strategy::XWing,            // 32
+		Strategy::HiddenPairs,      // 34
+		Strategy::NakedTriples,     // 36
+		Strategy::Swordfish,        // 38
+		Strategy::HiddenTriples,    // 40
+		Strategy::NakedQuads,       // 50
+		Strategy::Jellyfish,        // 52
+		Strategy::HiddenQuads,      // 54
+		//SinglesChain,
+	];
+
 	// is_first_strategy is an optimization hint
 	// it doesn't need to be used
 	fn deduce(&self, state: &mut StrategySolver, stop_after_first: bool, is_first_strategy: bool) -> Result<(), Unsolvable> {
@@ -1035,13 +1054,13 @@ pub enum DeductionResult<'a> {
 #[derive(Debug)]
 /// Result of a single strategy
 pub struct Deduction<'a> {
-	deduction: &'a StrategyResult,
+	deduction: &'a _Deduction,
 	deduced_entries: &'a [Entry],
 	eliminated_entries: &'a [Entry]
 }
 
 pub struct Hint<'a> {
-	// last StrategyResult is the solution
+	// last _Deduction is the solution
 	solver: &'a mut StrategySolver,
 	old_n_deductions: usize,
 	old_n_eliminations: usize,
@@ -1056,7 +1075,7 @@ impl<'a> Hint<'a> {
 
 	fn as_deduction(&self) -> Deduction {
 		Deduction {
-			deduction: self.solver.employed_strategies.last().unwrap(),
+			deduction: self.solver.deductions.last().unwrap(),
 			deduced_entries: &self.solver.deduced_entries,
 			eliminated_entries: &self.solver.eliminated_entries,
 		}
@@ -1070,14 +1089,14 @@ impl<'a> Hint<'a> {
 	/// Returns the entries that were entered or ruled out as a result of this strategy application
 	pub fn results(&self) -> DeductionResult {
 		// can't go through temporary `Deduction` as that would be dropped
-		self.solver.employed_strategies.last().unwrap()
-			.deductions(&self.solver.eliminated_entries)
+		self.solver.deductions.last().unwrap()
+			.result(&self.solver.eliminated_entries)
 	}
 }
 
 impl<'a> ::std::ops::Drop for Hint<'a> {
 	fn drop(&mut self) {
-		self.solver.employed_strategies.pop();
+		self.solver.deductions.pop();
 		self.solver.eliminated_entries.truncate(self.old_n_eliminations);
 		self.solver.deduced_entries.truncate(self.old_n_deductions);
 	}
@@ -1089,22 +1108,27 @@ impl<'a> Deduction<'a> {
 		self.deduction.strategy()
 	}
 
-	/// Returns the entries that were entered or ruled out as a result of this strategy application
+	/// Returns the SudokuExplainer compatible difficulty of this `Deduction`
+	pub fn se_difficulty(&self) -> u8 {
+		self.deduction.se_difficulty()
+	}
+
+	/// Returns the entries that were entered or ruled out as a result of this deduction
 	pub fn results(&self) -> DeductionResult {
-		self.deduction.deductions(&self.eliminated_entries)
+		self.deduction.result(&self.eliminated_entries)
 	}
 }
 
 #[derive(Debug)]
 /// Contains the sequence of deductions made to solve / partially solve the sudoku
 pub struct Deductions {
-	employed_strategies: Vec<StrategyResult>,
+	deductions: Vec<_Deduction>,
 	deduced_entries: Vec<Entry>,
 	eliminated_entries: Vec<Entry>,
 }
 
 pub struct DeductionsIter<'a> {
-	employed_strategies: ::std::slice::Iter<'a, StrategyResult>,
+	deductions: ::std::slice::Iter<'a, _Deduction>,
 	deduced_entries: &'a [Entry],
 	eliminated_entries: &'a [Entry]
 }
@@ -1113,10 +1137,10 @@ impl<'a> Iterator for DeductionsIter<'a> {
 	type Item = Deduction<'a>;
 
 	fn next(&mut self) -> Option<Self::Item> {
-		self.employed_strategies.next()
-			.map(|strategy_result|
+		self.deductions.next()
+			.map(|deduction|
 				Deduction {
-					deduction: strategy_result,
+					deduction,
 					deduced_entries: &self.deduced_entries,
 					eliminated_entries: &self.eliminated_entries,
 				}
@@ -1125,18 +1149,49 @@ impl<'a> Iterator for DeductionsIter<'a> {
 }
 
 impl Deductions {
+	/// Grade the difficulty of the sudoku like SudokuExplainer would.
+	/// This means, it returns the SudokuExplainer compatible difficulty
+	/// of the most difficult strategy used.
+	/// If these deductions could not solve the sudoku, the difficulty is a lower bound.
+	///
+	/// If `Deductions` is empty, None will be returned.
 	pub fn se_difficulty(&self) -> Option<u8> {
-		self.employed_strategies.iter()
-			.map(StrategyResult::se_difficulty)
+		self.deductions.iter()
+			.map(_Deduction::se_difficulty)
 			.max()
 	}
 
+	/// Returns the number of deductions.
+	pub fn len(&self) -> usize {
+		self.deductions.len()
+	}
+
+	/// Return the `index`th Deduction, if it exists.
+	pub fn get<'a>(&'a self, index: usize) -> Option<Deduction<'a>> {
+		self.deductions.get(index)
+			.map(|deduction| Deduction {
+				deduction,
+				deduced_entries: &self.deduced_entries,
+				eliminated_entries: &self.eliminated_entries,
+			})
+	}
+
+	/// Return an iterator over the deductions.
+	pub fn iter<'a>(&'a self) -> DeductionsIter<'a> {
+		DeductionsIter {
+			deductions: self.deductions.iter(),
+			deduced_entries: &self.deduced_entries,
+			eliminated_entries: &self.eliminated_entries,
+		}
+	}
+
+	// For debugging solution paths
 	fn print_deductions(&self) {
-		for strategy_result in &self.employed_strategies {
-			print!("{:25?}: ", strategy_result.strategy());
-			strategy_result.print_reason();
+		for deduction in &self.deductions {
+			print!("{:25?}: ", deduction.strategy());
+			deduction.print_reason();
 			print!("\n");
-			match strategy_result.deductions(&self.eliminated_entries) {
+			match deduction.result(&self.eliminated_entries) {
 				DeductionResult::Forced(entry) => println!("\tr{}c{} {}", entry.row()+1, entry.col()+1, entry.num),
 
 				DeductionResult::Eliminated(deductions) => {
@@ -1157,7 +1212,7 @@ impl Deductions {
 // highlighting of cells / houses / cell possibilities, their removal and cell-to-cell chains
 // Basically, the GUI should only need to give the basic highlighting operations and we generate the explanation
 #[derive(Debug, Clone)]
-pub(crate) enum StrategyResult {
+pub(crate) enum _Deduction {
     NakedSingles(Entry),
     HiddenSingles(Entry, ZoneType),
     LockedCandidates(Slice, Mask<Digit>, DeductionRange), // which slice is affected and what's unique
@@ -1197,27 +1252,9 @@ pub(crate) enum StrategyResult {
     #[doc(hidden)] __NonExhaustive
 }
 
-macro_rules! map_to_strategy {
-	($this:expr; $($variant:ident),*) => {
-		match *$this {
-			$(
-				$variant {..} => Strategy::$variant,
-			)*
-		}
-	}
-}
-
-impl StrategyResult {
+impl _Deduction {
 	fn strategy(&self) -> Strategy {
-		use self::StrategyResult::*;
-		// for each strategy: StrategyName{..} => Strategy::StrategyName
-		/*
-		map_to_strategy!( self;
-			NakedSingles, HiddenSingles, LockedCandidates, NakedPairs, NakedTriples, NakedQuads,
-			HiddenPairs, HiddenTriples, HiddenQuads,
-			XWing, Swordfish, Jellyfish, SinglesChain, __NonExhaustive
-		)
-		*/
+		use self::_Deduction::*;
 		match self {
 			NakedSingles { .. } => Strategy::NakedSingles,
 			HiddenSingles { .. } => Strategy::HiddenSingles,
@@ -1249,7 +1286,7 @@ impl StrategyResult {
 	// SudokuExplainer compatible difficulty of deduction
 	// FIXME: correct numbers and do the right analysis
 	fn se_difficulty(&self) -> u8 {
-		use self::StrategyResult::*;
+		use self::_Deduction::*;
 		match self {
 			NakedSingles(_) => 23,
 			HiddenSingles(_, ZoneType::Block) => 12,
@@ -1275,31 +1312,35 @@ impl StrategyResult {
 			XWing { .. } => 32,
 			Swordfish { .. } => 38,
 			Jellyfish { .. } => 52,
-			SinglesChain(DeductionRange) => unimplemented!(),
+			SinglesChain(_) => unimplemented!(),
 			__NonExhaustive => unreachable!(),
 		}
 	}
 
-	fn deductions<'e>(&self, eliminated: &'e [Entry]) -> DeductionResult<'e> {
-		use self::StrategyResult::*;
+	/// Returns the entries that were entered or eliminated as a result of this
+	/// deduction.
+	fn result<'e>(&self, eliminated: &'e [Entry]) -> DeductionResult<'e> {
+		use self::_Deduction::*;
 		match self {
-			NakedSingles(entry) | HiddenSingles(entry, _) => DeductionResult::Forced(*entry),
-			LockedCandidates(.., conflicts) |
-			NakedSubsets { conflicts, .. } |
-			HiddenSubsets { conflicts, .. } |
-			XWing { conflicts, .. } |
-			Swordfish { conflicts, .. } |
-			Jellyfish { conflicts, .. } |
-			SinglesChain(conflicts)
-
+			| NakedSingles(entry)
+			| HiddenSingles(entry, _)
+				=> DeductionResult::Forced(*entry),
+			| LockedCandidates(.., conflicts)
+			| NakedSubsets { conflicts, .. }
+			| HiddenSubsets { conflicts, .. }
+			| XWing { conflicts, .. }
+			| Swordfish { conflicts, .. }
+			| Jellyfish { conflicts, .. }
+			| SinglesChain(conflicts)
 				=> DeductionResult::Eliminated(&eliminated[conflicts.clone()]),
-
-			__NonExhaustive => unreachable!(),
+			| __NonExhaustive
+				=> unreachable!(),
 		}
 	}
 
+	// For debugging solution paths
 	fn print_reason(&self) {
-		use self::StrategyResult::*;
+		use self::_Deduction::*;
 		match *self {
 			NakedSingles(entry) => print!("r{}c{} {}", entry.row()+1, entry.col()+1, entry.num),
 			HiddenSingles(entry, zone_type) => {
@@ -1327,7 +1368,7 @@ impl StrategyResult {
 					.map(|pos| Cell::from_zone_pos(zone, pos))
 					.collect();
 
-				StrategyResult::NakedSubsets {
+				_Deduction::NakedSubsets {
 					zone, digits, cells, conflicts: 0..0
 				}
 				.print_reason();
@@ -1358,53 +1399,6 @@ fn find_unique<I: Iterator<Item=Mask<Digit>>>(possibilities: I) -> (Mask<Digit>,
 	(unsolved, multiple_unsolved, unsolved & !multiple_unsolved)
 }
 
-pub fn all_strategies() -> Vec<Strategy> {
-	use super::Strategy::*;
-
-	/*
-	NakedSingles(_) => 23,
-	HiddenSingles(_, ZoneType::Block) => 12,
-	HiddenSingles(_, _) => 15,
-	LockedCandidates(_, _, _) => 28,
-	NakedSubsets { cells, .. } => {
-		match cells.len() {
-			2 => 30,
-			3 => 36,
-			4 => 50,
-			_ => unreachable!(),
-		}
-	}
-	HiddenSubsets { num_offsets, .. } => {
-		// fixme: direct hidden pairs and triplets are lower
-		match num_offsets.len() {
-			2 => 34,
-			3 => 40,
-			4 => 54,
-			_ => unreachable!(),
-		}
-	}
-	XWing { .. } => 32,
-	Swordfish { .. } => 38,
-	Jellyfish { .. } => 52,
-	*/
-
-	vec![
-		NakedSingles,     // 23
-		HiddenSingles,    // 15
-		LockedCandidates, // 28
-		NakedPairs,       // 30
-		XWing,            // 32
-		HiddenPairs,      // 34
-		NakedTriples,     // 36
-		Swordfish,        // 38
-		HiddenTriples,    // 40
-		NakedQuads,       // 50
-		Jellyfish,        // 52
-		HiddenQuads,      // 54
-		//SinglesChain,
-	]
-}
-
 #[cfg(test)]
 mod test {
     extern crate test;
@@ -1418,7 +1412,7 @@ mod test {
     fn strategy_solver_correct_solution<F>(sudokus: Vec<Sudoku>, solved_sudokus: Vec<Sudoku>, solver: F)
         where F: Fn(StrategySolver, &[Strategy]) -> Result<(Sudoku, Deductions), (Sudoku, Deductions)>,
     {
-        let strategies = all_strategies();
+        let strategies = Strategy::ALL;
         let mut unsolved = vec![];
         for (i, (sudoku, solved_sudoku)) in sudokus.into_iter().zip(solved_sudokus).enumerate() {
             let cache = StrategySolver::from_sudoku(sudoku);
@@ -1506,7 +1500,7 @@ mod test {
     fn easy_sudokus_strategy_solver(b: &mut test::Bencher) {
         let sudokus = read_sudokus( include_str!("../../sudokus/Lines/easy_sudokus.txt") );
         let sudokus_100 = sudokus.iter().cycle().cloned().take(100).collect::<Vec<_>>();
-        let strategies = all_strategies();
+        let strategies = Strategy::ALL;
         b.iter(|| {
             for sudoku in sudokus_100.iter().cloned() {
                 StrategySolver::from_sudoku(sudoku).solve(&strategies).unwrap(); //.unwrap();
@@ -1518,7 +1512,7 @@ mod test {
     fn medium_sudokus_strategy_solver(b: &mut test::Bencher) {
         let sudokus = read_sudokus( include_str!("../../sudokus/Lines/medium_sudokus.txt") );
         let sudokus_100 = sudokus.iter().cycle().cloned().take(100).collect::<Vec<_>>();
-        let strategies = all_strategies();
+        let strategies = Strategy::ALL;
         b.iter(|| {
             for sudoku in sudokus_100.iter().cloned() {
                 // solution not guaranteed yet, discard error.
@@ -1531,7 +1525,7 @@ mod test {
     fn easy_sudokus_backtracking_strategy_solver(b: &mut test::Bencher) {
         let sudokus = read_sudokus( include_str!("../../sudokus/Lines/easy_sudokus.txt") );
         let sudokus_100 = sudokus.iter().cycle().cloned().take(100).collect::<Vec<_>>();
-        let strategies = all_strategies();
+        let strategies = Strategy::ALL;
         b.iter(|| {
             for sudoku in sudokus_100.iter().cloned() {
                 StrategySolver::from_sudoku(sudoku).solve_with_backtracking(&strategies).unwrap();
@@ -1543,7 +1537,7 @@ mod test {
     fn medium_sudokus_backtracking_strategy_solver(b: &mut test::Bencher) {
         let sudokus = read_sudokus( include_str!("../../sudokus/Lines/medium_sudokus.txt") );
         let sudokus_100 = sudokus.iter().cycle().cloned().take(100).collect::<Vec<_>>();
-        let strategies = all_strategies();
+        let strategies = Strategy::ALL;
         b.iter(|| {
             for sudoku in sudokus_100.iter().cloned() {
                 // solution not guaranteed yet, discard error.

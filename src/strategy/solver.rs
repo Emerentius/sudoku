@@ -566,21 +566,20 @@ impl StrategySolver {
 	}
 
 
-	fn find_naked_subsets(&mut self, stop_after_first: bool) -> Result<(), Unsolvable> 	{
-		// TODO: limit min/max length so naked pairs / triples / quadruples can be distinguished
-		//		 breadth first search?
+	fn find_naked_subsets(&mut self, subset_size: usize, stop_after_first: bool) -> Result<(), Unsolvable> 	{
 		fn walk_combinations(
 			state: &mut StrategySolver,
 			total_poss_digs: Mask<Digit>,
 			cells: &[Cell],
 			zone: Zone,
 			stack: &mut Vec<Cell>,
+			subset_size: usize,
 			stop_after_first: bool,
 		) -> bool {
 			// subsets of 5 and more numbers always have complementary subsets
 			// of 9 - subset_size
-			if stack.len() == 5 { return false }
-			if stack.len() > 0 && total_poss_digs.n_possibilities() == stack.len() as u8 {
+			if stack.len() > subset_size { return false }
+			if stack.len() == subset_size && total_poss_digs.n_possibilities() == stack.len() as u8 {
 				// found a subset
 				let n_eliminated = state.eliminated_entries.len();
 				for cell in zone.cells().iter().filter(|cell| !stack.contains(cell)) {
@@ -612,7 +611,7 @@ impl StrategySolver {
 
 				// if true, then a subset was found and stop_after_first is set
 				// stop recursion
-				if walk_combinations(state, new_total_poss_digs, &cells[i+1..], zone, stack, stop_after_first) {
+				if walk_combinations(state, new_total_poss_digs, &cells[i+1..], zone, stack, subset_size, stop_after_first) {
 					return true
 				};
 				stack.pop();
@@ -627,16 +626,14 @@ impl StrategySolver {
 			let cells = zone.cells();
 			// if true, then a subset was found and stop_after_first is set
 			// stop looking
-			if walk_combinations(self, Mask::NONE, &cells, zone, &mut stack, stop_after_first) {
+			if walk_combinations(self, Mask::NONE, &cells, zone, &mut stack, subset_size, stop_after_first) {
 				break
 			};
 		}
 		Ok(())
 	}
 
-	fn find_hidden_subsets(&mut self, stop_after_first: bool) -> Result<(), Unsolvable> {
-		// TODO: limit min/max length so hidden pairs / triples / quadruples can be distinguished
-		//		 breadth first search?
+	fn find_hidden_subsets(&mut self, subset_size: usize, stop_after_first: bool) -> Result<(), Unsolvable> {
 		fn walk_combinations(
 			state: &mut StrategySolver,
 			zone: u8,
@@ -644,12 +641,13 @@ impl StrategySolver {
 			num_offs: &[u8],
 			all_num_offs: &[u8; 9],
 			stack: &mut Vec<u8>,
+			subset_size: usize,
 			stop_after_first: bool,
 		) -> bool {
-			if stack.len() == 5 { return false }
+			if stack.len() > subset_size { return false }
 			let zone_poss_positions = state.zone_poss_positions.state[zone as usize];
 
-			if stack.len() > 0 && total_poss_pos.n_possibilities() == stack.len() as u8 {
+			if stack.len() == subset_size && total_poss_pos.n_possibilities() == stack.len() as u8 {
 
 				let n_eliminated = state.eliminated_entries.len();
 				for &num_off in all_num_offs.iter().filter(|num_off| !stack.contains(num_off)) {
@@ -679,7 +677,7 @@ impl StrategySolver {
 				if num_poss_pos == Mask::NONE { continue }
 				stack.push(num_off);
 				let new_total_poss_pos = total_poss_pos | num_poss_pos;
-				if walk_combinations(state, zone, new_total_poss_pos, &num_offs[i+1..], all_num_offs, stack, stop_after_first) {
+				if walk_combinations(state, zone, new_total_poss_pos, &num_offs[i+1..], all_num_offs, stack, subset_size, stop_after_first) {
 					return true
 				};
 				stack.pop();
@@ -693,7 +691,7 @@ impl StrategySolver {
 		for zone in 0..27 {
 			if self.zone_solved_digits.state[zone as usize] == Mask::ALL { continue }
 			let num_offs = [0, 1, 2, 3, 4, 5, 6, 7, 8];
-			if walk_combinations(self, zone, Mask::NONE, &num_offs, &num_offs, &mut stack, stop_after_first) {
+			if walk_combinations(self, zone, Mask::NONE, &num_offs, &num_offs, &mut stack, subset_size, stop_after_first) {
 				break
 			};
 		}
@@ -969,8 +967,12 @@ pub enum Strategy {
     NakedSingles,
     HiddenSingles,
     LockedCandidates,
-    NakedSubsets,
-    HiddenSubsets,
+	NakedPairs,
+	NakedTriples,
+	NakedQuads,
+	HiddenPairs,
+	HiddenTriples,
+	HiddenQuads,
     XWing,
     Swordfish,
     Jellyfish,
@@ -988,8 +990,12 @@ impl Strategy {
 			NakedSingles => state.find_naked_singles(stop_after_first),
 			HiddenSingles => state.find_hidden_singles(stop_after_first),
 			LockedCandidates => state.find_locked_candidates(stop_after_first),
-			NakedSubsets => state.find_naked_subsets(stop_after_first),
-			HiddenSubsets => state.find_hidden_subsets(stop_after_first),
+			NakedPairs => state.find_naked_subsets(2, stop_after_first),
+			NakedTriples => state.find_naked_subsets(3, stop_after_first),
+			NakedQuads => state.find_naked_subsets(4, stop_after_first),
+			HiddenPairs => state.find_hidden_subsets(2, stop_after_first),
+			HiddenTriples => state.find_hidden_subsets(3, stop_after_first),
+			HiddenQuads => state.find_hidden_subsets(4, stop_after_first),
 			XWing => { state.find_xwings(stop_after_first); Ok(()) },
 			Swordfish => { state.find_swordfish(stop_after_first); Ok(()) },
 			Jellyfish => { state.find_jellyfish(stop_after_first); Ok(()) },
@@ -1195,8 +1201,8 @@ macro_rules! map_to_strategy {
 	($this:expr; $($variant:ident),*) => {
 		match *$this {
 			$(
-				$variant {..} => Strategy::$variant
-			),*
+				$variant {..} => Strategy::$variant,
+			)*
 		}
 	}
 }
@@ -1205,10 +1211,39 @@ impl StrategyResult {
 	fn strategy(&self) -> Strategy {
 		use self::StrategyResult::*;
 		// for each strategy: StrategyName{..} => Strategy::StrategyName
+		/*
 		map_to_strategy!( self;
-			NakedSingles, HiddenSingles, LockedCandidates, NakedSubsets, HiddenSubsets,
+			NakedSingles, HiddenSingles, LockedCandidates, NakedPairs, NakedTriples, NakedQuads,
+			HiddenPairs, HiddenTriples, HiddenQuads,
 			XWing, Swordfish, Jellyfish, SinglesChain, __NonExhaustive
 		)
+		*/
+		match self {
+			NakedSingles { .. } => Strategy::NakedSingles,
+			HiddenSingles { .. } => Strategy::HiddenSingles,
+			LockedCandidates { .. } => Strategy::LockedCandidates,
+			XWing { .. } => Strategy::XWing,
+			Swordfish { .. } => Strategy::Swordfish,
+			Jellyfish { .. } => Strategy::Jellyfish,
+			SinglesChain { .. } => Strategy::SinglesChain,
+			NakedSubsets { cells, .. } => {
+				match cells.len() {
+					2 => Strategy::NakedPairs,
+					3 => Strategy::NakedTriples,
+					4 => Strategy::NakedQuads,
+					_ => unreachable!(),
+				}
+			}
+			HiddenSubsets { num_offsets, .. } => {
+				match num_offsets.len() {
+					2 => Strategy::HiddenPairs,
+					3 => Strategy::HiddenTriples,
+					4 => Strategy::HiddenQuads,
+					_ => unreachable!(),
+				}
+			}
+			__NonExhaustive => unreachable!(),
+		}
 	}
 
 	// SudokuExplainer compatible difficulty of deduction
@@ -1325,15 +1360,47 @@ fn find_unique<I: Iterator<Item=Mask<Digit>>>(possibilities: I) -> (Mask<Digit>,
 
 pub fn all_strategies() -> Vec<Strategy> {
 	use super::Strategy::*;
+
+	/*
+	NakedSingles(_) => 23,
+	HiddenSingles(_, ZoneType::Block) => 12,
+	HiddenSingles(_, _) => 15,
+	LockedCandidates(_, _, _) => 28,
+	NakedSubsets { cells, .. } => {
+		match cells.len() {
+			2 => 30,
+			3 => 36,
+			4 => 50,
+			_ => unreachable!(),
+		}
+	}
+	HiddenSubsets { num_offsets, .. } => {
+		// fixme: direct hidden pairs and triplets are lower
+		match num_offsets.len() {
+			2 => 34,
+			3 => 40,
+			4 => 54,
+			_ => unreachable!(),
+		}
+	}
+	XWing { .. } => 32,
+	Swordfish { .. } => 38,
+	Jellyfish { .. } => 52,
+	*/
+
 	vec![
-		NakedSingles,
-		HiddenSingles,
-		LockedCandidates,
-		NakedSubsets,
-		HiddenSubsets,
-		XWing,
-		Swordfish,
-		Jellyfish,
+		NakedSingles,     // 23
+		HiddenSingles,    // 15
+		LockedCandidates, // 28
+		NakedPairs,       // 30
+		XWing,            // 32
+		HiddenPairs,      // 34
+		NakedTriples,     // 36
+		Swordfish,        // 38
+		HiddenTriples,    // 40
+		NakedQuads,       // 50
+		Jellyfish,        // 52
+		HiddenQuads,      // 54
 		//SinglesChain,
 	]
 }

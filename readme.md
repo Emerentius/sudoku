@@ -3,45 +3,34 @@ Sudoku
 
 [![Crates.io Status](http://meritbadge.herokuapp.com/sudoku)](https://crates.io/crates/sudoku) [![Build Status](https://travis-ci.org/Emerentius/sudoku.svg?branch=master)](https://travis-ci.org/Emerentius/sudoku)
 
-> A Rust library with ambition to be your one stop shop for all your sudoku logic needs. Currently offering
-  very fast sudoku generation and solving.
+Utilities for classical 9x9 sudokus.
 
-# Usage Example
+This library currently offers extremely fast sudoku solving and a basic sudoku
+generator. The solver is based on [jczsolve](http://forum.enjoysudoku.com/3-77us-solver-2-8g-cpu-testcase-17sodoku-t30470-210.html#p249309)
+which is currently and to the best knowledge of the author the world's fastest sudoku
+solver algorithm. A few modifications were made to improve the speed further.
+
+A future goal is the addition of a fast solver applying human style strategies
+so that sudokus can be graded, hinted and the solution path explained. With the ability to
+grade sudokus, puzzles of any desired desired difficulty can be generated.
+
+## Example
 
 ```rust
-extern crate sudoku;
-
 use sudoku::Sudoku;
 
-fn main() {
-    // in block format
-    let sudoku_str = "\
-___|2__|_63
-3__|__5|4_1
-__1|__3|98_
----+---+---
-___|___|_9_
-___|538|___
-_3_|___|___
----+---+---
-_26|3__|5__
-5_3|7__|__8
-47_|__1|___";
+// Sudokus can be created from &str's in both block or line formats or directly from bytes.
+// here, an example in line format
+let sudoku_line = "...2...633....54.1..1..398........9....538....3........263..5..5.37....847...1...";
 
-    // or line format (same sudoku)
-    let sudoku_str2 = "...2...633....54.1..1..398........9....538....3........263..5..5.37....847...1...";
+let sudoku = Sudoku::from_str_line(sudoku_line).unwrap();
 
-    let mut sudoku = Sudoku::from_str_block(sudoku_str).unwrap();
-    let mut sudoku2 = Sudoku::from_str_line(sudoku_str2).unwrap();
+// Solve, print or convert the sudoku to another format
+if let Some(solution) = sudoku.solve_unique() {
+    // print the solution in line format
+    println!("{}", solution);
 
-    sudoku.solve();
-    sudoku2.solve();
-
-    // print as block
-    println!("{}", sudoku);
-    // or as line
-    println!("{}", sudoku.to_str_line());
-
-    assert!(sudoku == sudoku2);
+    // or return it as a byte array
+    let cell_contents: [u8; 81] = solution.to_bytes();
 }
 ```

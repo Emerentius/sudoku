@@ -9,44 +9,34 @@
         write_with_newline,
     )
 )]
-//! The Sudoku library
+//! Utilities for classical 9x9 sudokus.
 //!
-//! ## Overview
+//! This library currently offers extremely fast sudoku solving and a basic sudoku
+//! generator. The solver is based on [jczsolve](http://forum.enjoysudoku.com/3-77us-solver-2-8g-cpu-testcase-17sodoku-t30470-210.html#p249309)
+//! which is currently and to the best knowledge of the author the world's fastest sudoku
+//! solver algorithm. A few modifications were made to improve the speed further.
 //!
-//! Sudoku is a library that aims to provide a simple API to solve sudokus
-//! without having to deal with too much details.
+//! A future goal is the addition of a fast solver applying human style strategies
+//! so that sudokus can be graded, hinted and the solution path explained. With the ability to
+//! grade sudokus, puzzles of any desired desired difficulty can be generated.
 //!
 //! ## Example
 //!
 //! ```
 //! use sudoku::Sudoku;
 //!
-//! let sudoku_block =
-//! "___|2__|_63
-//! 3__|__5|4_1
-//! __1|__3|98_
-//! ---+---+---
-//! ___|___|_9_
-//! ___|538|___
-//! _3_|___|___
-//! ---+---+---
-//! _26|3__|5__
-//! 5_3|7__|__8
-//! 47_|__1|___";
-//!
+//! // Sudokus can be created from &str's in both block or line formats or directly from bytes.
+//! // here, an example in line format
 //! let sudoku_line = "...2...633....54.1..1..398........9....538....3........263..5..5.37....847...1...";
 //!
-//! // Sudokus can be created from &str's in both block or line formats or directly from bytes.
-//! let sudoku = Sudoku::from_str_block_permissive(sudoku_block).unwrap();
 //! let sudoku = Sudoku::from_str_line(sudoku_line).unwrap();
-//! // Sudoku::from_bytes(some_bytes_arr);
-//! // Sudoku::from_bytes_slice(some_slice);
 //!
 //! // Solve, print or convert the sudoku to another format
 //! if let Some(solution) = sudoku.solve_unique() {
+//!     // print the solution in line format
 //!     println!("{}", solution);
-//!     println!("{}", solution.to_str_line());
 //!
+//!     // or return it as a byte array
 //!     let cell_contents: [u8; 81] = solution.to_bytes();
 //! }
 //! ```

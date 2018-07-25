@@ -9,43 +9,9 @@ use std::{fmt, slice, iter, hash, cmp, ops::{self, Deref}, str};
 #[cfg(feature="serde")] use ::serde::{de, Serialize, Serializer, Deserialize, Deserializer};
 
 /// The main structure exposing all the functionality of the library
-/// Sudokus can be parsed in either the line format or the block format
 ///
-/// line format:
-///
-/// `..3.2.6..9..3.5..1..18.64....81.29..7.......8..67.82....26.95..8..2.3..9..5.1.3.. optional comment`
-///
-/// block format:
-///
-/// ```text
-/// __3_2_6__ optional comment
-/// 9__3_5__1 another comment
-/// __18_64__
-/// __81_29__
-/// 7_______8
-/// __67_82__
-/// __26_95__
-/// 8__2_3__9
-/// __5_1_3__
-/// ```
-///
-/// alternatively also with field delimiters
-///
-/// ```text
-/// __3|_2_|6__ optional comment
-/// 9__|3_5|__1 another comment
-/// __1|8_6|4__
-/// ---+---+--- comment: "-----------", i.e. '-' 11 times is also allowed
-/// __8|1_2|9__          but has to be consistent
-/// 7__|___|__8
-/// __6|7_8|2__
-/// ---+---+---
-/// __2|6_9|5__
-/// 8__|2_3|__9
-/// __5|_1_|3__
-/// ```
-///
-/// `'_'`, `'.'` and `'0'` are accepted interchangeably as unfilled cells
+/// `Sudoku"s can generated, constructed from arrays or parsed from `&str`s
+/// in either the line or block format.
 #[derive(Copy, Clone)]
 pub struct Sudoku(pub(crate) [u8; 81]);
 
@@ -277,7 +243,22 @@ impl Sudoku {
 			}
 	}
 
-	/// Reads a sudoku in the line format
+	/// Reads a sudoku in the line format.
+	///
+	/// This is a concatenation of the digits in each cell, line by line from top to bottom.
+	/// Digits must be in range of 1-9.
+	/// `'_'`, `'.'` and `'0'` are accepted interchangeably as empty cells
+	///
+	/// An optional comment is allowed after the sudoku,
+	/// separated by ASCII whitespace, commas or semicolons,
+	/// that is, any of ' ', '\t', '\n', '\r', ',', ';'
+	///
+	/// Example:
+	///
+	/// ```text
+	/// ..3.2.6..9..3.5..1..18.64....81.29..7.......8..67.82....26.95..8..2.3..9..5.1.3.. optional comment
+	/// ```
+	///
 	/// Stops parsing after the first sudoku
 	pub fn from_str_line(s: &str) -> Result<Sudoku, LineFormatParseError> {
 		let chars = s.as_bytes();
@@ -325,6 +306,41 @@ impl Sudoku {
 	}
 
 	/// Reads a sudoku in the block format with or without field delimiters
+	///
+	/// Digits must be in range of 1-9.
+	/// `'_'`, `'.'` and `'0'` are accepted interchangeably as empty cells
+	///
+	/// Optional comments are accepted after each line. They must be delimited by
+	/// ' ' or '\t', i.e. a space or a tab character.
+	///
+	/// ```text
+	/// __3_2_6__ optional comment
+	/// 9__3_5__1 another comment
+	/// __18_64__
+	/// __81_29__
+	/// 7_______8
+	/// __67_82__
+	/// __26_95__
+	/// 8__2_3__9
+	/// __5_1_3__
+	/// ```
+	///
+	/// alternatively also with field delimiters
+	///
+	/// ```text
+	/// __3|_2_|6__ optional comment
+	/// 9__|3_5|__1 another comment
+	/// __1|8_6|4__
+	/// ---+---+--- comment: "-----------", i.e. '-' 11 times is also allowed
+	/// __8|1_2|9__          delimiters have to be consistent across the entire
+	/// 7__|___|__8          grid
+	/// __6|7_8|2__
+	/// ---+---+---
+	/// __2|6_9|5__
+	/// 8__|2_3|__9
+	/// __5|_1_|3__
+	/// ```
+	///
 	/// Stops parsing after the first sudoku
 	pub fn from_str_block(s: &str) -> Result<Sudoku, BlockFormatParseError> {
 		let mut grid = [0; N_CELLS];
@@ -420,13 +436,16 @@ impl Sudoku {
 		Ok(Sudoku(grid))
 	}
 
-	/// Reads a sudoku in a variety of block formats, applying few constraints.
-	/// '_', '.' and '0' are treated as empty cells. '1' to '9' as clues. Each line needs to have 9 valid cells.
+	/// Reads a sudoku in a variety of block formats with very few constraints.
+	///
+	/// '_', '.' and '0' are treated as empty cells. '1' to '9' as clues.
+	/// Each line needs to have 9 valid cells.
 	/// Lines that don't contain 9 valid entries are ignored.
-	/// Stops parsing after the first sudoku. Due to the lax format rules, the only failure that can occur
+	///
+	/// Stops parsing after the first sudoku.
+	///
+	/// Due to the lax format rules, the only failure that can occur
 	/// is that there are not enough rows.
-	//pub fn from_str_block_permissive<CP>(s: &str, mut matches_empty_cell: CP) -> Result<Sudoku, BlockFormatParseError>
-	//	where CP: CharPattern,
 	pub fn from_str_block_permissive(s: &str) -> Result<Sudoku, NotEnoughRows>
 	{
 		let mut grid = [0; N_CELLS];

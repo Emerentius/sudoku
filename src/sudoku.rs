@@ -5,7 +5,7 @@ use types::{Entry, PubEntry, BlockFormatParseError, LineFormatParseError, NotEno
 use solver::SudokuSolver;
 use generator::SudokuGenerator;
 
-use std::{fmt, slice, iter, hash, cmp};
+use std::{fmt, slice, iter, hash, cmp, ops::{self, Deref}, str};
 #[cfg(feature="serde")] use ::serde::{de, Serialize, Serializer, Deserialize, Deserializer};
 
 /// The main structure exposing all the functionality of the library
@@ -70,7 +70,7 @@ impl Serialize for Sudoku {
 #[cfg(feature="serde")]
 impl<'de> de::Visitor<'de> for ByteSudoku {
 	type Value = Sudoku;
-	fn expecting(&self, formatter: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+	fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
 		write!(formatter, "81 numbers from 0 to 9 inclusive")
 	}
 
@@ -88,7 +88,7 @@ impl<'de> de::Visitor<'de> for ByteSudoku {
 #[cfg(feature="serde")]
 impl<'de> de::Visitor<'de> for StrSudoku {
 	type Value = Sudoku;
-	fn expecting(&self, formatter: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+	fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
 		write!(formatter, "81 numbers from 0 to 9 inclusive")
 	}
 
@@ -730,6 +730,40 @@ impl Sudoku {
 		}
 		SudokuLine(chars)
 	}
+
+	/// Returns a value that, prints a block representation of the sudoku
+	/// when formatted via the `Display` trait.
+	///
+	///
+	/// ```
+	/// use sudoku::Sudoku;
+	///
+	/// let mut grid = [0; 81];
+	/// grid[3] = 5;
+    /// grid[36..45].copy_from_slice(&[1, 2, 3, 4, 5, 6, 7, 8, 9]);
+	/// let sudoku = Sudoku::from_bytes(grid).unwrap();
+	/// let block = sudoku.display_block(); // :SudokuBlock
+	///
+	/// let block_string = format!("{}", block);
+	/// assert_eq!(
+	///     &block_string,
+	/// "
+	/// ___ 5__ ___
+	/// ___ ___ ___
+	/// ___ ___ ___
+	///
+	/// ___ ___ ___
+	/// 123 456 789
+	/// ___ ___ ___
+	///
+	/// ___ ___ ___
+	/// ___ ___ ___
+	/// ___ ___ ___"
+	///	);
+	/// ```
+	pub fn display_block(&self) -> SudokuBlock {
+		SudokuBlock(self.0)
+	}
 }
 
 fn num_to_opt(num: &u8) -> Option<u8> {
@@ -738,23 +772,7 @@ fn num_to_opt(num: &u8) -> Option<u8> {
 
 impl fmt::Display for Sudoku {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		for entry in self.0.iter().enumerate().map(|(cell, &num)| Entry { cell: cell as u8, num } ) {
-			try!( match (entry.row(), entry.col()) {
-				(_, 3) | (_, 6) => write!(f, " "),    // seperate fields in columns
-				(3, 0) | (6, 0) => write!(f, "\n\n"), // separate fields in rows
-				(_, 0)          => write!(f, "\n"),   // separate lines not between fields
-				_ => Ok(()),
-			});
-			//try!(
-            try!( match entry.num() {
-                0 => write!(f, "_"),
-                1...9 => write!(f, "{}", entry.num()),
-                _ => unreachable!(),
-            });
-                //uwrite!(f, "{}", entry.num())
-            //);
-		}
-		Ok(())
+		write!(f, "{}", self.to_str_line())
 	}
 }
 
@@ -768,6 +786,8 @@ pub struct SudokuLine([u8; 81]);
 /// going from left to right, top to bottom
 impl PartialOrd for SudokuLine {
 	fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+		// the &str representation uses '.', which is below '0' and therefore
+		// this orders just like the regular sudoku would.
 		// deref into &str and cmp
 		(**self).partial_cmp(other)
 	}
@@ -803,16 +823,76 @@ impl fmt::Debug for SudokuLine {
 	}
 }
 
-impl ::core::ops::Deref for SudokuLine {
+impl ops::Deref for SudokuLine {
 	type Target = str;
 	fn deref(&self) -> &Self::Target {
-		::core::str::from_utf8(&self.0).unwrap()
+		str::from_utf8(&self.0).unwrap()
 	}
 }
 
-use ::core::ops::Deref;
-impl ::core::fmt::Display for SudokuLine {
+impl fmt::Display for SudokuLine {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		write!(f, "{}", self.deref())
+	}
+}
+
+/// Sudoku that will be printed in block format.
+/// This exists primarily for debugging.
+#[derive(Copy, Clone)]
+pub struct SudokuBlock([u8; 81]);
+
+/// The ordering is lexicographical in the cells of the sudoku
+/// going from left to right, top to bottom
+impl PartialOrd for SudokuBlock {
+	fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+		self.0[..].partial_cmp(&other.0[..])
+	}
+}
+
+impl Ord for SudokuBlock {
+	fn cmp(&self, other: &Self) -> cmp::Ordering {
+		self.0[..].cmp(&other.0[..])
+	}
+}
+
+impl hash::Hash for SudokuBlock {
+    fn hash<H>(&self, state: &mut H)
+    where
+        H: hash::Hasher
+	{
+		self.0[..].hash(state)
+	}
+}
+
+impl PartialEq for SudokuBlock {
+	fn eq(&self, other: &SudokuBlock) -> bool {
+		self.0[..] == other.0[..]
+	}
+}
+
+impl Eq for SudokuBlock {}
+
+impl fmt::Debug for SudokuBlock {
+	fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+		self.0.fmt(fmt)
+	}
+}
+
+impl fmt::Display for SudokuBlock {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		for entry in self.0.iter().enumerate().map(|(cell, &num)| Entry { cell: cell as u8, num } ) {
+			match (entry.row(), entry.col()) {
+				(_, 3) | (_, 6) => write!(f, " ")?,    // seperate fields in columns
+				(3, 0) | (6, 0) => write!(f, "\n\n")?, // separate fields in rows
+				(_, 0)          => write!(f, "\n")?,   // separate lines not between fields
+				_ => {},
+			};
+            match entry.num() {
+                0 => write!(f, "_")?,
+                1...9 => write!(f, "{}", entry.num())?,
+                _ => unreachable!(),
+            };
+		}
+		Ok(())
 	}
 }

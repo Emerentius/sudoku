@@ -53,7 +53,6 @@
 #[macro_use]
 extern crate crunchy;
 #[cfg(feature="serde")] extern crate serde;
-extern crate core;
 extern crate rand;
 
 mod consts;
@@ -64,7 +63,6 @@ mod generator;
 mod positions;
 
 pub use sudoku::Sudoku;
-//pub use types::{LineFormatParseError, BlockFormatParseError, PubEntry as Entry};
 
 /// Contains errors for the various parsing modes
 pub mod parse_errors {

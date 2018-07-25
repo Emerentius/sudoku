@@ -62,3 +62,6 @@ Version 0.6.2 (2018-06-24)
 Unreleased
 ==========
 * Remove `Sudoku::solve`
+* Switch default sudoku print format to the line format
+* Add `SudokuBlock` wrapper to print a grid representation
+  created by `display_block()` on `Sudoku`

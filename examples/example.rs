@@ -15,7 +15,8 @@ _26|3__|5__
 5_3|7__|__8
 47_|__1|___";
 
-    let mut sudoku = Sudoku::from_str_block(sudoku_str).unwrap();
-    sudoku.solve();
-    println!("{}", sudoku);
+    let sudoku = Sudoku::from_str_block(sudoku_str).unwrap();
+    if let Some(solution) = sudoku.solve_unique() {
+        println!("{}", solution);
+    }
 }

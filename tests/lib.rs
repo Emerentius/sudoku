@@ -20,8 +20,8 @@ _263__5__
 5_37____8
 47___1___";
 
-    let mut sudoku = Sudoku::from_str_block(sudoku_str).unwrap();
-    sudoku.solve();
+    let sudoku = Sudoku::from_str_block(sudoku_str).unwrap();
+    let sudoku = sudoku.solve_unique().unwrap();
     println!("{}", sudoku);
 }
 
@@ -40,8 +40,8 @@ __5|817|___
 _63|2_4|_17
 8__|__9|__3";
 
-	let mut sudoku = Sudoku::from_str_block(sudoku_str).unwrap();
-	sudoku.solve();
+	let sudoku = Sudoku::from_str_block(sudoku_str).unwrap();
+	let sudoku = sudoku.solve_unique().unwrap();
 	println!("{}", sudoku);
 }
 
@@ -62,11 +62,11 @@ _26|3__|5__
 
     let sudoku_str2 = "...2...633....54.1..1..398........9....538....3........263..5..5.37....847...1...";
 
-    let mut sudoku = Sudoku::from_str_block(sudoku_str).unwrap();
-    let mut sudoku2 = Sudoku::from_str_line(sudoku_str2).unwrap();
-    sudoku.solve();
-    sudoku2.solve();
-    println!("{}", sudoku);
+    let sudoku = Sudoku::from_str_block(sudoku_str).unwrap()
+        .solve_unique().unwrap();
+    let sudoku2 = Sudoku::from_str_line(sudoku_str2).unwrap()
+        .solve_unique().unwrap();
+    println!("{}", sudoku.display_block());
     println!("{}", sudoku.to_str_line());
     assert!(sudoku == sudoku2);
 }

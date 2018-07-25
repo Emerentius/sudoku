@@ -458,18 +458,6 @@ impl Sudoku {
 		Err(NotEnoughRows(valid_rows as u8))
 	}
 
-	/// Try to find a solution to the sudoku and fill it in. Return true if a solution was found.
-	/// This is a convenience interface. Use one of the other solver methods for better error handling
-	pub fn solve(&mut self) -> bool {
-		match self.clone().solve_one() {
-			Some(solution) => {
-				*self = solution;
-				true
-			},
-			None => false,
-		}
-	}
-
 	/// Find a solution to the sudoku. If multiple solutions exist, it will not find them and just stop at the first.
 	/// Return `None` if no solution exists.
     pub fn solve_one(self) -> Option<Sudoku> {

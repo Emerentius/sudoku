@@ -58,3 +58,7 @@ Version 0.6.1 (2018-06-6)
 Version 0.6.2 (2018-06-24)
 --------------------------
 * Add `solve_at_most_buffer`, primarily for C FFI
+
+Unreleased
+==========
+* Remove `Sudoku::solve`

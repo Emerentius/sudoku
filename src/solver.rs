@@ -268,12 +268,12 @@ impl SudokuSolver {
 		self.poss_cells[subband] = poss_cells;
 
 		// possible columns in subband, including already solved ones
-		let s = (poss_cells | poss_cells >> 9 | poss_cells >> 18) & LOW9;
+		let poss_cols = (poss_cells | poss_cells >> 9 | poss_cells >> 18) & LOW9;
 
 		// check for locked candidates of the columns (pointing type)
 		// this is also what's enforcing that a column cannot contain
 		// more than once
-		let nonconflicting_other = nonconflicting_cells_neighbor_bands_by_locked_candidates(s);
+		let nonconflicting_other = nonconflicting_cells_neighbor_bands_by_locked_candidates(poss_cols);
 		let (ns1, ns2) = neighbor_subbands(subband);
 		self.poss_cells[ns1] &= nonconflicting_other;
 		self.poss_cells[ns2] &= nonconflicting_other;
@@ -289,7 +289,7 @@ impl SudokuSolver {
 		//                      s_jczsolve = 7 ^ solved_rows
 		//                      jczsolve used a 2nd, inverted lookup table
 		let solved_rows = shrink_mask(
-			locked_minirows(shrink) & column_single(s)
+			locked_minirows(shrink) & column_single(poss_cols)
 		);
 		let solved_cells = row_mask(solved_rows) & poss_cells;
 
@@ -321,15 +321,15 @@ impl SudokuSolver {
 
 			unroll!{
 				for subband in 0..27 {
-					// this is always true
+					// the first condition is always true
 					// but the optimizer doesn't get that
-					// which in this rare circumstance actually produces BETTER code
-					// (don't ask me why)
-					if (self.requirement_for_weird_optimization[0] >> subband / 3) & LOW9 != NONE {
-						if self.poss_cells[subband] != self.prev_poss_cells[subband] {
-							found_nothing = false;
-							self._find_locked_candidates_and_update(subband)?;
-			}
+					// which causes it to be less aggressive in applying optimizations
+					// which would, in this rare case, cause the code to run slower
+					if (self.requirement_for_weird_optimization[0] >> subband / 3) & LOW9 != NONE
+					&& self.poss_cells[subband] != self.prev_poss_cells[subband]
+					{
+						found_nothing = false;
+						self._find_locked_candidates_and_update(subband)?;
 					}
 				}
 			}

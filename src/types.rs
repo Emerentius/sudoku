@@ -15,13 +15,31 @@ pub(crate) struct Entry {
 }
 
 impl Entry {
-    #[inline] pub fn cell(self) -> usize { self.cell as usize }
-    #[inline] pub fn row(self) -> u8 { self.cell / 9 }
-    #[inline] pub fn col(self) -> u8 { self.cell % 9 }
-    #[inline] pub fn field(self) -> u8 { FIELD[self.cell()] }
-    #[inline] pub fn num(self) -> u8 { self.num }
+    #[inline]
+    pub fn cell(self) -> usize {
+        self.cell as usize
+    }
+    #[inline]
+    pub fn row(self) -> u8 {
+        self.cell / 9
+    }
+    #[inline]
+    pub fn col(self) -> u8 {
+        self.cell % 9
+    }
+    #[inline]
+    pub fn field(self) -> u8 {
+        FIELD[self.cell()]
+    }
+    #[inline]
+    pub fn num(self) -> u8 {
+        self.num
+    }
 
-    #[inline] pub fn mask(self) -> Mask<Digit> { Mask::from_num(self.num()) }
+    #[inline]
+    pub fn mask(self) -> Mask<Digit> {
+        Mask::from_num(self.num())
+    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -36,13 +54,21 @@ pub struct PubEntry {
 
 impl PubEntry {
     /// Row index from 0..=8, topmost row is 0
-    #[inline] pub fn row(self) -> u8 { self.cell / 9 }
+    #[inline]
+    pub fn row(self) -> u8 {
+        self.cell / 9
+    }
     /// Column index from 0..=8, leftmost col is 0
-    #[inline] pub fn col(self) -> u8 { self.cell % 9 }
+    #[inline]
+    pub fn col(self) -> u8 {
+        self.cell % 9
+    }
     /// Field index from 0..=8, numbering from left to right, top to bottom. Example: Top-row is 0, 1, 2
-    #[inline] pub fn field(self) -> u8 { FIELD[self.cell as usize] }
+    #[inline]
+    pub fn field(self) -> u8 {
+        FIELD[self.cell as usize]
+    }
 }
-
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -89,17 +115,24 @@ impl fmt::Display for LineFormatParseError {
         use self::LineFormatParseError::*;
 
         match *self {
-            InvalidEntry(PubEntry { cell, ch }) => write!(f, "cell {} contains invalid character '{}'", cell, ch),
+            InvalidEntry(PubEntry { cell, ch }) => {
+                write!(f, "cell {} contains invalid character '{}'", cell, ch)
+            }
             NotEnoughCells(cells) => write!(f, "sudoku contains {} cells instead of required 81", cells),
-            TooManyCells => write!(f, "sudoku contains more than 81 cells or is missing comment delimiter"),
+            TooManyCells => write!(
+                f,
+                "sudoku contains more than 81 cells or is missing comment delimiter"
+            ),
             MissingCommentDelimiter => write!(f, "missing comment delimiter"),
         }
     }
 }
 ////////////////////////////////////////////////////////////////////////////////
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)] pub(crate) struct Position;
-#[derive(Clone, Copy, PartialEq, Eq, Debug)] pub(crate) struct Digit;
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) struct Position;
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) struct Digit;
 
 // Bitmask struct for T where T is just an information regarding intent
 // it could for example be Mask<Digit> or Mask<Position>
@@ -164,7 +197,7 @@ impl Mask<Digit> {
     pub fn unique_num(self) -> Result<Option<u8>, Unsolvable> {
         match self.0 {
             0 => Err(Unsolvable),
-            n if n.is_power_of_two() => Ok(Some(n.trailing_zeros() as u8+1)),
+            n if n.is_power_of_two() => Ok(Some(n.trailing_zeros() as u8 + 1)),
             _ => Ok(None),
         }
     }
@@ -197,7 +230,7 @@ impl Iterator for MaskIter<Digit> {
                 let num = self.0.one_possibility();
                 self.0.remove(Mask::from_num(num));
                 Some(num)
-            },
+            }
         }
     }
 }
@@ -215,7 +248,7 @@ impl<T> ::std::ops::Not for Mask<T> {
 }
 
 macro_rules! impl_bitops {
-    ($trait_:path, $fn_name:ident ) => {
+    ($trait_:path, $fn_name:ident) => {
         impl<T> $trait_ for Mask<T> {
             type Output = Self;
             #[inline(always)]
@@ -223,7 +256,7 @@ macro_rules! impl_bitops {
                 Mask::new(u16::$fn_name(self.0, rhs.0))
             }
         }
-    }
+    };
 }
 
 impl_bitops!(::std::ops::BitAnd, bitand);
@@ -231,13 +264,13 @@ impl_bitops!(::std::ops::BitOr, bitor);
 impl_bitops!(::std::ops::BitXor, bitxor);
 
 macro_rules! impl_bitops_assign {
-    ($trait_:path, $fn_name:ident ) => {
+    ($trait_:path, $fn_name:ident) => {
         impl<T> $trait_ for Mask<T> {
             fn $fn_name(&mut self, rhs: Self) {
                 u16::$fn_name(&mut self.0, rhs.0)
             }
         }
-    }
+    };
 }
 
 impl_bitops_assign!(::std::ops::BitAndAssign, bitand_assign);

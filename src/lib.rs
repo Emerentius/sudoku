@@ -1,5 +1,6 @@
 #![warn(missing_docs)]
-#![cfg_attr(feature = "cargo-clippy",
+#![cfg_attr(
+    feature = "cargo-clippy",
     allow(
         clippy_complexity,
         match_bool,
@@ -42,19 +43,20 @@
 //! ```
 #[macro_use]
 extern crate crunchy;
-#[cfg(feature="serde")] extern crate serde;
 extern crate rand;
+#[cfg(feature = "serde")]
+extern crate serde;
 
 mod consts;
-mod types;
-mod sudoku;
-mod solver;
 mod generator;
 mod positions;
+mod solver;
+mod sudoku;
+mod types;
 
 pub use sudoku::Sudoku;
 
 /// Contains errors for the various parsing modes
 pub mod parse_errors {
-    pub use types::{LineFormatParseError, BlockFormatParseError, NotEnoughRows, PubEntry as Entry};
+    pub use types::{BlockFormatParseError, LineFormatParseError, NotEnoughRows, PubEntry as Entry};
 }

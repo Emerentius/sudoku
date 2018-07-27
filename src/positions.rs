@@ -1,12 +1,30 @@
 use consts::*;
 
-#[inline(always)] pub fn row(cell: u8) -> u8 { cell / 9 }
-#[inline(always)] pub fn col(cell: u8) -> u8 { cell % 9 }
-#[inline(always)] pub fn field(cell: u8) -> u8 { FIELD[cell as usize] }
+#[inline(always)]
+pub fn row(cell: u8) -> u8 {
+    cell / 9
+}
+#[inline(always)]
+pub fn col(cell: u8) -> u8 {
+    cell % 9
+}
+#[inline(always)]
+pub fn field(cell: u8) -> u8 {
+    FIELD[cell as usize]
+}
 
-#[inline(always)] pub fn row_zone(cell: u8) -> usize   { row(cell) as usize + ROW_OFFSET }
-#[inline(always)] pub fn col_zone(cell: u8) -> usize   { col(cell) as usize + COL_OFFSET }
-#[inline(always)] pub fn field_zone(cell: u8) -> usize { field(cell) as usize + FIELD_OFFSET }
+#[inline(always)]
+pub fn row_zone(cell: u8) -> usize {
+    row(cell) as usize + ROW_OFFSET
+}
+#[inline(always)]
+pub fn col_zone(cell: u8) -> usize {
+    col(cell) as usize + COL_OFFSET
+}
+#[inline(always)]
+pub fn field_zone(cell: u8) -> usize {
+    field(cell) as usize + FIELD_OFFSET
+}
 
 #[inline(always)]
 pub fn cells_of_zone(cell: u8) -> &'static [u8; 9] {
@@ -18,6 +36,7 @@ pub fn neighbours(cell: u8) -> &'static [u8; 20] {
     &ZONE_NEIGHBOURS_OF_CELL[cell as usize]
 }
 
+#[cfg_attr(rustfmt, rustfmt_skip)]
 pub static FIELD: [u8; N_CELLS] = [
     0, 0, 0, 1, 1, 1, 2, 2, 2,
     0, 0, 0, 1, 1, 1, 2, 2, 2,
@@ -30,6 +49,7 @@ pub static FIELD: [u8; N_CELLS] = [
     6, 6, 6, 7, 7, 7, 8, 8, 8,
 ];
 
+#[cfg_attr(rustfmt, rustfmt_skip)]
 static CELLS_BY_ZONE: [[u8; 9]; 27] = [
     [0, 1, 2, 3, 4, 5, 6, 7, 8],
     [9, 10, 11, 12, 13, 14, 15, 16, 17],
@@ -64,6 +84,7 @@ static CELLS_BY_ZONE: [[u8; 9]; 27] = [
 
 // list of cells that share a row, col or field for a given cell
 // sorted low to high
+#[cfg_attr(rustfmt, rustfmt_skip)]
 static ZONE_NEIGHBOURS_OF_CELL: [[u8; 20]; 81] = [
     [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 18, 19, 20, 27, 36, 45, 54, 63, 72],
     [0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 18, 19, 20, 28, 37, 46, 55, 64, 73],

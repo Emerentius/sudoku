@@ -1,10 +1,11 @@
 #![feature(test)]
-extern crate test;
 extern crate sudoku;
+extern crate test;
 use sudoku::Sudoku;
 
 fn read_sudokus(sudokus_str: &str) -> Vec<Sudoku> {
-    sudokus_str.lines()
+    sudokus_str
+        .lines()
         .map(|line| Sudoku::from_str_line(line).unwrap_or_else(|err| panic!("{:?}", err)))
         .collect()
 }
@@ -68,21 +69,20 @@ fn shuffle(b: &mut test::Bencher) {
 
 #[bench]
 fn parse_line(b: &mut test::Bencher) {
-    let sudokus = (0..1000).map(|_| Sudoku::generate_unique().to_str_line())
+    let sudokus = (0..1000)
+        .map(|_| Sudoku::generate_unique().to_str_line())
         .collect::<Vec<_>>();
     let mut sudokus = sudokus.iter().cycle();
 
-    b.iter(|| {
-        Sudoku::from_str_line(sudokus.next().unwrap())
-    })
+    b.iter(|| Sudoku::from_str_line(sudokus.next().unwrap()))
 }
 
 #[bench]
 fn parse_lines(b: &mut test::Bencher) {
-    let sudokus = (0..1000).map(|_| Sudoku::generate_unique().to_str_line())
+    let sudokus = (0..1000)
+        .map(|_| Sudoku::generate_unique().to_str_line())
         .collect::<Vec<_>>();
-    let sudokus = sudokus.iter().map(|line| &**line)
-        .collect::<Vec<_>>();
+    let sudokus = sudokus.iter().map(|line| &**line).collect::<Vec<_>>();
     let sudokus = sudokus.join("\n");
 
     b.iter(|| {
@@ -94,22 +94,20 @@ fn parse_lines(b: &mut test::Bencher) {
 
 #[bench]
 fn is_solved_on_unsolved(b: &mut test::Bencher) {
-    let sudokus = read_sudokus( include_str!("../sudokus/Lines/hard_sudokus.txt") );
-    b.iter(||
+    let sudokus = read_sudokus(include_str!("../sudokus/Lines/hard_sudokus.txt"));
+    b.iter(|| {
         for sudoku in sudokus.iter().cloned() {
             sudoku.is_solved();
         }
-
-    )
+    })
 }
 
 #[bench]
 fn is_solved_on_solved(b: &mut test::Bencher) {
-    let solved_sudokus = read_sudokus( include_str!("../sudokus/Lines/solved_hard_sudokus.txt") );
-    b.iter(||
+    let solved_sudokus = read_sudokus(include_str!("../sudokus/Lines/solved_hard_sudokus.txt"));
+    b.iter(|| {
         for sudoku in solved_sudokus.iter().cloned() {
             sudoku.is_solved();
         }
-
-    )
+    })
 }

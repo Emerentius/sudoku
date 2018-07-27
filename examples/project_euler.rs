@@ -10,13 +10,14 @@ use sudoku::Sudoku;
 fn main() {
     let mut sum = 0;
     let sudokus = include_str!("p096_sudoku.txt");
-    for sudoku in sudokus.split("Grid")
+    for sudoku in sudokus
+        .split("Grid")
         .skip(1)
         .map(Sudoku::from_str_block_permissive)
         .map(Result::unwrap)
     {
         let array = sudoku.solve_one().unwrap().to_bytes();
-        sum += array[..3].iter().fold(0, |acc, &num| acc*10 + num as u32);
+        sum += array[..3].iter().fold(0, |acc, &num| acc * 10 + num as u32);
     }
     println!("{}", sum);
 }

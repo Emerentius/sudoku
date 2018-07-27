@@ -64,7 +64,7 @@ impl<'a> Solutions<'a> {
             Solutions::Buffer(_, len) => *len,
         }
     }
-        }
+}
 // Bands  Rows                   Columns
 //
 //               0    1    2    3    4    5    6    7    8
@@ -288,9 +288,8 @@ impl SudokuSolver {
         // jczsolve equivalent: s , but lower 3 bits inversed
         //                      s_jczsolve = 7 ^ solved_rows
         //                      jczsolve used a 2nd, inverted lookup table
-        let solved_rows = shrink_mask(
-            locked_minirows(shrink) & column_single(poss_cols)
-        );
+        let locked_candidates_intersection = locked_minirows(shrink) & column_single(poss_cols);
+        let solved_rows = shrink_mask(locked_candidates_intersection);
         let solved_cells = row_mask(solved_rows) & poss_cells;
 
         // -------------- jczsolve equivalent: upwcl ---------------------------
@@ -334,7 +333,9 @@ impl SudokuSolver {
                 }
             }
 
-            if found_nothing { return Ok(()) }
+            if found_nothing {
+                return Ok(());
+            }
         }
     }
 
@@ -386,11 +387,7 @@ impl SudokuSolver {
     // with only 2 possibilities. These positions are found and saved when
     // looking for naked singles.
     // For that reason, finding such a cell is practically just a lookup.
-    fn guess_bivalue_in_cell(
-        &mut self,
-        limit: usize,
-        solutions: &mut Solutions,
-    ) -> Result<(), Unsolvable> {
+    fn guess_bivalue_in_cell(&mut self, limit: usize, solutions: &mut Solutions) -> Result<(), Unsolvable> {
         for band in 0..3 {
             // get first bivalue cell, if it exists
             let cell_mask = match mask_iter(self.pairs[band]).next() {
@@ -545,6 +542,7 @@ fn index_mut<T>(slice: &mut [T], idx: usize) -> &mut T {
 // jczsolve equivalent: TblSelfMask
 #[inline]
 fn nonconflicting_cells_same_band(cell: usize) -> u32 {
+    #[cfg_attr(rustfmt, rustfmt_skip)]
     static SELF_MASK: [u32; 81] = [
         0x37E3F001,	0x37E3F002,	0x37E3F004,	0x371F8E08,	0x371F8E10,	0x371F8E20,	0x30FC7E40,	0x30FC7E80,	0x30FC7F00,
         0x2FE003F8,	0x2FE005F8,	0x2FE009F8,	0x2F1C11C7,	0x2F1C21C7,	0x2F1C41C7,	0x28FC803F, 0x28FD003F,	0x28FE003F,
@@ -631,6 +629,7 @@ fn locked_minirows(shrink: u32) -> u32 {
 // jczsolve equivalent: reversed TblRowMask
 #[inline]
 fn row_mask(thing: u32) -> u32 {
+    #[cfg_attr(rustfmt, rustfmt_skip)]
     static ROW_MASK: [u32; 8] = [	// rows where single  found _000 to 111
         0o000000000, 0o000000777, 0o000777000, 0o000777777,
         0o777000000, 0o777000777, 0o777777000, 0o777777777,
@@ -642,6 +641,7 @@ fn row_mask(thing: u32) -> u32 {
 // jczsolve equivalent: TblAnother1 and TblAnother2
 #[inline]
 fn neighbor_subbands(subband: usize) -> (usize, usize) {
+    #[cfg_attr(rustfmt, rustfmt_skip)]
     static NEIGHBOR_SUBBANDS: [(usize, usize); 27] = [
         (1, 2), (2, 0), (0, 1),
         (4, 5), (5, 3), (3, 4),
@@ -662,6 +662,7 @@ fn bit_pos(mask: u32) -> usize {
     mask.trailing_zeros() as usize
 }
 
+#[cfg_attr(rustfmt, rustfmt_skip)]
 static SHRINK_MASK: [u32; 512] = [
     0, 1, 1, 1, 1, 1, 1, 1, 2, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3,
     2, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3,
@@ -681,6 +682,7 @@ static SHRINK_MASK: [u32; 512] = [
     6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7,
 ];
 
+#[cfg_attr(rustfmt, rustfmt_skip)]
 static LOCKED_CANDIDATES_MASK_SAME_BAND: [u32; 512] = [
     0o000000000, 0o000000000, 0o000000000, 0o000000000, 0o000000000, 0o000000000, 0o000000000, 0o000000000,
     0o000000000, 0o000000000, 0o000000000, 0o000000000, 0o000000000, 0o000000000, 0o000000000, 0o000000000,
@@ -748,6 +750,7 @@ static LOCKED_CANDIDATES_MASK_SAME_BAND: [u32; 512] = [
     0o000000000, 0o770770777, 0o707707777, 0o777777777, 0o077077777, 0o777777777, 0o777777777, 0o777777777,
 ];
 
+#[cfg_attr(rustfmt, rustfmt_skip)]
 static LOCKED_CANDIDATES_MASK_NEIGHBOR_BAND: [u32; 512] = [
     0o777777777, 0o776776776, 0o775775775, 0o777777777, 0o773773773, 0o777777777, 0o777777777, 0o777777777,
     0o767767767, 0o766766766, 0o765765765, 0o767767767, 0o763763763, 0o767767767, 0o767767767, 0o767767767,
@@ -815,6 +818,7 @@ static LOCKED_CANDIDATES_MASK_NEIGHBOR_BAND: [u32; 512] = [
     0o777777777, 0o776776776, 0o775775775, 0o777777777, 0o773773773, 0o777777777, 0o777777777, 0o777777777,
 ];
 
+#[cfg_attr(rustfmt, rustfmt_skip)]
 static LOCKED_MINIROWS: [u32; 512] = [
     0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000,
     0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000,
@@ -850,6 +854,7 @@ static LOCKED_MINIROWS: [u32; 512] = [
     0o000, 0o001, 0o142, 0o000, 0o124, 0o000, 0o100, 0o000, 0o000, 0o001, 0o002, 0o000, 0o004, 0o000, 0o000, 0o000,
 ];
 
+#[cfg_attr(rustfmt, rustfmt_skip)]
 static COLUMN_SINGLE: [u32; 512] = [
     0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000,
     0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000,
@@ -917,12 +922,13 @@ impl ::std::ops::IndexMut<usize> for UncheckedIndexArray27 {
 }
 
 // for each set bit in mask, return a mask with only that bit set
-fn mask_iter(mask: u32) -> impl Iterator<Item=u32> {
-    ::std::iter::repeat(())
-        .scan(mask, |mask, ()| {
-            if *mask == 0 { return None }
-            let lowest_bit = *mask & !*mask + 1;
-            *mask ^= lowest_bit;
-            Some(lowest_bit)
-        })
+fn mask_iter(mask: u32) -> impl Iterator<Item = u32> {
+    ::std::iter::repeat(()).scan(mask, |mask, ()| {
+        if *mask == 0 {
+            return None;
+        }
+        let lowest_bit = *mask & !*mask + 1;
+        *mask ^= lowest_bit;
+        Some(lowest_bit)
+    })
 }

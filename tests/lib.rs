@@ -40,9 +40,9 @@ __5|817|___
 _63|2_4|_17
 8__|__9|__3";
 
-	let sudoku = Sudoku::from_str_block(sudoku_str).unwrap();
-	let sudoku = sudoku.solve_unique().unwrap();
-	println!("{}", sudoku);
+    let sudoku = Sudoku::from_str_block(sudoku_str).unwrap();
+    let sudoku = sudoku.solve_unique().unwrap();
+    println!("{}", sudoku);
 }
 
 #[test]

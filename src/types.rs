@@ -10,18 +10,18 @@ pub(crate) struct Unsolvable;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Entry {
-	pub cell: u8,
-	pub num: u8,
+    pub cell: u8,
+    pub num: u8,
 }
 
 impl Entry {
-	#[inline] pub fn cell(self) -> usize { self.cell as usize }
-	#[inline] pub fn row(self) -> u8 { self.cell / 9 }
-	#[inline] pub fn col(self) -> u8 { self.cell % 9 }
-	#[inline] pub fn field(self) -> u8 { FIELD[self.cell()] }
-	#[inline] pub fn num(self) -> u8 { self.num }
+    #[inline] pub fn cell(self) -> usize { self.cell as usize }
+    #[inline] pub fn row(self) -> u8 { self.cell / 9 }
+    #[inline] pub fn col(self) -> u8 { self.cell % 9 }
+    #[inline] pub fn field(self) -> u8 { FIELD[self.cell()] }
+    #[inline] pub fn num(self) -> u8 { self.num }
 
-	#[inline] pub fn mask(self) -> Mask<Digit> { Mask::from_num(self.num()) }
+    #[inline] pub fn mask(self) -> Mask<Digit> { Mask::from_num(self.num()) }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -29,18 +29,18 @@ impl Entry {
 /// An invalid entry that was parsed
 pub struct PubEntry {
     /// Cell number goes from 0..=80, 0..=8 for first line, 9..=17 for 2nd and so on
-	pub cell: u8,
+    pub cell: u8,
     /// The parsed invalid char
-	pub ch: char,
+    pub ch: char,
 }
 
 impl PubEntry {
     /// Row index from 0..=8, topmost row is 0
-	#[inline] pub fn row(self) -> u8 { self.cell / 9 }
+    #[inline] pub fn row(self) -> u8 { self.cell / 9 }
     /// Column index from 0..=8, leftmost col is 0
-	#[inline] pub fn col(self) -> u8 { self.cell % 9 }
+    #[inline] pub fn col(self) -> u8 { self.cell % 9 }
     /// Field index from 0..=8, numbering from left to right, top to bottom. Example: Top-row is 0, 1, 2
-	#[inline] pub fn field(self) -> u8 { FIELD[self.cell as usize] }
+    #[inline] pub fn field(self) -> u8 { FIELD[self.cell as usize] }
 }
 
 
@@ -120,10 +120,10 @@ impl<T> Mask<T> {
         Mask(mask, ::std::marker::PhantomData)
     }
 
-	#[inline(always)]
+    #[inline(always)]
     pub fn n_possibilities(self) -> u8 {
-		self.0.count_ones() as u8
-	}
+        self.0.count_ones() as u8
+    }
 
     #[inline(always)]
     pub fn is_empty(self) -> bool {
@@ -207,21 +207,21 @@ impl Iterator for MaskIter<Digit> {
 //       use .without() (owned) or .remove() (referenced) to avoid masking the high bits off
 //       for the negation. They won't be set anyway in `some_mask`.
 impl<T> ::std::ops::Not for Mask<T> {
-	type Output = Self;
+    type Output = Self;
     #[inline(always)]
-	fn not(self) -> Self {
-		Mask::new(!self.0 & 0b_0001_1111_1111)
-	}
+    fn not(self) -> Self {
+        Mask::new(!self.0 & 0b_0001_1111_1111)
+    }
 }
 
 macro_rules! impl_bitops {
     ($trait_:path, $fn_name:ident ) => {
         impl<T> $trait_ for Mask<T> {
-        	type Output = Self;
+            type Output = Self;
             #[inline(always)]
-        	fn $fn_name(self, rhs: Self) -> Self {
-        		Mask::new(u16::$fn_name(self.0, rhs.0))
-        	}
+            fn $fn_name(self, rhs: Self) -> Self {
+                Mask::new(u16::$fn_name(self.0, rhs.0))
+            }
         }
     }
 }
@@ -233,9 +233,9 @@ impl_bitops!(::std::ops::BitXor, bitxor);
 macro_rules! impl_bitops_assign {
     ($trait_:path, $fn_name:ident ) => {
         impl<T> $trait_ for Mask<T> {
-        	fn $fn_name(&mut self, rhs: Self) {
-        		u16::$fn_name(&mut self.0, rhs.0)
-        	}
+            fn $fn_name(&mut self, rhs: Self) {
+                u16::$fn_name(&mut self.0, rhs.0)
+            }
         }
     }
 }

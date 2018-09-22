@@ -6,10 +6,10 @@ use consts::*;
 use positions::FIELD;
 
 #[derive(Debug)]
-pub(crate) struct Unsolvable;
+pub struct Unsolvable;
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub(crate) struct Entry {
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Entry {
     pub cell: u8,
     pub num: u8,
 }
@@ -37,7 +37,7 @@ impl Entry {
     }
 
     #[inline]
-    pub fn mask(self) -> Mask<Digit> {
+    pub(crate) fn mask(self) -> Mask<Digit> {
         Mask::from_num(self.num())
     }
 }
@@ -130,9 +130,25 @@ impl fmt::Display for LineFormatParseError {
 ////////////////////////////////////////////////////////////////////////////////
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub(crate) struct Position;
+pub(crate) struct Position(pub u8);
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) struct Digit;
+
+impl Position {
+    pub fn in_row_of_cell(cell: u8) -> Self {
+        Position(col(cell))
+    }
+
+    pub fn in_col_of_cell(cell: u8) -> Position {
+        Position(row(cell))
+    }
+
+    pub fn in_field_of_cell(cell: u8) -> Position {
+        let row_in_field = row(cell) % 3;
+        let col_in_field = col(cell) % 3;
+        Position(row_in_field*3 + col_in_field)
+    }
+}
 
 // Bitmask struct for T where T is just an information regarding intent
 // it could for example be Mask<Digit> or Mask<Position>
@@ -140,7 +156,7 @@ pub(crate) struct Digit;
 // Mask<T> and Mask<U>, when T != U
 // NOTE: !mask is a leaky abstraction, see comment above trait implementation
 #[derive(Clone, Copy, Eq, Debug)]
-pub(crate) struct Mask<T>(u16, ::std::marker::PhantomData<T>);
+pub(crate) struct Mask<T>(pub(crate) u16, ::std::marker::PhantomData<T>);
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub(crate) struct MaskIter<T>(Mask<T>);
 
@@ -212,6 +228,63 @@ impl Mask<Digit> {
     }
 }
 
+use positions::{row, col};
+impl Mask<Position> {
+    #[inline(always)]
+    pub fn from_pos(pos: u8) -> Self {
+        debug_assert!(pos <= 8);
+        Mask::new(1 << pos)
+    }
+
+    #[inline(always)]
+    #[allow(unused)]
+    pub fn unique_pos(self) -> Result<Option<Position>, Unsolvable> {
+        match self.0 {
+            0 => Err(Unsolvable),
+            n if n.is_power_of_two() => Ok(Some(Position(n.trailing_zeros() as u8))),
+            _ => Ok(None),
+        }
+    }
+
+    pub fn row_pos_of_cell(cell: u8) -> Mask<Position> {
+        Mask::from_pos(col(cell))
+    }
+
+    pub fn col_pos_of_cell(cell: u8) -> Mask<Position> {
+        Mask::from_pos(row(cell))
+    }
+
+    pub fn field_pos_of_cell(cell: u8) -> Mask<Position> {
+        let row_in_field = row(cell) % 3;
+        let col_in_field = col(cell) % 3;
+        Mask::from_pos(row_in_field*3 + col_in_field)
+    }
+    /*
+    pub fn from_cell_by_zone(cell: Cell, zone: Zone) -> Self {
+        const ROW_OFF_PL8: usize = ROW_OFFSET + 8;
+        const COL_OFF_PL8: usize = COL_OFFSET + 8;
+        const FIELD_OFF_PL8: usize = FIELD_OFFSET + 8;
+        match Zone.0 as usize {
+            ROW_OFFSET...ROW_OFF_PL8 => ,
+            COL_OFFSET...COL_OFF_PL8 => ,
+            FIELD_OFFSET...FIELD_OFF_PL8 => {
+
+            },
+        };
+        unimplemented!()
+        }
+    */
+
+    // return a possible pos
+    // highest in this implementation, but that is not necessary
+    #[inline(always)]
+    pub fn one_possibility(self) -> Position {
+        debug_assert!(self.0 != 0);
+        Position(15 - self.0.leading_zeros() as u8)
+        //self.0.trailing_zeros() as u8 + 1
+    }
+}
+
 impl<T> MaskIter<T> {
     /// Return remaining possibilities in mask form
     #[allow(unused)]
@@ -230,7 +303,22 @@ impl Iterator for MaskIter<Digit> {
                 let num = self.0.one_possibility();
                 self.0.remove(Mask::from_num(num));
                 Some(num)
-            }
+            },
+        }
+    }
+}
+
+impl Iterator for MaskIter<Position> {
+    type Item = Position;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match (self.0).0 {
+            0 => None,
+            _ => {
+                let pos = self.0.one_possibility();
+                self.0.remove(Mask::from_pos(pos.0));
+                Some(pos)
+            },
         }
     }
 }

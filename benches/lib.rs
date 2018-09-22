@@ -2,6 +2,7 @@
 extern crate sudoku;
 extern crate test;
 use sudoku::Sudoku;
+use sudoku::strategy::{Strategy, StrategySolver};
 
 fn read_sudokus(sudokus_str: &str) -> Vec<Sudoku> {
     sudokus_str
@@ -108,6 +109,31 @@ fn is_solved_on_solved(b: &mut test::Bencher) {
     b.iter(|| {
         for sudoku in solved_sudokus.iter().cloned() {
             sudoku.is_solved();
+        }
+    })
+}
+
+#[bench]
+fn strategy_solver_1_easy_sudokus(b: &mut test::Bencher) {
+    let sudokus = read_sudokus( include_str!("../sudokus/Lines/easy_sudokus.txt") );
+    let sudokus_100 = sudokus.iter().cycle().cloned().take(100).collect::<Vec<_>>();
+    let strategies = Strategy::ALL;
+    b.iter(|| {
+        for sudoku in sudokus_100.iter().cloned() {
+            StrategySolver::from_sudoku(sudoku).solve(&strategies).unwrap(); //.unwrap();
+        }
+    })
+}
+
+#[bench]
+fn strategy_solver_2_medium_sudokus(b: &mut test::Bencher) {
+    let sudokus = read_sudokus( include_str!("../sudokus/Lines/medium_sudokus.txt") );
+    let sudokus_100 = sudokus.iter().cycle().cloned().take(100).collect::<Vec<_>>();
+    let strategies = Strategy::ALL;
+    b.iter(|| {
+        for sudoku in sudokus_100.iter().cloned() {
+            // solution not guaranteed yet, discard error.
+            let _ = StrategySolver::from_sudoku(sudoku).solve(&strategies); //.unwrap();
         }
     })
 }

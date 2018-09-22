@@ -51,6 +51,7 @@ mod consts;
 mod generator;
 mod positions;
 mod solver;
+pub mod strategy;
 mod sudoku;
 mod types;
 

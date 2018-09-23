@@ -79,6 +79,21 @@ impl StrategySolver {
 		self.grid.state
 	}
 
+	/// Try to insert the given entry. Fails, if the cell already contains a digit.
+	pub fn insert_entry(&mut self, entry: Entry) -> Result<(), ()> {
+		self.update_grid();
+		Self::push_new_entry(
+			&mut self.grid.state,
+			&mut self.deduced_entries,
+			entry,
+			&mut self.deductions,
+			_Deduction::Given(entry)
+		)
+		.map_err(|Unsolvable| ())?;
+
+		Ok(())
+	}
+
 	fn into_deductions(self) -> Deductions {
 		Deductions {
 			deductions: self.deductions,
@@ -378,18 +393,19 @@ impl StrategySolver {
 		Ok(())
 	}
 
-	fn push_new_entry(sudoku: &mut Sudoku,
+	fn push_new_entry(
+		sudoku: &mut Sudoku,
 		deduced_entries: &mut Vec<Entry>,
 		entry: Entry,
 		deductions: &mut Vec<_Deduction>,
-		strategy: _Deduction // either naked or hidden singles
+		strategy: _Deduction // either a user-given or naked or hidden singles
 	) -> Result<(), Unsolvable> {
 
 		#[cfg(debug_assertions)]
 		{
 			use self::_Deduction::*;
 			match strategy {
-				NakedSingles(..) | HiddenSingles(..) => (),
+				NakedSingles(..) | HiddenSingles(..) | Given(_) => (),
 				_ => panic!("Internal error: Called push_new_entry with wrong strategy type")
 			};
 		}
@@ -1213,6 +1229,7 @@ impl Deductions {
 // Basically, the GUI should only need to give the basic highlighting operations and we generate the explanation
 #[derive(Debug, Clone)]
 pub(crate) enum _Deduction {
+	Given(Entry), // by user
     NakedSingles(Entry),
     HiddenSingles(Entry, ZoneType),
     LockedCandidates(Slice, Mask<Digit>, DeductionRange), // which slice is affected and what's unique
@@ -1256,6 +1273,7 @@ impl _Deduction {
 	fn strategy(&self) -> Strategy {
 		use self::_Deduction::*;
 		match self {
+			Given(_) => unimplemented!(),
 			NakedSingles { .. } => Strategy::NakedSingles,
 			HiddenSingles { .. } => Strategy::HiddenSingles,
 			LockedCandidates { .. } => Strategy::LockedCandidates,
@@ -1288,6 +1306,7 @@ impl _Deduction {
 	fn se_difficulty(&self) -> u8 {
 		use self::_Deduction::*;
 		match self {
+			Given(_) => 0,
 			NakedSingles(_) => 23,
 			HiddenSingles(_, ZoneType::Block) => 12,
 			HiddenSingles(_, _) => 15,
@@ -1322,6 +1341,8 @@ impl _Deduction {
 	fn result<'e>(&self, eliminated: &'e [Entry]) -> DeductionResult<'e> {
 		use self::_Deduction::*;
 		match self {
+			| Given(_)
+				=> unimplemented!(),
 			| NakedSingles(entry)
 			| HiddenSingles(entry, _)
 				=> DeductionResult::Forced(*entry),

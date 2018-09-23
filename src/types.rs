@@ -10,11 +10,24 @@ pub struct Unsolvable;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Entry {
-    pub cell: u8,
-    pub num: u8,
+    pub(crate) cell: u8,
+    pub(crate) num: u8,
 }
 
 impl Entry {
+    /// Constructs a new entry.
+    ///
+    /// # Panics
+    ///
+    /// panics if `cell >= 81` or `!(1..=9).contains(num)`
+    #[inline]
+    pub fn new(cell: u8, num: u8) -> Entry {
+        assert!(cell < 81);
+        assert!(0 < num && num < 10);
+
+        Entry { cell, num }
+    }
+
     #[inline]
     pub fn cell(self) -> usize {
         self.cell as usize

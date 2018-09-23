@@ -8,6 +8,7 @@ use positions::{
     row_zone, col_zone, field_zone, cells_of_zone, neighbours,
     Cell, Line, Zone, Slice, Band,
 };
+use super::{DigitMask, CellState};
 
 type DeductionRange = ::std::ops::Range<usize>;
 
@@ -77,6 +78,40 @@ impl StrategySolver {
 	pub fn to_sudoku(&mut self) -> Sudoku {
 		self.update_grid();
 		self.grid.state
+	}
+
+	/// Returns the current state of the Sudoku
+	pub fn grid_state(&mut self) -> [CellState; 81] {
+		let mut grid = [CellState::Number(0); 81];
+		self.update_grid();
+		// TODO: continue despite error
+		let _ = self._update_cell_poss_zone_solved(false);
+
+		for (cell, &mask) in self.cell_poss_digits.state.iter().enumerate() {
+			grid[cell] = CellState::Candidates(DigitMask(mask.0));
+		}
+		for (cell, &digit) in self.grid.state.0.iter().enumerate().filter(|(_, &digit)| digit != 0) {
+			grid[cell] = CellState::Number(digit);
+		}
+		grid
+	}
+
+	/// Returns the current state of the cell
+	pub fn cell_state(&mut self, cell: u8) -> CellState {
+		if cell >= 81 {
+			panic!("cell {} does not exist. valid cell range is 0..=80", cell);
+		}
+		self.update_grid();
+		let _ = self._update_cell_poss_zone_solved(false);
+
+		let cell = cell as usize;
+		let num = self.grid.state.0[cell];
+		if num != 0 {
+			CellState::Number(num)
+		} else {
+			let mask = self.cell_poss_digits.state[cell];
+			CellState::Candidates(DigitMask(mask.0))
+		}
 	}
 
 	/// Try to insert the given entry. Fails, if the cell already contains a digit.

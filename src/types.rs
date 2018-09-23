@@ -8,6 +8,7 @@ use positions::FIELD;
 #[derive(Debug)]
 pub struct Unsolvable;
 
+/// Represents a digit in a specific cell
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Entry {
     pub(crate) cell: u8,
@@ -28,22 +29,31 @@ impl Entry {
         Entry { cell, num }
     }
 
+    /// Returns the cell this entry belongs to
     #[inline]
     pub fn cell(self) -> usize {
         self.cell as usize
     }
+
+    /// Returns the row of this entry's cell
     #[inline]
     pub fn row(self) -> u8 {
         self.cell / 9
     }
+
+    /// Returns the columns of this entry's cell
     #[inline]
     pub fn col(self) -> u8 {
         self.cell % 9
     }
+
+    /// Returns the field (box) of this entry's cell
     #[inline]
     pub fn field(self) -> u8 {
         FIELD[self.cell()]
     }
+
+    /// Returns this entry's digit
     #[inline]
     pub fn num(self) -> u8 {
         self.num

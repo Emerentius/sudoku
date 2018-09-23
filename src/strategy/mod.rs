@@ -10,3 +10,4 @@ mod solver;
 mod board;
 pub use self::solver::{Strategy, StrategySolver, Deductions, Deduction, DeductionResult, DeductionsIter};
 pub use self::board::{DigitMask, CellState};
+pub use types::Entry;

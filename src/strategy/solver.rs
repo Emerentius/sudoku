@@ -1159,10 +1159,12 @@ impl<'a> Deduction<'a> {
 		self.deduction.strategy()
 	}
 
+	/*
 	/// Returns the SudokuExplainer compatible difficulty of this `Deduction`
 	pub fn se_difficulty(&self) -> u8 {
 		self.deduction.se_difficulty()
 	}
+	*/
 
 	/// Returns the entries that were entered or ruled out as a result of this deduction
 	pub fn results(&self) -> DeductionResult {
@@ -1200,6 +1202,7 @@ impl<'a> Iterator for DeductionsIter<'a> {
 }
 
 impl Deductions {
+	/*
 	/// Grade the difficulty of the sudoku like SudokuExplainer would.
 	/// This means, it returns the SudokuExplainer compatible difficulty
 	/// of the most difficult strategy used.
@@ -1211,6 +1214,7 @@ impl Deductions {
 			.map(_Deduction::se_difficulty)
 			.max()
 	}
+	*/
 
 	/// Returns the number of deductions.
 	pub fn len(&self) -> usize {
@@ -1235,7 +1239,7 @@ impl Deductions {
 			eliminated_entries: &self.eliminated_entries,
 		}
 	}
-
+	/*
 	// For debugging solution paths
 	fn print_deductions(&self) {
 		for deduction in &self.deductions {
@@ -1254,6 +1258,7 @@ impl Deductions {
 			}
 		}
 	}
+	*/
 }
 
 // TODO:
@@ -1336,6 +1341,7 @@ impl _Deduction {
 		}
 	}
 
+	/*
 	// SudokuExplainer compatible difficulty of deduction
 	// FIXME: correct numbers and do the right analysis
 	fn se_difficulty(&self) -> u8 {
@@ -1370,6 +1376,7 @@ impl _Deduction {
 			__NonExhaustive => unreachable!(),
 		}
 	}
+	*/
 
 	/// Returns the entries that were entered or eliminated as a result of this
 	/// deduction.
@@ -1393,7 +1400,7 @@ impl _Deduction {
 				=> unreachable!(),
 		}
 	}
-
+	/*
 	// For debugging solution paths
 	fn print_reason(&self) {
 		use self::_Deduction::*;
@@ -1439,6 +1446,7 @@ impl _Deduction {
 			_ => ()
 		}
 	}
+	*/
 }
 
 

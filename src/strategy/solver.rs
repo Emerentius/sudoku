@@ -952,18 +952,11 @@ fn basic_fish_walk_combinations(
 			let num = num_off as u8 + 1;
 			let conflicts = rg_eliminations;
 
-			sudoku.deductions.push( match goal_depth {
-				2 => _Deduction::XWing {
-					lines, positions, num, conflicts
-				},
-				3 => _Deduction::Swordfish {
-					lines, positions, num, conflicts
-				},
-				4 => _Deduction::Jellyfish {
-					lines, positions, num, conflicts
-				},
-				_ => unreachable!(),
-			});
+			sudoku.deductions.push(
+				_Deduction::BasicFish {
+					lines, num, conflicts, positions,
+				}
+			);
 			if stop_after_first {
 				return true
 			}
@@ -1285,20 +1278,8 @@ pub(crate) enum _Deduction {
 		positions: Mask<Position>,  // positions restricted to num_offsets
 		conflicts: DeductionRange,       // link to impossible entries
 	},
-    XWing {
+    BasicFish {
 		lines: Vec<Line>, // 2 lines, TODO: refactor
-		positions: Mask<Position>, // which positions in all lines
-		num: u8,
-		conflicts: DeductionRange,
-	},
-    Swordfish {
-		lines: Vec<Line>, // 3 lines, TODO: refactor
-		positions: Mask<Position>, // which positions in all lines
-		num: u8,
-		conflicts: DeductionRange,
-	},
-    Jellyfish {
-		lines: Vec<Line>, // 4 lines, TODO: refactor
 		positions: Mask<Position>, // which positions in all lines
 		num: u8,
 		conflicts: DeductionRange,
@@ -1317,9 +1298,14 @@ impl _Deduction {
 			NakedSingles { .. } => Strategy::NakedSingles,
 			HiddenSingles { .. } => Strategy::HiddenSingles,
 			LockedCandidates { .. } => Strategy::LockedCandidates,
-			XWing { .. } => Strategy::XWing,
-			Swordfish { .. } => Strategy::Swordfish,
-			Jellyfish { .. } => Strategy::Jellyfish,
+			BasicFish { positions, .. } => {
+				match positions.n_possibilities() {
+					2 => Strategy::XWing,
+					3 => Strategy::Swordfish,
+					4 => Strategy::Jellyfish,
+					_ => unreachable!(),
+				}
+			}
 			SinglesChain { .. } => Strategy::SinglesChain,
 			NakedSubsets { cells, .. } => {
 				match cells.len() {
@@ -1369,9 +1355,14 @@ impl _Deduction {
 					_ => unreachable!(),
 				}
 			}
-			XWing { .. } => 32,
-			Swordfish { .. } => 38,
-			Jellyfish { .. } => 52,
+			BasicFish { positions, .. } => {
+				match positions.count() {
+					2 => 32,
+					3 => 38,
+					4 => 52,
+					_ => unreachable!(),
+				}
+			}
 			SinglesChain(_) => unimplemented!(),
 			__NonExhaustive => unreachable!(),
 		}
@@ -1391,9 +1382,7 @@ impl _Deduction {
 			| LockedCandidates(.., conflicts)
 			| NakedSubsets { conflicts, .. }
 			| HiddenSubsets { conflicts, .. }
-			| XWing { conflicts, .. }
-			| Swordfish { conflicts, .. }
-			| Jellyfish { conflicts, .. }
+			| BasicFish { conflicts, .. }
 			| SinglesChain(conflicts)
 				=> DeductionResult::Eliminated(&eliminated[conflicts.clone()]),
 			| __NonExhaustive
@@ -1409,9 +1398,8 @@ impl _Deduction {
 			HiddenSingles(entry, zone_type) => {
 				print!("r{}c{} {} {:?}", entry.row()+1, entry.col()+1, entry.num, zone_type);
 			},
-			LockedCandidates(slice, mask, _) => {
-				let nums = mask.iter().map(|n| n.to_string()).collect::<Vec<_>>();
-				print!("slice {} nums: {}", slice.0, nums.join(","))
+			LockedCandidates(slice, digit, _) => {
+				print!("slice {} num: {}", slice.0, digit);
 			},
 			NakedSubsets { zone, ref cells, digits, .. } => {
 				let zone_type = zone_type(zone.0);

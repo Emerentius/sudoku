@@ -35,7 +35,7 @@ define_types!(
     Cell: 81, Row: 9, Col: 9, Block: 9, Line: 18, House: 27, MiniRow: 27, MiniCol: 27, MiniLine: 54, Band: 3, Stack: 3, Chute: 6,
 );
 
-// digit separate because it has an offset
+// define digit separately because it has an offset
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
 pub struct Digit(NonZeroU8);
 
@@ -132,7 +132,7 @@ impl MiniLine {
 pub struct Position<IN>(pub(crate) u8, std::marker::PhantomData<IN>);
 
 impl<IN> Position<IN> {
-    fn new(pos: u8) -> Self {
+    pub fn new(pos: u8) -> Self {
         Position(pos, std::marker::PhantomData)
     }
 
@@ -202,7 +202,12 @@ impl_bitops_assign!(
     BitXorAssign, bitxor_assign;
 );
 
-impl<T: SetElement> Set<T> {
+impl<T: SetElement> Set<T>
+where
+    // TODO: properly implement the traits for Set and SetIter
+    //       bounded on T::Storage, not on T (which derive does)
+    Self: PartialEq + Copy
+{
     pub const ALL: Set<T> = Set(<T as SetElement>::ALL);
     pub const NONE: Set<T> = Set(<T as SetElement>::NONE);
 
@@ -221,12 +226,20 @@ impl<T: SetElement> Set<T> {
         self.0 &= !other.0;
     }
 
+    pub fn contains(&self, other: Self) -> bool {
+        *self & other != Set::NONE
+    }
+
     pub fn len(&self) -> u8 {
         T::count_possibilities(self.0) as u8
     }
 
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+
+    pub fn is_full(&self) -> bool {
+        *self == Self::ALL
     }
 
     // TODO: make enum for return value
@@ -248,8 +261,9 @@ impl<T: SetElement> Set<T> {
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 
+// TODO: Decide about visibility
 use self::set_element::SetElement;
-mod set_element {
+pub mod set_element {
     use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not, BitXor, BitXorAssign};
     use super::Set;
 
@@ -295,14 +309,22 @@ impl_setelement!(
     Cell => u128, 0o777_777_777___777_777_777___777_777_777,
     // 9 digits
     Digit => u16, 0o777,
+
+    // 9 of each house
+    //Row => u16, 0o777,
+    //Col => u16, 0o777,
+    //Block => u16, 0o777,
+    Line => u32, 0o777_777,      // both Rows and Cols
+    //House => u32, 0o777_777_777, // Rows, Cols, Blocks
+
     // 9 positions per house
-    Position<Row> => u16, 0o777,
-    Position<Col> => u16, 0o777,
+    //Position<Row> => u16, 0o777,
+    //Position<Col> => u16, 0o777,
     Position<Line> => u16, 0o777,
     Position<House> => u16, 0o777,
     // 27 positions per chute
-    Position<Band> => u32, 0o777_777_777,
-    Position<Stack> => u32, 0o777_777_777,
+    //Position<Band> => u32, 0o777_777_777,
+    //Position<Stack> => u32, 0o777_777_777,
     Position<Chute> => u32, 0o777_777_777,
 );
 
@@ -331,12 +353,13 @@ macro_rules! impl_iter_for_setiter {
 impl_iter_for_setiter!(
     Cell => Cell::new,
     Digit => Digit::from_index,
-    Position<Row> => Position::new,
-    Position<Col> => Position::new,
+    Line => Line::new,
+    //Position<Row> => Position::new,
+    //Position<Col> => Position::new,
     Position<Line> => Position::new,
     Position<House> => Position::new,
-    Position<Band> => Position::new,
-    Position<Stack> => Position::new,
+    //Position<Band> => Position::new,
+    //Position<Stack> => Position::new,
     Position<Chute> => Position::new,
 );
 
@@ -477,8 +500,10 @@ impl Chute {
 }
 
 impl Line {
-    pub const ALL_ROWS: [Line; 9] = [Line(0), Line(1), Line(2), Line(3), Line(4), Line(5), Line(6), Line(7), Line(8),];
-    pub const ALL_COLS: [Line; 9] = [Line(9), Line(10), Line(11), Line(12), Line(13), Line(14), Line(15), Line(16), Line(17),];
+    pub const ALL_ROWS: Set<Line> = Set(0o000_777);
+    pub const ALL_COLS: Set<Line> = Set(0o777_000);
+    //pub const ALL_ROWS: [Line; 9] = [Line(0), Line(1), Line(2), Line(3), Line(4), Line(5), Line(6), Line(7), Line(8),];
+    //pub const ALL_COLS: [Line; 9] = [Line(9), Line(10), Line(11), Line(12), Line(13), Line(14), Line(15), Line(16), Line(17),];
 }
 
 impl MiniLine {

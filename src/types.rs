@@ -4,6 +4,7 @@
 
 use consts::*;
 use positions::FIELD;
+use positions2::{Set, Digit as PDigit, Cell};
 
 #[derive(Debug)]
 pub struct Unsolvable;
@@ -62,6 +63,16 @@ impl Entry {
     #[inline]
     pub(crate) fn mask(self) -> Mask<Digit> {
         Mask::from_num(self.num())
+    }
+
+    #[inline]
+    pub(crate) fn cell_type(self) -> Cell {
+        Cell::new(self.cell)
+    }
+
+    #[inline]
+    pub(crate) fn digit_set(self) -> Set<PDigit> {
+        Set::from(PDigit::new(self.num))
     }
 }
 

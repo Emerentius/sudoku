@@ -1,4 +1,5 @@
-#![warn(missing_docs)]
+//#![warn(missing_docs)]
+#![allow(unused)]
 #![cfg_attr(
     feature = "cargo-clippy",
     allow(
@@ -50,6 +51,7 @@ extern crate serde;
 mod consts;
 mod generator;
 mod positions;
+pub mod positions2;
 mod solver;
 pub mod strategy;
 mod sudoku;

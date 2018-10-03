@@ -26,6 +26,10 @@ macro_rules! define_types(
                 fn as_index_u8(self) -> u8 {
                     self.0
                 }
+
+                pub fn all() -> impl Iterator<Item = Self> {
+                    (0..$limit).map(Self::new)
+                }
             }
         )*
     };
@@ -202,6 +206,16 @@ impl_bitops_assign!(
     BitXorAssign, bitxor_assign;
 );
 
+impl<T: SetElement> Not for Set<T>
+where
+    Self: PartialEq + Copy
+{
+    type Output = Self;
+    fn not(self) -> Self {
+        Self::ALL.without(self)
+    }
+}
+
 impl<T: SetElement> Set<T>
 where
     // TODO: properly implement the traits for Set and SetIter
@@ -215,9 +229,6 @@ where
         Set(mask)
     }
 
-    // Can't implement Not, because we don't know how many bits of the mask are relevant,
-    // so some of the high bits would be erroneously set.
-    // We can remove elements, though
     pub fn without(self, other: Self) -> Self {
         Set(self.0 & !other.0)
     }

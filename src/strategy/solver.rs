@@ -395,7 +395,7 @@ impl StrategySolver {
 		}
 
 		// update cell possibilities from house masks
-		for cell in (0..81).map(Cell::new) {
+		for cell in Cell::all() {
 			if cell_poss_digits[cell.as_index()] == Set::NONE { continue }
 			let zones_mask = house_solved_digits[cell.row().house_index()]
 				| house_solved_digits[cell.col().house_index()]
@@ -491,7 +491,7 @@ impl StrategySolver {
 		// TODO: remove auto-deducing naked singles inside update procedure
 		self.update_cell_poss_zone_solved()?;
 
-		for house in (0..27).map(House::new) {
+		for house in House::all() {
 			let mut unsolved: Set<Digit> = Set::NONE;
 			let mut multiple_unsolved = Set::NONE;
 
@@ -539,7 +539,7 @@ impl StrategySolver {
         self.update_cell_poss_zone_solved()?;
 		let (_, _, cell_poss_digits) = self.cell_poss_digits.get_mut();
 
-		for chute in (0..6).map(Chute::new) {
+		for chute in Chute::all() {
 			let mut miniline_poss_digits: [Set<Digit>; 9] = [Set::NONE; 9];
 
 			{ // compute possible digits for each miniline
@@ -639,7 +639,7 @@ impl StrategySolver {
 			if stack.len() == subset_size && total_poss_digs.len() == stack.len() {
 				// found a subset
 				let n_eliminated = state.eliminated_entries.len();
-				for pos in (0..9).map(Position::new).filter(|&pos| !stack.contains(pos.as_set())) {
+				for pos in !*stack {
 					let cell = house.cell_at(pos);
 				//for cell in house.cells().into_iter().filter(|cell| !stack.contains(cell)) {
 					let conflicts = state.cell_poss_digits.state[cell.as_index()] & total_poss_digs;
@@ -683,7 +683,7 @@ impl StrategySolver {
 		self.update_cell_poss_zone_solved()?;
 
 		let mut stack = Set::NONE;
-		for house in (0..27).map(House::new) {
+		for house in House::all() {
 			if self.house_solved_digits.state[house.as_index()] == Set::ALL { continue }
 			// if true, then a subset was found and stop_after_first is set
 			// stop looking
@@ -700,7 +700,6 @@ impl StrategySolver {
 			house: House,
 			total_poss_pos: Set<Position<House>>,
 			digits: SetIter<Digit>,
-			all_digits: Set<Digit>,
 			stack: &mut Set<Digit>,
 			subset_size: u8,
 			stop_after_first: bool,
@@ -711,7 +710,7 @@ impl StrategySolver {
 			if stack.len() == subset_size && total_poss_pos.len() == stack.len() {
 
 				let n_eliminated = state.eliminated_entries.len();
-				for digit in all_digits.into_iter().filter(|dig| !stack.contains(dig.as_set())) {
+				for digit in !*stack {
 					let conflicts = house_poss_positions[digit.as_index()] & total_poss_pos;
 					for pos in conflicts {
 						let cell = house.cell_at(pos);
@@ -740,7 +739,7 @@ impl StrategySolver {
 				if num_poss_pos == Set::NONE { continue }
 				*stack |= digit_set;
 				let new_total_poss_pos = total_poss_pos | num_poss_pos;
-				if walk_combinations(state, house, new_total_poss_pos, digits.clone(), all_digits, stack, subset_size, stop_after_first) {
+				if walk_combinations(state, house, new_total_poss_pos, digits.clone(), stack, subset_size, stop_after_first) {
 					return true
 				};
 				stack.remove(digit_set);
@@ -751,10 +750,10 @@ impl StrategySolver {
 		self.update_zone_poss_positions()?;
 
 		let mut stack = Set::NONE;
-		for house in (0..27).map(House::new) {
+		for house in House::all() {
 			if self.house_solved_digits.state[house.as_index()] == Set::ALL { continue }
 			let digits = Set::ALL;
-			if walk_combinations(self, house, Set::NONE, digits.into_iter(), digits, &mut stack, subset_size, stop_after_first) {
+			if walk_combinations(self, house, Set::NONE, digits.into_iter(), &mut stack, subset_size, stop_after_first) {
 				break
 			};
 		}
@@ -828,7 +827,7 @@ impl StrategySolver {
             let mut cell_linked = [0; 81];
             let mut cell_color = [Colour::Uncoloured; 81];
 
-            for house in (0..27).map(House::new) {
+            for house in House::all() {
                 let house_poss_positions = self.house_poss_positions.state[house.as_index()][digit.as_index()];
                 if house_poss_positions.len() == 2 {
                     let first = house_poss_positions.into_iter().next().unwrap();
@@ -854,7 +853,7 @@ impl StrategySolver {
 
 
                 // ===== Rule 1 ======
-                for house in (0..27).map(House::new) {
+                for house in House::all() {
                     // Collect colours in this link chain and this house
                     let mut zone_colors = [Colour::Uncoloured; 9];
                     for (pos, cell) in house.cells()
@@ -899,8 +898,8 @@ impl StrategySolver {
 
                 // ===== Rule 2 =====
                 let mut cell_sees_colour = [(false, false); 81];
-                for ((cell, &cell_colour), _) in (0..81).map(Cell::new).
-                    zip(cell_color.iter())
+                for ((cell, &cell_colour), _) in Cell::all()
+					.zip(cell_color.iter())
                     .zip(cell_linked.iter())
                     .filter(|&((_, &cell_colour), &cell_link_nr)| link_nr == cell_link_nr && cell_colour != Colour::Uncoloured)
                 {

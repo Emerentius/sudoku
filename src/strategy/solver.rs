@@ -805,7 +805,7 @@ impl StrategySolver {
             ] {
                 let house_poss_positions = sudoku.house_poss_positions.state[con_zone.as_index()][digit.as_index()];
                 if house_poss_positions.len() == 2 {
-                    let other_pos = house_poss_positions.without(Set::from(current_pos)).unique().unwrap().unwrap();
+                    let other_pos = house_poss_positions.without(Set::from(current_pos)).one_possibility();
                     let other_cell = con_zone.cell_at(other_pos);
 
                     match cell_linked[other_cell.as_index()] <= link_nr {
@@ -830,7 +830,7 @@ impl StrategySolver {
             for house in House::all() {
                 let house_poss_positions = self.house_poss_positions.state[house.as_index()][digit.as_index()];
                 if house_poss_positions.len() == 2 {
-                    let first = house_poss_positions.into_iter().next().unwrap();
+                    let first = house_poss_positions.one_possibility();
                     let cell = house.cell_at(first);
 
                     match cell_touched[cell.as_index()] {

@@ -268,6 +268,13 @@ where
             _ => Ok(None),
         }
     }
+
+    pub fn one_possibility(self) -> T
+    where
+        SetIter<T>: Iterator<Item = T>,
+    {
+        self.into_iter().next().expect("mask is empty")
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////

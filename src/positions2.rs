@@ -4,39 +4,66 @@ use std::num::NonZeroU8;
 use types::Unsolvable;
 
 macro_rules! define_types(
-    ($( $name:ident : $limit:expr ),* $(,)*) => {
+    ($( $vis:tt $name:ident : $limit:expr ),* $(,)*) => {
         $(
-            #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
-            pub struct $name(u8);
+            define_types!(@internal $vis $name : $limit );
+        )*
+    };
+    (@internal priv $name:ident : $limit:expr) => {
+        #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
+        struct $name(u8);
 
-            impl $name {
-                pub fn new(num: u8) -> Self {
-                    debug_assert!(num < $limit);
-                    $name(num)
-                }
+        define_types!(@internal $name $limit);
+    };
+    (@internal pub $name:ident : $limit:expr) => {
+        #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
+        pub struct $name(u8);
 
-                pub fn val(self) -> u8 {
-                    self.0
-                }
+        define_types!(@internal $name $limit);
+    };
+    (@internal $name:ident $limit:expr) => {
+        impl $name {
+            pub fn new(num: u8) -> Self {
+                debug_assert!(num < $limit);
+                $name(num)
+            }
 
-                pub fn as_index(self) -> usize {
-                    self.0 as usize
-                }
-
-                fn as_index_u8(self) -> u8 {
-                    self.0
-                }
-
-                pub fn all() -> impl Iterator<Item = Self> {
-                    (0..$limit).map(Self::new)
+            pub fn new_checked(num: u8) -> Option<Self> {
+                if num < $limit {
+                    Some($name(num))
+                } else {
+                    None
                 }
             }
-        )*
+
+            pub fn val(self) -> u8 {
+                self.0
+            }
+
+            pub fn as_index(self) -> usize {
+                self.0 as _
+            }
+
+            pub fn all() -> impl Iterator<Item = Self> {
+                (0..$limit).map(Self::new)
+            }
+        }
     };
 );
 
 define_types!(
-    Cell: 81, Row: 9, Col: 9, Block: 9, Line: 18, House: 27, MiniRow: 27, MiniCol: 27, MiniLine: 54, Band: 3, Stack: 3, Chute: 6,
+    pub Cell: 81,
+    pub Row: 9,
+    pub Col: 9,
+    pub Block: 9,
+    pub Line: 18,
+    pub House: 27,
+    pub MiniRow: 27,
+    pub MiniCol: 27,
+    pub MiniLine: 54,
+    pub Band: 3,
+    pub Stack: 3,
+    pub Chute: 6,
 );
 
 // define digit separately because it has an offset
@@ -54,8 +81,12 @@ impl Digit {
         Self::new_checked(idx+1).unwrap()
     }
 
-    fn new_checked(num: u8) -> Option<Self> {
+    pub fn new_checked(num: u8) -> Option<Self> {
         NonZeroU8::new(num).map(Digit)
+    }
+
+    pub fn all() -> impl Iterator<Item = Self> {
+        (1..10).map(Digit::new)
     }
 
     pub fn val(self) -> u8 {
@@ -64,10 +95,6 @@ impl Digit {
 
     pub fn as_index(self) -> usize {
         self.val() as usize - 1
-    }
-
-    fn as_index_u8(self) -> u8 {
-        self.val() - 1
     }
 }
 
@@ -140,8 +167,8 @@ impl<IN> Position<IN> {
         Position(pos, std::marker::PhantomData)
     }
 
-    fn as_index_u8(self) -> u8 {
-        self.0
+    fn as_index(self) -> usize {
+        self.0 as _
     }
 }
 
@@ -315,7 +342,7 @@ macro_rules! impl_setelement {
                 }
 
                 fn as_set(self) -> Set<Self> {
-                    Set(1 << self.as_index_u8())
+                    Set(1 << self.as_index() as u8)
                 }
             }
         )*
@@ -706,7 +733,7 @@ fn stack(cell: u8) -> u8 {
 
 pub fn neighbours2(cell: Cell) -> impl IntoIterator<Item = Cell> {
     use positions::neighbours;
-    neighbours(cell.as_index_u8()).into_iter().cloned().map(Cell::new)
+    neighbours(cell.as_index() as u8).into_iter().cloned().map(Cell::new)
 }
 
 // TODO: generalize

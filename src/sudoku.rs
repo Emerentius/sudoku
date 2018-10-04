@@ -916,21 +916,18 @@ impl fmt::Debug for SudokuBlock {
 
 impl fmt::Display for SudokuBlock {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        for entry in self.0.iter().enumerate().map(|(cell, &num)| Entry {
-            cell: cell as u8,
-            num,
-        }) {
+        use positions2::{Cell, Digit};
+        for (digit, cell) in self.0.iter().cloned().map(Digit::new_checked).zip(Cell::all()) {
             #[cfg_attr(rustfmt, rustfmt_skip)]
-            match (entry.row().val(), entry.col().val()) {
+            match (cell.row().val(), cell.col().val()) {
                 (_, 3) | (_, 6) => write!(f, " ")?,    // seperate fields in columns
                 (3, 0) | (6, 0) => write!(f, "\n\n")?, // separate fields in rows
                 (_, 0)          => write!(f, "\n")?,   // separate lines not between fields
                 _ => {},
             };
-            match entry.digit().val() {
-                0 => write!(f, "_")?,
-                1...9 => write!(f, "{}", entry.digit().val())?,
-                _ => unreachable!(),
+            match digit {
+                None => write!(f, "_")?,
+                Some(dig) => write!(f, "{}", dig.val())?,
             };
         }
         Ok(())

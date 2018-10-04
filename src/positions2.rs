@@ -237,7 +237,7 @@ where
         self.0 &= !other.0;
     }
 
-    pub fn contains(&self, other: Self) -> bool {
+    pub fn overlaps(&self, other: Self) -> bool {
         *self & other != Set::NONE
     }
 
@@ -343,7 +343,7 @@ impl_setelement!(
     // 27 positions per chute
     //Position<Band> => u32, 0o777_777_777,
     //Position<Stack> => u32, 0o777_777_777,
-    Position<Chute> => u32, 0o777_777_777,
+    //Position<Chute> => u32, 0o777_777_777,
 );
 
 macro_rules! impl_iter_for_setiter {
@@ -378,7 +378,7 @@ impl_iter_for_setiter!(
     Position<House> => Position::new,
     //Position<Band> => Position::new,
     //Position<Stack> => Position::new,
-    Position<Chute> => Position::new,
+    //Position<Chute> => Position::new,
 );
 
 macro_rules! into_cells {
@@ -704,11 +704,9 @@ fn stack(cell: u8) -> u8 {
     col(cell) / 3
 }
 
-pub fn neighbours2(cell: Cell) -> Set<Cell> {
-    let row = Row::from(cell);
-    let col = Col::from(cell);
-    let block = Block::from(cell);
-    (row.cells() | col.cells() | block.cells()).without( cell.cells() )
+pub fn neighbours2(cell: Cell) -> impl IntoIterator<Item = Cell> {
+    use positions::neighbours;
+    neighbours(cell.as_index_u8()).into_iter().cloned().map(Cell::new)
 }
 
 // TODO: generalize

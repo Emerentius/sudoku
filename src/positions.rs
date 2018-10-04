@@ -27,12 +27,12 @@ pub fn field_zone(cell: u8) -> usize {
 }
 
 #[inline(always)]
-pub fn cells_of_zone(cell: u8) -> &'static [u8; 9] {
+pub fn cells_of_zone(cell: u8) -> impl IntoIterator<Item = &'static u8> + Copy {
     &CELLS_BY_ZONE[cell as usize]
 }
 
 #[inline(always)]
-pub fn neighbours(cell: u8) -> &'static [u8; 20] {
+pub fn neighbours(cell: u8) -> impl IntoIterator<Item = &'static u8> + Copy {
     &ZONE_NEIGHBOURS_OF_CELL[cell as usize]
 }
 

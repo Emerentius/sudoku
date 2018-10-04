@@ -4,7 +4,7 @@
 
 use consts::*;
 use positions::FIELD;
-use positions2::{Set, Digit as PDigit, Cell};
+use positions2::{Set, Digit as Digit, Cell, House};
 
 #[derive(Debug)]
 pub struct Unsolvable;
@@ -32,42 +32,38 @@ impl Entry {
 
     /// Returns the cell this entry belongs to
     #[inline]
-    pub fn cell(self) -> usize {
-        self.cell as usize
+    pub fn cell(self) -> Cell {
+        Cell::new(self.cell)
     }
 
     /// Returns the row of this entry's cell
     #[inline]
-    pub fn row(self) -> u8 {
-        self.cell / 9
+    pub fn row(self) -> House {
+        self.cell().row().house()
+        //self.cell / 9
     }
 
     /// Returns the columns of this entry's cell
     #[inline]
-    pub fn col(self) -> u8 {
-        self.cell % 9
+    pub fn col(self) -> House {
+        self.cell().col().house()
     }
 
     /// Returns the field (box) of this entry's cell
     #[inline]
-    pub fn field(self) -> u8 {
-        FIELD[self.cell()]
+    pub fn field(self) -> House {
+        self.cell().block().house()
     }
 
     /// Returns this entry's digit
     #[inline]
-    pub fn num(self) -> u8 {
-        self.num
+    pub fn digit(self) -> Digit {
+        Digit::new(self.num)
     }
 
     #[inline]
-    pub(crate) fn cell_type(self) -> Cell {
-        Cell::new(self.cell)
-    }
-
-    #[inline]
-    pub(crate) fn digit_set(self) -> Set<PDigit> {
-        Set::from(PDigit::new(self.num))
+    pub(crate) fn digit_set(self) -> Set<Digit> {
+        Set::from(Digit::new(self.num))
     }
 }
 

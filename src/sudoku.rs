@@ -921,15 +921,15 @@ impl fmt::Display for SudokuBlock {
             num,
         }) {
             #[cfg_attr(rustfmt, rustfmt_skip)]
-            match (entry.row(), entry.col()) {
+            match (entry.row().val(), entry.col().val()) {
                 (_, 3) | (_, 6) => write!(f, " ")?,    // seperate fields in columns
                 (3, 0) | (6, 0) => write!(f, "\n\n")?, // separate fields in rows
                 (_, 0)          => write!(f, "\n")?,   // separate lines not between fields
                 _ => {},
             };
-            match entry.num() {
+            match entry.digit().val() {
                 0 => write!(f, "_")?,
-                1...9 => write!(f, "{}", entry.num())?,
+                1...9 => write!(f, "{}", entry.digit().val())?,
                 _ => unreachable!(),
             };
         }

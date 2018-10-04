@@ -100,61 +100,66 @@ impl Digit {
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
 pub enum LineType {
-    Row, Col
+    Row(Row),
+    Col(Col),
 }
 
 impl Line {
     pub fn categorize(self) -> LineType {
         debug_assert!(self.0 < 18);
         match self.0 < 9 {
-            true => LineType::Row,
-            false => LineType::Col
+            true => LineType::Row(Row::new(self.0)),
+            false => LineType::Col(Col::new(self.0 - 9)),
         }
     }
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
 pub enum HouseType {
-    Row, Col, Block
+    Row(Row),
+    Col(Col),
+    Block(Block),
 }
 
 impl House {
     pub fn categorize(self) -> HouseType {
         debug_assert!(self.0 < 27);
         match self.0 {
-            0..= 8 => HouseType::Row,
-            9..=17 => HouseType::Col,
-                 _ => HouseType::Block,
+            0..= 8 => HouseType::Row(Row::new(self.0)),
+            9..=17 => HouseType::Col(Col::new(self.0 - 9)),
+            _      => HouseType::Block(Block::new(self.0 - 18)),
         }
     }
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
 pub enum ChuteType {
-    Band, Stack
+    Band(Band),
+    Stack(Stack),
 }
 
 impl Chute {
     pub fn categorize(self) -> ChuteType {
         debug_assert!(self.0 < 6);
         match self.0 < 3 {
-            true => ChuteType::Band,
-            false => ChuteType::Stack,
+            true => ChuteType::Band(Band::new(self.0)),
+            false => ChuteType::Stack(Stack::new(self.0 - 3)),
         }
     }
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
 pub enum MiniLineType {
-    MiniRow, MiniCol
+    MiniRow(MiniRow),
+    MiniCol(MiniCol),
 }
 
 impl MiniLine {
     pub fn categorize(self) -> MiniLineType {
         debug_assert!(self.0 < 54);
         match self.0 < 27 {
-            true => MiniLineType::MiniRow,
-            false => MiniLineType::MiniCol,
+            true => MiniLineType::MiniRow(MiniRow::new(self.0)),
+            false => MiniLineType::MiniCol(MiniCol::new(self.0 - 27)),
         }
     }
 }
@@ -413,7 +418,7 @@ macro_rules! into_cells {
         $(
             impl $name {
                 pub fn cells(self) -> Set<Cell> {
-                    let $arg = self.0;
+                    let $arg = self;
                     Set($code)
                 }
             }
@@ -424,46 +429,50 @@ macro_rules! into_cells {
 // the closures here aren't actually closures, they just introduce
 // the variables to be used in the code blocks for macro hygiene reasons
 into_cells!(
-    Cell => |cell| { 1 << cell };
-    Row  => |row| { 0o777 << (9 * row) };
-    Col  => |col| { 0o_001_001_001___001_001_001___001_001_001 << col };
+    Cell => |cell| { 1 << cell.0 };
+    Row  => |row| { 0o777 << (9 * row.0) };
+    Col  => |col| { 0o_001_001_001___001_001_001___001_001_001 << col.0 };
     Block  => |block| {
-        let band = block / 3;
-        let stack = block % 3;
+        let band = block.0 / 3;
+        let stack = block.0 % 3;
         0o007_007_007 << (band * 27 + stack * 3)
     };
     Line => |line| {
-        match line < 9 {
-            true  => Row::new(line).cells().0,
-            false => Col::new(line - 9).cells().0,
+        use self::LineType::*;
+        match line.categorize() {
+            Row(row) => row.cells().0,
+            Col(col) => col.cells().0,
         }
     };
     House => |house| {
-        match house {
-            r @ 0..=8  => Row::new(r).cells().0,
-            c @ 9..=17 => Col::new(c - 9).cells().0,
-            b          => Block::new(b - 18).cells().0,
+        use self::HouseType::*;
+        match house.categorize() {
+            Row(row) => row.cells().0,
+            Col(col) => col.cells().0,
+            Block(block) => block.cells().0,
         }
     };
-    MiniRow => |mr| { 0o7 << 3 * mr };
+    MiniRow => |mr| { 0o7 << 3 * mr.0 };
     //MiniCol => |mc| { 0o001_001_001 << mc / 9 * 27 + mc % 9 }; // old, different counting system
     MiniCol => |mc| {
-        let band = mc % 3;
-        let col = mc / 3;
+        let band = mc.0 % 3;
+        let col = mc.0 / 3;
         0o001_001_001 << band * 27 + col
     };
     MiniLine => |ml| {
-        match ml < 27 {
-            true  => MiniRow::new(ml).cells().0,
-            false => MiniCol::new(ml - 27).cells().0,
+        use self::MiniLineType::*;
+        match ml.categorize() {
+            MiniRow(mr)  => mr.cells().0,
+            MiniCol(mc) => mc.cells().0,
         }
     };
-    Band => |band| { 0o777_777_777 << 27 * band };
-    Stack => |stack| { 0o_007_007_007___007_007_007___007_007_007 << 3 * stack };
+    Band => |band| { 0o777_777_777 << 27 * band.0 };
+    Stack => |stack| { 0o_007_007_007___007_007_007___007_007_007 << 3 * stack.0 };
     Chute => |chute| {
-        match chute < 3 {
-            true  => Band::new(chute).cells().0,
-            false => Stack::new(chute - 3).cells().0,
+        use self::ChuteType::*;
+        match chute.categorize() {
+            Band(band) => band.cells().0,
+            Stack(stack) => stack.cells().0,
         }
     };
 );
@@ -622,19 +631,19 @@ impl Block {
 
 impl Line {
     pub fn cell_at(self, pos: Position<Line>) -> Cell {
-        match self.0 < 9 {
-            true => Row::new(self.0).cell_at(Position::new(pos.0)),
-            false => Col::new(self.0 - 9).cell_at(Position::new(pos.0)),
+        match self.categorize() {
+            LineType::Row(row) => row.cell_at(Position::new(pos.0)),
+            LineType::Col(col) => col.cell_at(Position::new(pos.0)),
         }
     }
 }
 
 impl House {
     pub fn cell_at(self, pos: Position<House>) -> Cell {
-        match self.0 {
-            0..=8  => Row::new(self.0).cell_at(Position::new(pos.0)),
-            9..=17 => Col::new(self.0 - 9).cell_at(Position::new(pos.0)),
-            _      => Block::new(self.0 - 18).cell_at(Position::new(pos.0)),
+        match self.categorize() {
+            HouseType::Row(row) => row.cell_at(Position::new(pos.0)),
+            HouseType::Col(col) => col.cell_at(Position::new(pos.0)),
+            HouseType::Block(block) => block.cell_at(Position::new(pos.0)),
         }
     }
 }

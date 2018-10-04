@@ -507,10 +507,11 @@ define_conversion_shortcuts!(
         Row, row;
         Col, col;
         Block, block;
-        Position<Row>, row_pos;
-        Position<Col>, col_pos;
-        Position<Block>, block_pos;
+        //Position<Row>, row_pos;
+        //Position<Col>, col_pos;
+        //Position<Block>, block_pos;
     }
+    /*
     Row : {
         Line, line;
         House, house;
@@ -533,7 +534,22 @@ define_conversion_shortcuts!(
     Position<Block> : {
         Position<House>, house_pos;
     }
+    */
 );
+
+impl Cell {
+    pub fn row_pos(self) -> Position<House> {
+        Position::<Row>::from(self).into()
+    }
+
+    pub fn col_pos(self) -> Position<House> {
+        Position::<Col>::from(self).into()
+    }
+
+    pub fn block_pos(self) -> Position<House> {
+        Position::<Block>::from(self).into()
+    }
+}
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -556,8 +572,6 @@ impl Chute {
 impl Line {
     pub const ALL_ROWS: Set<Line> = Set(0o000_777);
     pub const ALL_COLS: Set<Line> = Set(0o777_000);
-    //pub const ALL_ROWS: [Line; 9] = [Line(0), Line(1), Line(2), Line(3), Line(4), Line(5), Line(6), Line(7), Line(8),];
-    //pub const ALL_COLS: [Line; 9] = [Line(9), Line(10), Line(11), Line(12), Line(13), Line(14), Line(15), Line(16), Line(17),];
 }
 
 impl MiniLine {
@@ -573,32 +587,6 @@ impl MiniLine {
     // TODO: refactor to be part of the define_conversion_shortcuts macro
     pub fn chute(self) -> Chute {
         Chute::new(self.0 / 9)
-    }
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////
-
-impl Row {
-    pub fn house_index(self) -> usize {
-        self.as_index()
-    }
-}
-
-impl Col {
-    pub fn house_index(self) -> usize {
-        self.as_index() + 9
-    }
-}
-
-impl Block {
-    pub fn house_index(self) -> usize {
-        self.as_index() + 18
-    }
-}
-
-impl Line {
-    pub fn house_index(self) -> usize {
-        self.as_index()
     }
 }
 
@@ -752,6 +740,15 @@ impl Set<Position<House>> {
         Set::new(self.0)
     }
 }
+
+pub trait IntoHouse: Into<House> {
+    #[inline(always)]
+    fn house(self) -> House {
+        self.into()
+    }
+}
+
+impl<T: Into<House>> IntoHouse for T {}
 
 static MINILINE_NEIGHBOURS: [([u8; 2], [u8; 2]); 54] = [
         ([1, 2], [3, 6]),

@@ -4,7 +4,8 @@
 
 use consts::*;
 use positions::FIELD;
-use positions2::{Set, Digit as Digit, Cell, House};
+use positions2::{Set, Digit as Digit, Cell, House, Row, Col, Block};
+use ::std::ops::{Deref, DerefMut, Index, IndexMut};
 
 #[derive(Debug)]
 pub struct Unsolvable;
@@ -38,21 +39,20 @@ impl Entry {
 
     /// Returns the row of this entry's cell
     #[inline]
-    pub fn row(self) -> House {
-        self.cell().row().house()
-        //self.cell / 9
+    pub fn row(self) -> Row {
+        self.cell().row()
     }
 
     /// Returns the columns of this entry's cell
     #[inline]
-    pub fn col(self) -> House {
-        self.cell().col().house()
+    pub fn col(self) -> Col {
+        self.cell().col()
     }
 
     /// Returns the field (box) of this entry's cell
     #[inline]
-    pub fn field(self) -> House {
-        self.cell().block().house()
+    pub fn field(self) -> Block {
+        self.cell().block()
     }
 
     /// Returns this entry's digit
@@ -157,15 +157,15 @@ impl fmt::Display for LineFormatParseError {
 
 // Pure boilerplate. Just an array of size 81.
 #[derive(Copy, Clone)]
-pub(crate) struct Array81<T>(pub [T; N_CELLS]);
+pub(crate) struct CellArray<T>(pub [T; N_CELLS]);
 
-impl<T: fmt::Debug> fmt::Debug for Array81<T> {
+impl<T: fmt::Debug> fmt::Debug for CellArray<T> {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> Result<(), ::std::fmt::Error> {
         (&self.0[..]).fmt(f)
     }
 }
 
-impl<T> ::std::ops::Deref for Array81<T> {
+impl<T> Deref for CellArray<T> {
     type Target = [T; 81];
     #[inline(always)]
     fn deref(&self) -> &Self::Target {
@@ -173,9 +173,65 @@ impl<T> ::std::ops::Deref for Array81<T> {
     }
 }
 
-impl<T> ::std::ops::DerefMut for Array81<T> {
+impl<T> DerefMut for CellArray<T> {
     #[inline(always)]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
+    }
+}
+
+impl<T> Index<Cell> for CellArray<T> {
+    type Output = T;
+
+    #[inline(always)]
+    fn index(&self, idx: Cell) -> &Self::Output {
+        &self.0[idx.as_index()]
+    }
+}
+
+impl<T> IndexMut<Cell> for CellArray<T> {
+    #[inline(always)]
+    fn index_mut(&mut self, idx: Cell) -> &mut Self::Output {
+        &mut self.0[idx.as_index()]
+    }
+}
+
+///////////////////////////////
+#[derive(Copy, Clone, Debug)]
+pub(crate) struct HouseArray<T>(pub [T; 27]);
+
+impl<T, IDX: Into<House>> Index<IDX> for HouseArray<T> {
+    type Output = T;
+
+    #[inline(always)]
+    fn index(&self, idx: IDX) -> &Self::Output {
+        &self.0[idx.into().as_index()]
+    }
+}
+
+impl<T, IDX: Into<House>> IndexMut<IDX> for HouseArray<T> {
+    #[inline(always)]
+    fn index_mut(&mut self, idx: IDX) -> &mut Self::Output {
+        &mut self.0[idx.into().as_index()]
+    }
+}
+
+///////////////////////////////
+#[derive(Copy, Clone, Debug)]
+pub(crate) struct DigitArray<T>(pub [T; 9]);
+
+impl<T> Index<Digit> for DigitArray<T> {
+    type Output = T;
+
+    #[inline(always)]
+    fn index(&self, idx: Digit) -> &Self::Output {
+        &self.0[idx.as_index()]
+    }
+}
+
+impl<T> IndexMut<Digit> for DigitArray<T> {
+    #[inline(always)]
+    fn index_mut(&mut self, idx: Digit) -> &mut Self::Output {
+        &mut self.0[idx.as_index()]
     }
 }

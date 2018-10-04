@@ -3,8 +3,8 @@ use rand::Rng;
 use consts::*;
 use positions::*;
 use sudoku::Sudoku;
-use types::{Array81, Entry, Unsolvable};
-use positions2::{Digit, Set};
+use types::{CellArray, Entry, Unsolvable, HouseArray};
+use positions2::{Digit, Set, Cell, House, neighbours2};
 
 // Sudoku generation is done via randomized solving of empty grids
 // the solver is based on jsolve
@@ -13,8 +13,8 @@ use positions2::{Digit, Set};
 pub(crate) struct SudokuGenerator {
     pub grid: Sudoku,
     pub n_solved_cells: u8,
-    pub cell_poss_digits: Array81<Set<Digit>>,
-    pub zone_solved_digits: [Set<Digit>; 27],
+    pub cell_poss_digits: CellArray<Set<Digit>>,
+    pub zone_solved_digits: HouseArray<Set<Digit>>,
     pub last_cell: u8, // last cell checked in guess routine
 }
 
@@ -24,8 +24,8 @@ impl SudokuGenerator {
         SudokuGenerator {
             grid: Sudoku([0; 81]),
             n_solved_cells: 0,
-            cell_poss_digits: Array81([Set::ALL; 81]),
-            zone_solved_digits: [Set::NONE; 27],
+            cell_poss_digits: CellArray([Set::ALL; 81]),
+            zone_solved_digits: HouseArray([Set::NONE; 27]),
             last_cell: 0,
         }
     }
@@ -34,10 +34,10 @@ impl SudokuGenerator {
     fn _insert_entry(&mut self, entry: Entry) {
         self.n_solved_cells += 1;
         self.grid.0[entry.cell().as_index()] = entry.num;
-        self.cell_poss_digits[entry.cell().as_index()] = Set::NONE;
-        self.zone_solved_digits[entry.row().as_index()] |= entry.digit_set();
-        self.zone_solved_digits[entry.col().as_index()] |= entry.digit_set();
-        self.zone_solved_digits[entry.field().as_index()] |= entry.digit_set();
+        self.cell_poss_digits[entry.cell()] = Set::NONE;
+        self.zone_solved_digits[entry.row()] |= entry.digit_set();
+        self.zone_solved_digits[entry.col()] |= entry.digit_set();
+        self.zone_solved_digits[entry.field()] |= entry.digit_set();
     }
 
     #[inline(always)]
@@ -59,18 +59,18 @@ impl SudokuGenerator {
         while let Some(entry) = stack.pop() {
             let entry_mask = entry.digit_set();
             // cell already solved from previous entry in stack, skip
-            if self.cell_poss_digits[entry.cell().as_index()].is_empty() {
+            if self.cell_poss_digits[entry.cell()].is_empty() {
                 continue;
             }
 
             // is entry still possible?
-            if (self.cell_poss_digits[entry.cell().as_index()] & entry_mask).is_empty() {
+            if (self.cell_poss_digits[entry.cell()] & entry_mask).is_empty() {
                 return Err(Unsolvable);
             }
 
             self._insert_entry(entry);
-            for &cell in neighbours(entry.cell) {
-                if entry_mask.overlaps(self.cell_poss_digits[cell as usize]) {
+            for cell in neighbours2(entry.cell()) {
+                if entry_mask.overlaps(self.cell_poss_digits[cell]) {
                     self.remove_impossibilities(cell, entry_mask, stack)?;
                 };
             }
@@ -86,7 +86,7 @@ impl SudokuGenerator {
     pub fn batch_insert_entries(&mut self, stack: &mut Vec<Entry>) -> Result<(), Unsolvable> {
         for entry in stack.drain(..) {
             // cell already solved from previous entry in stack, skip
-            if self.cell_poss_digits[entry.cell().as_index()].is_empty() {
+            if self.cell_poss_digits[entry.cell()].is_empty() {
                 continue;
             }
 
@@ -97,9 +97,9 @@ impl SudokuGenerator {
             // is temporarily out of date
             #[cfg_attr(rustfmt, rustfmt_skip)]
             {
-                if self.zone_solved_digits[entry.row().as_index()].overlaps(entry_mask)
-                || self.zone_solved_digits[entry.col().as_index()].overlaps(entry_mask)
-                || self.zone_solved_digits[entry.field().as_index()].overlaps(entry_mask)
+                if self.zone_solved_digits[entry.row()].overlaps(entry_mask)
+                || self.zone_solved_digits[entry.col()].overlaps(entry_mask)
+                || self.zone_solved_digits[entry.field()].overlaps(entry_mask)
                 {
                     return Err(Unsolvable);
                 }
@@ -109,13 +109,13 @@ impl SudokuGenerator {
         }
 
         // update cell possibilities from zone masks
-        for cell in 0..81 {
-            if self.cell_poss_digits[cell as usize].is_empty() {
+        for cell in Cell::all() {
+            if self.cell_poss_digits[cell].is_empty() {
                 continue;
             }
-            let zones_mask = self.zone_solved_digits[row_zone(cell)]
-                | self.zone_solved_digits[col_zone(cell)]
-                | self.zone_solved_digits[field_zone(cell)];
+            let zones_mask = self.zone_solved_digits[cell.row()]
+                | self.zone_solved_digits[cell.col()]
+                | self.zone_solved_digits[cell.block()];
 
             self.remove_impossibilities(cell, zones_mask, stack)?;
         }
@@ -129,17 +129,17 @@ impl SudokuGenerator {
 
     #[inline(always)]
     fn find_hidden_singles(&mut self, stack: &mut Vec<Entry>) -> Result<(), Unsolvable> {
-        for zone in 0..27 {
+        for house in House::all() {
             let mut unsolved = Set::NONE;
             let mut multiple_unsolved = Set::NONE;
 
-            let cells = cells_of_zone(zone);
-            for &cell in cells {
-                let poss_digits = self.cell_poss_digits[cell as usize];
+            let cells = house.cells();
+            for cell in cells {
+                let poss_digits = self.cell_poss_digits[cell];
                 multiple_unsolved |= unsolved & poss_digits;
                 unsolved |= poss_digits;
             }
-            if unsolved | self.zone_solved_digits[zone as usize] != Set::ALL {
+            if unsolved | self.zone_solved_digits[house] != Set::ALL {
                 return Err(Unsolvable);
             }
 
@@ -148,12 +148,12 @@ impl SudokuGenerator {
                 continue;
             }
 
-            for &cell in cells {
-                let mask = self.cell_poss_digits[cell as usize];
+            for cell in cells {
+                let mask = self.cell_poss_digits[cell];
 
                 if let Ok(maybe_unique) = (mask & singles).unique() {
                     let num = maybe_unique.ok_or(Unsolvable)?;
-                    stack.push(Entry { cell, num: num.val() });
+                    stack.push(Entry { cell: cell.val(), num: num.val() });
 
                     // mark num as found
                     singles.remove(Set::from(num));
@@ -175,14 +175,14 @@ impl SudokuGenerator {
     // to have a better chance of finding minimal cells quickly
     // on the next round
     #[inline]
-    fn find_cell_min_poss(&mut self) -> u8 {
+    fn find_cell_min_poss(&mut self) -> Cell {
         let mut min_possibilities = 10;
         let mut best_cell = 100;
 
         {
             let mut cell = (self.last_cell + 1) % 81;
             loop {
-                let cell_mask = self.cell_poss_digits[cell as usize];
+                let cell_mask = self.cell_poss_digits.0[cell as usize];
                 let n_possibilities = cell_mask.len();
                 // 0 means cell was already processed or its impossible in which case,
                 // it should have been caught elsewhere
@@ -201,30 +201,30 @@ impl SudokuGenerator {
             }
             self.last_cell = cell;
         }
-        best_cell
+        Cell::new(best_cell)
     }
 
     #[inline(always)]
     fn find_good_random_guess(&mut self) -> Entry {
         let best_cell = self.find_cell_min_poss();
-        let poss_digits = self.cell_poss_digits[best_cell as usize];
+        let poss_digits = self.cell_poss_digits[best_cell];
         let choice = ::rand::thread_rng().gen_range(0, poss_digits.len());
         let num = poss_digits.into_iter().nth(choice as usize).unwrap();
-        Entry { num: num.val(), cell: best_cell }
+        Entry { num: num.val(), cell: best_cell.val() }
     }
 
     // remove impossible digits from masks for given cell
     // also check for naked singles and impossibility of sudoku
     fn remove_impossibilities(
         &mut self,
-        cell: u8,
+        cell: Cell,
         impossible: Set<Digit>,
         stack: &mut Vec<Entry>,
     ) -> Result<(), Unsolvable> {
-        let cell_mask = &mut self.cell_poss_digits[cell as usize];
+        let cell_mask = &mut self.cell_poss_digits[cell];
         cell_mask.remove(impossible);
         if let Some(num) = cell_mask.unique()? {
-            stack.push(Entry { cell, num: num.val() });
+            stack.push(Entry { cell: cell.val(), num: num.val() });
         }
         Ok(())
     }
@@ -252,7 +252,7 @@ impl SudokuGenerator {
             }
             stack.clear();
 
-            self.remove_impossibilities(entry.cell, entry.digit_set(), stack)?;
+            self.remove_impossibilities(entry.cell(), entry.digit_set(), stack)?;
         }
     }
 

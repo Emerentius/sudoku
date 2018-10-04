@@ -3,7 +3,7 @@ use rand::Rng;
 use consts::*;
 use generator::SudokuGenerator;
 use solver::SudokuSolver;
-use types::{BlockFormatParseError, Entry, LineFormatParseError, NotEnoughRows, PubEntry};
+use types::{BlockFormatParseError, LineFormatParseError, NotEnoughRows, PubEntry};
 
 #[cfg(feature = "serde")]
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};

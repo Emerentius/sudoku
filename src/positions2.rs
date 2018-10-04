@@ -16,7 +16,7 @@ macro_rules! define_types(
         define_types!(@internal $name $limit);
     };
     (@internal pub $name:ident : $limit:expr) => {
-        #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
+        #[derive(Copy, Clone, Eq, PartialEq, PartialOrd, Ord, Debug, Hash)]
         pub struct $name(u8);
 
         define_types!(@internal $name $limit);
@@ -67,7 +67,7 @@ define_types!(
 );
 
 // define digit separately because it has an offset
-#[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
+#[derive(Copy, Clone, Eq, PartialEq, PartialOrd, Ord, Debug, Hash)]
 pub struct Digit(NonZeroU8);
 
 impl Digit {

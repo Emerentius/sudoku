@@ -39,7 +39,7 @@
 //		http://forum.enjoysudoku.com/3-77us-solver-2-8g-cpu-testcase-17sodoku-t30470-270.html#p262718
 
 use sudoku::Sudoku;
-use types::{Entry, Unsolvable};
+use types::Unsolvable;
 
 // masks of 27 bits
 const NONE: u32 = 0;
@@ -125,17 +125,17 @@ impl SudokuSolver {
         };
         for (cell, num) in (0..81).zip(sudoku.iter()) {
             if let Some(num) = num {
-                solver.insert_entry(Entry { cell, num })?;
+                solver.insert_candidate(cell, num)?;
             }
         }
         Ok(solver)
     }
 
     // jczsolve equivalent: SetSolvedDigit
-    fn insert_entry(&mut self, entry: Entry) -> Result<(), Unsolvable> {
-        let band = (entry.cell / 27) as usize;
-        let subband = (entry.num as usize - 1) * 3 + band;
-        let cell_mask = 1 << (entry.cell % 27);
+    fn insert_candidate(&mut self, cell: u8, num: u8) -> Result<(), Unsolvable> {
+        let band = (cell / 27) as usize;
+        let subband = (num as usize - 1) * 3 + band;
+        let cell_mask = 1 << (cell % 27);
 
         if self.poss_cells[subband] & cell_mask == NONE {
             return Err(Unsolvable);
@@ -145,8 +145,8 @@ impl SudokuSolver {
         self.unsolved_cells[band] &= !cell_mask;
 
         // remove digit possibility from cell neighbors by row, column and box
-        self.poss_cells[subband] &= nonconflicting_cells_same_band(entry.cell as _);
-        let nonconflicting_other = nonconflicting_cells_neighbor_bands(entry.cell);
+        self.poss_cells[subband] &= nonconflicting_cells_same_band(cell as _);
+        let nonconflicting_other = nonconflicting_cells_neighbor_bands(cell);
         let (ns1, ns2) = neighbor_subbands(subband);
         self.poss_cells[ns1] &= nonconflicting_other;
         self.poss_cells[ns2] &= nonconflicting_other;
@@ -187,7 +187,7 @@ impl SudokuSolver {
     // Other digit candidates digits and other bands are not touched (too expensive)
     //
     // jczsolve equivalent: SetSolvedMask
-    fn insert_entry_by_mask(&mut self, subband: usize, mask: u32) {
+    fn insert_candidate_by_mask(&mut self, subband: usize, mask: u32) {
         debug_assert!(mask.count_ones() == 1);
         debug_assert!(self.poss_cells[subband] & mask != 0);
         let band = subband % 3;
@@ -234,7 +234,7 @@ impl SudokuSolver {
                 single_applied = true;
                 for digit in 0..9 {
                     if self.poss_cells[digit * 3 + band] & cell_mask_single != NONE {
-                        self.insert_entry_by_mask(digit * 3 + band, cell_mask_single);
+                        self.insert_candidate_by_mask(digit * 3 + band, cell_mask_single);
                         continue 'singles;
                     }
                 }
@@ -298,7 +298,7 @@ impl SudokuSolver {
         let band = subband % 3;
         let nonconflicting_cells = !solved_cells;
         self.unsolved_cells[band] &= nonconflicting_cells;
-        // remove from every entry but the current one
+        // remove from every candidate but the current one
         let mut other_subband = band;
         while other_subband < 27 {
             if other_subband != subband {
@@ -406,13 +406,13 @@ impl SudokuSolver {
                     if first {
                         first = false;
                         let mut solver = *self;
-                        solver.insert_entry_by_mask(subband, cell_mask);
+                        solver.insert_candidate_by_mask(subband, cell_mask);
                         if solver.full_update(limit, solutions).is_ok() {
                             solver.guess(limit, solutions);
                         }
                         self.poss_cells[subband] ^= cell_mask;
                     } else {
-                        self.insert_entry_by_mask(subband, cell_mask);
+                        self.insert_candidate_by_mask(subband, cell_mask);
                         if self.full_update(limit, solutions).is_ok() {
                             self.guess(limit, solutions);
                         }
@@ -460,7 +460,7 @@ impl SudokuSolver {
         while subband < 27 {
             if self.poss_cells[subband] & unsolved_cell != NONE {
                 let mut solver = self.clone();
-                solver.insert_entry_by_mask(subband, unsolved_cell);
+                solver.insert_candidate_by_mask(subband, unsolved_cell);
                 if solver.full_update(limit, solutions).is_ok() {
                     solver.guess(limit, solutions);
                 }
@@ -560,7 +560,7 @@ fn nonconflicting_cells_same_band(cell: usize) -> u32 {
 // jczsolve equivalent: TblOtherfMask
 #[inline]
 fn nonconflicting_cells_neighbor_bands(cell: u8) -> u32 {
-    // only 3 cells in a column conflict with an entry in another band
+    // only 3 cells in a column conflict with a candidate in another band
     // and they are all in one column, each 9 steps apart in the mask
     ALL ^ (0o_001_001_001 << cell % 9)
 }

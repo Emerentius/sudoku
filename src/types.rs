@@ -4,7 +4,7 @@
 
 use consts::*;
 use positions::FIELD;
-use positions2::{Set, Digit as Digit, Cell, House, Row, Col, Block};
+use positions2::{Set, Digit, Cell, House, Row, Col, Block};
 use ::std::ops::{Deref, DerefMut, Index, IndexMut};
 
 #[derive(Debug)]
@@ -12,58 +12,46 @@ pub struct Unsolvable;
 
 /// Represents a digit in a specific cell
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Entry {
-    pub(crate) cell: u8,
-    pub(crate) num: u8,
+pub struct Candidate {
+    pub cell: Cell,
+    pub digit: Digit,
 }
 
-impl Entry {
-    /// Constructs a new entry.
+impl Candidate {
+    /// Constructs a new candidate.
     ///
     /// # Panics
     ///
     /// panics if `cell >= 81` or `!(1..=9).contains(num)`
     #[inline]
-    pub fn new(cell: u8, num: u8) -> Entry {
+    pub fn new(cell: u8, digit: u8) -> Candidate {
         assert!(cell < 81);
-        assert!(0 < num && num < 10);
+        assert!(0 < digit && digit < 10);
 
-        Entry { cell, num }
+        Candidate { cell: Cell::new(cell), digit: Digit::new(digit) }
     }
 
-    /// Returns the cell this entry belongs to
-    #[inline]
-    pub fn cell(self) -> Cell {
-        Cell::new(self.cell)
-    }
-
-    /// Returns the row of this entry's cell
+    /// Returns the row of this candidate's cell
     #[inline]
     pub fn row(self) -> Row {
-        self.cell().row()
+        self.cell.row()
     }
 
-    /// Returns the columns of this entry's cell
+    /// Returns the columns of this candidate's cell
     #[inline]
     pub fn col(self) -> Col {
-        self.cell().col()
+        self.cell.col()
     }
 
-    /// Returns the field (box) of this entry's cell
+    /// Returns the field (box) of this candidate's cell
     #[inline]
     pub fn field(self) -> Block {
-        self.cell().block()
-    }
-
-    /// Returns this entry's digit
-    #[inline]
-    pub fn digit(self) -> Digit {
-        Digit::new(self.num)
+        self.cell.block()
     }
 
     #[inline]
     pub(crate) fn digit_set(self) -> Set<Digit> {
-        Set::from(Digit::new(self.num))
+        Set::from(self.digit)
     }
 }
 

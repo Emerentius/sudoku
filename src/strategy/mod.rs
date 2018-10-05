@@ -7,7 +7,9 @@
 //! be at least an order of magnitude slower than the fast solver.
 
 mod solver;
-mod board;
-pub use self::solver::{Strategy, StrategySolver, Deductions, Deduction, DeductionResult, DeductionsIter};
-pub use self::board::CellState;
-pub use types::Candidate;
+pub mod deduction;
+mod strategies;
+
+pub use self::solver::{StrategySolver};
+pub use self::strategies::Strategy;
+pub use self::deduction::Deduction;

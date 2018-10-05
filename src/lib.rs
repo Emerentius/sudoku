@@ -1,5 +1,5 @@
 //#![warn(missing_docs)]
-#![allow(unused)]
+#![allow(renamed_and_removed_lints, unknown_lints)]
 #![cfg_attr(
     feature = "cargo-clippy",
     allow(
@@ -48,18 +48,13 @@ extern crate rand;
 #[cfg(feature = "serde")]
 extern crate serde;
 
+pub mod bitset;
 mod consts;
 mod generator;
-mod positions;
-pub mod positions2;
 mod solver;
+mod helper;
 pub mod strategy;
-mod sudoku;
-mod types;
+pub mod board;
+pub mod parse_errors;
 
-pub use sudoku::Sudoku;
-
-/// Contains errors for the various parsing modes
-pub mod parse_errors {
-    pub use types::{BlockFormatParseError, LineFormatParseError, NotEnoughRows, PubEntry as Entry};
-}
+pub use board::Sudoku;

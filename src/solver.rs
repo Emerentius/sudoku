@@ -38,8 +38,8 @@
 //  for a port under the AGPLv3 license in the forum thread
 //		http://forum.enjoysudoku.com/3-77us-solver-2-8g-cpu-testcase-17sodoku-t30470-270.html#p262718
 
-use sudoku::Sudoku;
-use types::Unsolvable;
+use ::Sudoku;
+use helper::Unsolvable;
 
 // masks of 27 bits
 const NONE: u32 = 0;

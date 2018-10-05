@@ -3,7 +3,7 @@ use rand::Rng;
 use consts::*;
 use generator::SudokuGenerator;
 use solver::SudokuSolver;
-use types::{BlockFormatParseError, LineFormatParseError, NotEnoughRows, PubEntry};
+use parse_errors::{BlockParseError, LineParseError, NotEnoughRows, InvalidEntry};
 
 #[cfg(feature = "serde")]
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
@@ -15,10 +15,10 @@ use std::{
 
 /// The main structure exposing all the functionality of the library
 ///
-/// `Sudoku"s can generated, constructed from arrays or parsed from `&str`s
+/// `Sudoku`s can generated, constructed from arrays or parsed from `&str`s
 /// in either the line or block format.
 #[derive(Copy, Clone)]
-pub struct Sudoku(pub(crate) [u8; 81]);
+pub struct Sudoku(pub(crate) [u8; N_CELLS]);
 
 #[cfg(feature = "serde")]
 impl Serialize for Sudoku {
@@ -156,7 +156,7 @@ impl Sudoku {
         // and backtrack on error
 
         // generate random order
-        let mut cell_order = [0; 81];
+        let mut cell_order = [0; N_CELLS];
         cell_order
             .iter_mut()
             .enumerate()
@@ -229,10 +229,10 @@ impl Sudoku {
     /// All numbers must be below 10. Empty cells are denoted by 0, clues by the numbers 1-9.
     /// The slice must be of length 81.
     pub fn from_bytes_slice(bytes: &[u8]) -> Result<Sudoku, ()> {
-        if bytes.len() != 81 {
+        if bytes.len() != N_CELLS {
             return Err(());
         }
-        let mut sudoku = Sudoku([0; 81]);
+        let mut sudoku = Sudoku([0; N_CELLS]);
 
         match bytes.iter().all(|&byte| byte <= 9) {
             true => {
@@ -245,7 +245,7 @@ impl Sudoku {
 
     /// Creates a sudoku from a byte array.
     /// All numbers must be below 10. Empty cells are denoted by 0, clues by the numbers 1-9.
-    pub fn from_bytes(bytes: [u8; 81]) -> Result<Sudoku, ()> {
+    pub fn from_bytes(bytes: [u8; N_CELLS]) -> Result<Sudoku, ()> {
         match bytes.iter().all(|&byte| byte <= 9) {
             true => Ok(Sudoku(bytes)),
             false => Err(()),
@@ -269,7 +269,7 @@ impl Sudoku {
     /// ```
     ///
     /// Stops parsing after the first sudoku
-    pub fn from_str_line(s: &str) -> Result<Sudoku, LineFormatParseError> {
+    pub fn from_str_line(s: &str) -> Result<Sudoku, LineParseError> {
         let chars = s.as_bytes();
         let mut grid = [0; N_CELLS];
         let mut i = 0;
@@ -278,9 +278,9 @@ impl Sudoku {
                 b'_' | b'.' => *cell = 0,
                 b'0'...b'9' => *cell = ch - b'0',
                 // space ends sudoku before grid is filled
-                b' ' | b'\t' => return Err(LineFormatParseError::NotEnoughCells(i)),
+                b' ' | b'\t' => return Err(LineParseError::NotEnoughCells(i)),
                 _ => {
-                    return Err(LineFormatParseError::InvalidEntry(PubEntry {
+                    return Err(LineParseError::InvalidEntry(InvalidEntry {
                         cell: i,
                         ch: s[i as usize..].chars().next().unwrap(),
                     }))
@@ -289,21 +289,21 @@ impl Sudoku {
             i += 1;
         }
 
-        if i != 81 {
-            return Err(LineFormatParseError::NotEnoughCells(i));
+        if i != N_CELLS as u8 {
+            return Err(LineParseError::NotEnoughCells(i));
         }
 
         // if more than 81 elements, sudoku must be delimited
-        if let Some(&ch) = chars.get(81) {
+        if let Some(&ch) = chars.get(N_CELLS) {
             match ch {
                 // delimiters, end of sudoku
                 b'\t' | b' ' | b'\r' | b'\n' | b';' | b',' => (),
                 // valid cell entry => too long
-                b'_' | b'.' | b'0'...b'9' => return Err(LineFormatParseError::TooManyCells),
+                b'_' | b'.' | b'0'...b'9' => return Err(LineParseError::TooManyCells),
                 // any other char can not be part of sudoku
                 // without having both length and character wrong
                 // treat like comment, but with missing delimiter
-                _ => return Err(LineFormatParseError::MissingCommentDelimiter),
+                _ => return Err(LineParseError::MissingCommentDelimiter),
             }
         }
 
@@ -347,7 +347,7 @@ impl Sudoku {
     /// ```
     ///
     /// Stops parsing after the first sudoku
-    pub fn from_str_block(s: &str) -> Result<Sudoku, BlockFormatParseError> {
+    pub fn from_str_block(s: &str) -> Result<Sudoku, BlockParseError> {
         let mut grid = [0; N_CELLS];
         #[derive(PartialEq)]
         enum Format {
@@ -367,7 +367,7 @@ impl Sudoku {
             if n_line_sud == 9 {
                 match line.trim().is_empty() {
                     true => break,
-                    false => return Err(BlockFormatParseError::TooManyRows),
+                    false => return Err(BlockParseError::TooManyRows),
                 }
             }
 
@@ -380,13 +380,13 @@ impl Sudoku {
                 }
                 if format == Format::Delimited {
                     match !(line.starts_with("-----------") || line.starts_with("----------- ")) {
-                        true => return Err(BlockFormatParseError::IncorrectFieldDelimiter),
+                        true => return Err(BlockParseError::IncorrectFieldDelimiter),
                         false => continue,
                     }
                 }
                 if format == Format::DelimitedPlus {
                     match !(line.starts_with("---+---+---") || line.starts_with("---+---+--- ")) {
-                        true => return Err(BlockFormatParseError::IncorrectFieldDelimiter),
+                        true => return Err(BlockParseError::IncorrectFieldDelimiter),
                         false => continue,
                     }
                 }
@@ -401,10 +401,10 @@ impl Sudoku {
                         ' ' | '\t' => break,
                         // valid entry, line too long
                         '1'...'9' | '_' | '.' | '0' => {
-                            return Err(BlockFormatParseError::InvalidLineLength(n_line_sud))
+                            return Err(BlockParseError::InvalidLineLength(n_line_sud))
                         }
                         // invalid entry, interpret as comment but enforce separation
-                        _ => return Err(BlockFormatParseError::MissingCommentDelimiter(n_line_sud)),
+                        _ => return Err(BlockParseError::MissingCommentDelimiter(n_line_sud)),
                     }
                 }
 
@@ -422,7 +422,7 @@ impl Sudoku {
                     if format == Format::Delimited || format == Format::DelimitedPlus {
                         match ch {
                             '|' => continue,
-                            _ => return Err(BlockFormatParseError::IncorrectFieldDelimiter),
+                            _ => return Err(BlockParseError::IncorrectFieldDelimiter),
                         }
                     }
                 }
@@ -432,7 +432,7 @@ impl Sudoku {
                     '_' | '.' => grid[cell as usize] = 0,
                     '0'...'9' => grid[cell as usize] = ch as u8 - b'0',
                     _ => {
-                        return Err(BlockFormatParseError::InvalidEntry(PubEntry {
+                        return Err(BlockParseError::InvalidEntry(InvalidEntry {
                             cell: cell as u8,
                             ch,
                         }))
@@ -441,13 +441,13 @@ impl Sudoku {
                 n_col_sud += 1;
             }
             if n_col_sud != 9 {
-                return Err(BlockFormatParseError::InvalidLineLength(n_line_sud));
+                return Err(BlockParseError::InvalidLineLength(n_line_sud));
             }
 
             n_line_sud += 1;
         }
         if n_line_sud != 9 {
-            return Err(BlockFormatParseError::NotEnoughRows(n_line_sud + 1)); // number of rows = index of last + 1
+            return Err(BlockParseError::NotEnoughRows(n_line_sud + 1)); // number of rows = index of last + 1
         }
         Ok(Sudoku(grid))
     }
@@ -495,7 +495,7 @@ impl Sudoku {
     /// Find a solution to the sudoku. If multiple solutions exist, it will not find them and just stop at the first.
     /// Return `None` if no solution exists.
     pub fn solve_one(self) -> Option<Sudoku> {
-        let mut buf = [[0; 81]];
+        let mut buf = [[0; N_CELLS]];
         match self.solve_at_most_buffer(&mut buf, 1) == 1 {
             true => Some(Sudoku(buf[0])),
             false => None,
@@ -517,7 +517,7 @@ impl Sudoku {
             return None;
         };
 
-        let mut solution = [[0; 81]];
+        let mut solution = [[0; N_CELLS]];
         let n_solutions = self.solve_at_most_buffer(&mut solution, 2);
         match n_solutions == 1 {
             true => Some(Sudoku(solution[0])),
@@ -551,7 +551,7 @@ impl Sudoku {
     /// up to its capacity. Additional solutions will be counted but not saved.
     /// No specific ordering of solutions is promised. It can change across versions.
     /// This is primarily meant for C FFI.
-    pub fn solve_at_most_buffer(self, target: &mut [[u8; 81]], limit: usize) -> usize {
+    pub fn solve_at_most_buffer(self, target: &mut [[u8; N_CELLS]], limit: usize) -> usize {
         SudokuSolver::from_sudoku(self)
             .ok()
             .map_or(0, |solver| solver.solve_at_most_buffer(target, limit))
@@ -734,7 +734,7 @@ impl Sudoku {
 
     /// Returns a byte array for the sudoku.
     /// Empty cells are denoted by 0, clues by the numbers 1-9.
-    pub fn to_bytes(self) -> [u8; 81] {
+    pub fn to_bytes(self) -> [u8; N_CELLS] {
         self.0
     }
 
@@ -757,7 +757,7 @@ impl Sudoku {
     ///	);
     /// ```
     pub fn to_str_line(&self) -> SudokuLine {
-        let mut chars = [0; 81];
+        let mut chars = [0; N_CELLS];
         for (char_, entry) in chars.iter_mut().zip(self.iter()) {
             *char_ = match entry {
                 Some(num) => num + b'0',
@@ -816,7 +816,7 @@ impl fmt::Display for Sudoku {
 /// Container for the &str representation of a sudoku
 // MUST ALWAYS contain valid utf8
 #[derive(Copy, Clone)]
-pub struct SudokuLine([u8; 81]);
+pub struct SudokuLine([u8; N_CELLS]);
 
 /// The ordering is lexicographical in the cells of the sudoku
 /// going from left to right, top to bottom
@@ -875,7 +875,7 @@ impl fmt::Display for SudokuLine {
 /// Sudoku that will be printed in block format.
 /// This exists primarily for debugging.
 #[derive(Copy, Clone)]
-pub struct SudokuBlock([u8; 81]);
+pub struct SudokuBlock([u8; N_CELLS]);
 
 /// The ordering is lexicographical in the cells of the sudoku
 /// going from left to right, top to bottom
@@ -916,10 +916,10 @@ impl fmt::Debug for SudokuBlock {
 
 impl fmt::Display for SudokuBlock {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use positions2::{Cell, Digit};
+        use board::{Digit, Cell};
         for (digit, cell) in self.0.iter().cloned().map(Digit::new_checked).zip(Cell::all()) {
             #[cfg_attr(rustfmt, rustfmt_skip)]
-            match (cell.row().val(), cell.col().val()) {
+            match (cell.row().get(), cell.col().get()) {
                 (_, 3) | (_, 6) => write!(f, " ")?,    // seperate fields in columns
                 (3, 0) | (6, 0) => write!(f, "\n\n")?, // separate fields in rows
                 (_, 0)          => write!(f, "\n")?,   // separate lines not between fields
@@ -927,7 +927,7 @@ impl fmt::Display for SudokuBlock {
             };
             match digit {
                 None => write!(f, "_")?,
-                Some(dig) => write!(f, "{}", dig.val())?,
+                Some(dig) => write!(f, "{}", dig.get())?,
             };
         }
         Ok(())

@@ -1,7 +1,164 @@
 #![allow(unused, missing_docs)]
-use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not, BitXor, BitXorAssign};
+
 use std::num::NonZeroU8;
-use types::Unsolvable;
+use bitset::Set;
+use helper::Unsolvable;
+use board::Digit;
+use consts::*;
+
+#[inline(always)]
+pub(crate) fn row(cell: u8) -> u8 {
+    cell / 9
+}
+#[inline(always)]
+pub(crate) fn col(cell: u8) -> u8 {
+    cell % 9
+}
+#[inline(always)]
+pub(crate) fn block(cell: u8) -> u8 {
+    BLOCK[cell as usize]
+}
+
+fn band(cell: u8) -> u8 {
+    cell / 27
+}
+
+fn stack(cell: u8) -> u8 {
+    col(cell) / 3
+}
+
+#[cfg_attr(rustfmt, rustfmt_skip)]
+static BLOCK: [u8; N_CELLS] = [
+    0, 0, 0, 1, 1, 1, 2, 2, 2,
+    0, 0, 0, 1, 1, 1, 2, 2, 2,
+    0, 0, 0, 1, 1, 1, 2, 2, 2,
+    3, 3, 3, 4, 4, 4, 5, 5, 5,
+    3, 3, 3, 4, 4, 4, 5, 5, 5,
+    3, 3, 3, 4, 4, 4, 5, 5, 5,
+    6, 6, 6, 7, 7, 7, 8, 8, 8,
+    6, 6, 6, 7, 7, 7, 8, 8, 8,
+    6, 6, 6, 7, 7, 7, 8, 8, 8,
+];
+
+#[cfg_attr(rustfmt, rustfmt_skip)]
+static CELLS_BY_HOUSE: [[u8; 9]; 27] = [
+    [0, 1, 2, 3, 4, 5, 6, 7, 8],
+    [9, 10, 11, 12, 13, 14, 15, 16, 17],
+    [18, 19, 20, 21, 22, 23, 24, 25, 26],
+    [27, 28, 29, 30, 31, 32, 33, 34, 35],
+    [36, 37, 38, 39, 40, 41, 42, 43, 44],
+    [45, 46, 47, 48, 49, 50, 51, 52, 53],
+    [54, 55, 56, 57, 58, 59, 60, 61, 62],
+    [63, 64, 65, 66, 67, 68, 69, 70, 71],
+    [72, 73, 74, 75, 76, 77, 78, 79, 80],
+
+    [0, 9, 18, 27, 36, 45, 54, 63, 72],
+    [1, 10, 19, 28, 37, 46, 55, 64, 73],
+    [2, 11, 20, 29, 38, 47, 56, 65, 74],
+    [3, 12, 21, 30, 39, 48, 57, 66, 75],
+    [4, 13, 22, 31, 40, 49, 58, 67, 76],
+    [5, 14, 23, 32, 41, 50, 59, 68, 77],
+    [6, 15, 24, 33, 42, 51, 60, 69, 78],
+    [7, 16, 25, 34, 43, 52, 61, 70, 79],
+    [8, 17, 26, 35, 44, 53, 62, 71, 80],
+
+    [0, 1, 2, 9, 10, 11, 18, 19, 20],
+    [3, 4, 5, 12, 13, 14, 21, 22, 23],
+    [6, 7, 8, 15, 16, 17, 24, 25, 26],
+    [27, 28, 29, 36, 37, 38, 45, 46, 47],
+    [30, 31, 32, 39, 40, 41, 48, 49, 50],
+    [33, 34, 35, 42, 43, 44, 51, 52, 53],
+    [54, 55, 56, 63, 64, 65, 72, 73, 74],
+    [57, 58, 59, 66, 67, 68, 75, 76, 77],
+    [60, 61, 62, 69, 70, 71, 78, 79, 80],
+];
+
+// list of cells that share a row, col or field for a given cell
+// sorted low to high
+#[cfg_attr(rustfmt, rustfmt_skip)]
+static HOUSE_NEIGHBORS_OF_CELL: [[u8; 20]; 81] = [
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 18, 19, 20, 27, 36, 45, 54, 63, 72],
+    [0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 18, 19, 20, 28, 37, 46, 55, 64, 73],
+    [0, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 18, 19, 20, 29, 38, 47, 56, 65, 74],
+    [0, 1, 2, 4, 5, 6, 7, 8, 12, 13, 14, 21, 22, 23, 30, 39, 48, 57, 66, 75],
+    [0, 1, 2, 3, 5, 6, 7, 8, 12, 13, 14, 21, 22, 23, 31, 40, 49, 58, 67, 76],
+    [0, 1, 2, 3, 4, 6, 7, 8, 12, 13, 14, 21, 22, 23, 32, 41, 50, 59, 68, 77],
+    [0, 1, 2, 3, 4, 5, 7, 8, 15, 16, 17, 24, 25, 26, 33, 42, 51, 60, 69, 78],
+    [0, 1, 2, 3, 4, 5, 6, 8, 15, 16, 17, 24, 25, 26, 34, 43, 52, 61, 70, 79],
+    [0, 1, 2, 3, 4, 5, 6, 7, 15, 16, 17, 24, 25, 26, 35, 44, 53, 62, 71, 80],
+    [0, 1, 2, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 27, 36, 45, 54, 63, 72],
+    [0, 1, 2, 9, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 28, 37, 46, 55, 64, 73],
+    [0, 1, 2, 9, 10, 12, 13, 14, 15, 16, 17, 18, 19, 20, 29, 38, 47, 56, 65, 74],
+    [3, 4, 5, 9, 10, 11, 13, 14, 15, 16, 17, 21, 22, 23, 30, 39, 48, 57, 66, 75],
+    [3, 4, 5, 9, 10, 11, 12, 14, 15, 16, 17, 21, 22, 23, 31, 40, 49, 58, 67, 76],
+    [3, 4, 5, 9, 10, 11, 12, 13, 15, 16, 17, 21, 22, 23, 32, 41, 50, 59, 68, 77],
+    [6, 7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 24, 25, 26, 33, 42, 51, 60, 69, 78],
+    [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 17, 24, 25, 26, 34, 43, 52, 61, 70, 79],
+    [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 24, 25, 26, 35, 44, 53, 62, 71, 80],
+    [0, 1, 2, 9, 10, 11, 19, 20, 21, 22, 23, 24, 25, 26, 27, 36, 45, 54, 63, 72],
+    [0, 1, 2, 9, 10, 11, 18, 20, 21, 22, 23, 24, 25, 26, 28, 37, 46, 55, 64, 73],
+    [0, 1, 2, 9, 10, 11, 18, 19, 21, 22, 23, 24, 25, 26, 29, 38, 47, 56, 65, 74],
+    [3, 4, 5, 12, 13, 14, 18, 19, 20, 22, 23, 24, 25, 26, 30, 39, 48, 57, 66, 75],
+    [3, 4, 5, 12, 13, 14, 18, 19, 20, 21, 23, 24, 25, 26, 31, 40, 49, 58, 67, 76],
+    [3, 4, 5, 12, 13, 14, 18, 19, 20, 21, 22, 24, 25, 26, 32, 41, 50, 59, 68, 77],
+    [6, 7, 8, 15, 16, 17, 18, 19, 20, 21, 22, 23, 25, 26, 33, 42, 51, 60, 69, 78],
+    [6, 7, 8, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 26, 34, 43, 52, 61, 70, 79],
+    [6, 7, 8, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 35, 44, 53, 62, 71, 80],
+    [0, 9, 18, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 45, 46, 47, 54, 63, 72],
+    [1, 10, 19, 27, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 45, 46, 47, 55, 64, 73],
+    [2, 11, 20, 27, 28, 30, 31, 32, 33, 34, 35, 36, 37, 38, 45, 46, 47, 56, 65, 74],
+    [3, 12, 21, 27, 28, 29, 31, 32, 33, 34, 35, 39, 40, 41, 48, 49, 50, 57, 66, 75],
+    [4, 13, 22, 27, 28, 29, 30, 32, 33, 34, 35, 39, 40, 41, 48, 49, 50, 58, 67, 76],
+    [5, 14, 23, 27, 28, 29, 30, 31, 33, 34, 35, 39, 40, 41, 48, 49, 50, 59, 68, 77],
+    [6, 15, 24, 27, 28, 29, 30, 31, 32, 34, 35, 42, 43, 44, 51, 52, 53, 60, 69, 78],
+    [7, 16, 25, 27, 28, 29, 30, 31, 32, 33, 35, 42, 43, 44, 51, 52, 53, 61, 70, 79],
+    [8, 17, 26, 27, 28, 29, 30, 31, 32, 33, 34, 42, 43, 44, 51, 52, 53, 62, 71, 80],
+    [0, 9, 18, 27, 28, 29, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 54, 63, 72],
+    [1, 10, 19, 27, 28, 29, 36, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 55, 64, 73],
+    [2, 11, 20, 27, 28, 29, 36, 37, 39, 40, 41, 42, 43, 44, 45, 46, 47, 56, 65, 74],
+    [3, 12, 21, 30, 31, 32, 36, 37, 38, 40, 41, 42, 43, 44, 48, 49, 50, 57, 66, 75],
+    [4, 13, 22, 30, 31, 32, 36, 37, 38, 39, 41, 42, 43, 44, 48, 49, 50, 58, 67, 76],
+    [5, 14, 23, 30, 31, 32, 36, 37, 38, 39, 40, 42, 43, 44, 48, 49, 50, 59, 68, 77],
+    [6, 15, 24, 33, 34, 35, 36, 37, 38, 39, 40, 41, 43, 44, 51, 52, 53, 60, 69, 78],
+    [7, 16, 25, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 44, 51, 52, 53, 61, 70, 79],
+    [8, 17, 26, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 51, 52, 53, 62, 71, 80],
+    [0, 9, 18, 27, 28, 29, 36, 37, 38, 46, 47, 48, 49, 50, 51, 52, 53, 54, 63, 72],
+    [1, 10, 19, 27, 28, 29, 36, 37, 38, 45, 47, 48, 49, 50, 51, 52, 53, 55, 64, 73],
+    [2, 11, 20, 27, 28, 29, 36, 37, 38, 45, 46, 48, 49, 50, 51, 52, 53, 56, 65, 74],
+    [3, 12, 21, 30, 31, 32, 39, 40, 41, 45, 46, 47, 49, 50, 51, 52, 53, 57, 66, 75],
+    [4, 13, 22, 30, 31, 32, 39, 40, 41, 45, 46, 47, 48, 50, 51, 52, 53, 58, 67, 76],
+    [5, 14, 23, 30, 31, 32, 39, 40, 41, 45, 46, 47, 48, 49, 51, 52, 53, 59, 68, 77],
+    [6, 15, 24, 33, 34, 35, 42, 43, 44, 45, 46, 47, 48, 49, 50, 52, 53, 60, 69, 78],
+    [7, 16, 25, 33, 34, 35, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 53, 61, 70, 79],
+    [8, 17, 26, 33, 34, 35, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 62, 71, 80],
+    [0, 9, 18, 27, 36, 45, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 72, 73, 74],
+    [1, 10, 19, 28, 37, 46, 54, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 72, 73, 74],
+    [2, 11, 20, 29, 38, 47, 54, 55, 57, 58, 59, 60, 61, 62, 63, 64, 65, 72, 73, 74],
+    [3, 12, 21, 30, 39, 48, 54, 55, 56, 58, 59, 60, 61, 62, 66, 67, 68, 75, 76, 77],
+    [4, 13, 22, 31, 40, 49, 54, 55, 56, 57, 59, 60, 61, 62, 66, 67, 68, 75, 76, 77],
+    [5, 14, 23, 32, 41, 50, 54, 55, 56, 57, 58, 60, 61, 62, 66, 67, 68, 75, 76, 77],
+    [6, 15, 24, 33, 42, 51, 54, 55, 56, 57, 58, 59, 61, 62, 69, 70, 71, 78, 79, 80],
+    [7, 16, 25, 34, 43, 52, 54, 55, 56, 57, 58, 59, 60, 62, 69, 70, 71, 78, 79, 80],
+    [8, 17, 26, 35, 44, 53, 54, 55, 56, 57, 58, 59, 60, 61, 69, 70, 71, 78, 79, 80],
+    [0, 9, 18, 27, 36, 45, 54, 55, 56, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74],
+    [1, 10, 19, 28, 37, 46, 54, 55, 56, 63, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74],
+    [2, 11, 20, 29, 38, 47, 54, 55, 56, 63, 64, 66, 67, 68, 69, 70, 71, 72, 73, 74],
+    [3, 12, 21, 30, 39, 48, 57, 58, 59, 63, 64, 65, 67, 68, 69, 70, 71, 75, 76, 77],
+    [4, 13, 22, 31, 40, 49, 57, 58, 59, 63, 64, 65, 66, 68, 69, 70, 71, 75, 76, 77],
+    [5, 14, 23, 32, 41, 50, 57, 58, 59, 63, 64, 65, 66, 67, 69, 70, 71, 75, 76, 77],
+    [6, 15, 24, 33, 42, 51, 60, 61, 62, 63, 64, 65, 66, 67, 68, 70, 71, 78, 79, 80],
+    [7, 16, 25, 34, 43, 52, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 71, 78, 79, 80],
+    [8, 17, 26, 35, 44, 53, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 78, 79, 80],
+    [0, 9, 18, 27, 36, 45, 54, 55, 56, 63, 64, 65, 73, 74, 75, 76, 77, 78, 79, 80],
+    [1, 10, 19, 28, 37, 46, 54, 55, 56, 63, 64, 65, 72, 74, 75, 76, 77, 78, 79, 80],
+    [2, 11, 20, 29, 38, 47, 54, 55, 56, 63, 64, 65, 72, 73, 75, 76, 77, 78, 79, 80],
+    [3, 12, 21, 30, 39, 48, 57, 58, 59, 66, 67, 68, 72, 73, 74, 76, 77, 78, 79, 80],
+    [4, 13, 22, 31, 40, 49, 57, 58, 59, 66, 67, 68, 72, 73, 74, 75, 77, 78, 79, 80],
+    [5, 14, 23, 32, 41, 50, 57, 58, 59, 66, 67, 68, 72, 73, 74, 75, 76, 78, 79, 80],
+    [6, 15, 24, 33, 42, 51, 60, 61, 62, 69, 70, 71, 72, 73, 74, 75, 76, 77, 79, 80],
+    [7, 16, 25, 34, 43, 52, 60, 61, 62, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 80],
+    [8, 17, 26, 35, 44, 53, 60, 61, 62, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79],
+];
 
 macro_rules! define_types(
     ($( $vis:tt $name:ident : $limit:expr ),* $(,)*) => {
@@ -36,7 +193,7 @@ macro_rules! define_types(
                 }
             }
 
-            pub fn val(self) -> u8 {
+            pub fn get(self) -> u8 {
                 self.0
             }
 
@@ -66,38 +223,6 @@ define_types!(
     pub Chute: 6,
 );
 
-// define digit separately because it has an offset
-#[derive(Copy, Clone, Eq, PartialEq, PartialOrd, Ord, Debug, Hash)]
-pub struct Digit(NonZeroU8);
-
-impl Digit {
-    pub fn new(digit: u8) -> Self {
-        debug_assert!(digit <= 9);
-        Self::new_checked(digit).unwrap()
-    }
-
-    pub fn from_index(idx: u8) -> Self {
-        debug_assert!(idx < 9);
-        Self::new_checked(idx+1).unwrap()
-    }
-
-    pub fn new_checked(num: u8) -> Option<Self> {
-        NonZeroU8::new(num).map(Digit)
-    }
-
-    pub fn all() -> impl Iterator<Item = Self> {
-        (1..10).map(Digit::new)
-    }
-
-    pub fn val(self) -> u8 {
-        self.0.get()
-    }
-
-    pub fn as_index(self) -> usize {
-        self.val() as usize - 1
-    }
-}
-
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
 pub enum LineType {
     Row(Row),
@@ -106,10 +231,10 @@ pub enum LineType {
 
 impl Line {
     pub fn categorize(self) -> LineType {
-        debug_assert!(self.0 < 18);
-        match self.0 < 9 {
+        debug_assert!(self.0 < BLOCK_OFFSET);
+        match self.0 < COL_OFFSET {
             true => LineType::Row(Row::new(self.0)),
-            false => LineType::Col(Col::new(self.0 - 9)),
+            false => LineType::Col(Col::new(self.0 - COL_OFFSET)),
         }
     }
 }
@@ -126,8 +251,8 @@ impl House {
         debug_assert!(self.0 < 27);
         match self.0 {
             0..= 8 => HouseType::Row(Row::new(self.0)),
-            9..=17 => HouseType::Col(Col::new(self.0 - 9)),
-            _      => HouseType::Block(Block::new(self.0 - 18)),
+            9..=17 => HouseType::Col(Col::new(self.0 - COL_OFFSET)),
+            _      => HouseType::Block(Block::new(self.0 - BLOCK_OFFSET)),
         }
     }
 }
@@ -172,246 +297,10 @@ impl<IN> Position<IN> {
         Position(pos, std::marker::PhantomData)
     }
 
-    fn as_index(self) -> usize {
+    pub fn as_index(self) -> usize {
         self.0 as _
     }
 }
-
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
-pub struct Set<T: SetElement>(T::Storage);
-
-#[derive(Clone, Eq, PartialEq, Debug)]
-pub struct SetIter<T: SetElement>(T::Storage);
-
-impl<T: SetElement> IntoIterator for Set<T>
-where
-    SetIter<T>: Iterator,
-{
-    type Item = <SetIter<T> as Iterator>::Item;
-    type IntoIter = SetIter<T>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        SetIter(self.0)
-    }
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////
-//                                  Bitops
-///////////////////////////////////////////////////////////////////////////////////////////////
-
-macro_rules! impl_binary_bitops {
-    ( $( $trait:ident, $fn_name:ident);* $(;)* ) => {
-        $(
-            impl<T: SetElement> $trait for Set<T> {
-                type Output = Self;
-                fn $fn_name(self, other: Self) -> Self {
-                    Set(
-                        $trait::$fn_name(self.0, other.0)
-                    )
-                }
-            }
-        )*
-    };
-}
-
-macro_rules! impl_bitops_assign {
-    ( $( $trait:ident, $fn_name:ident);* $(;)* ) => {
-        $(
-            impl<T: SetElement> $trait for Set<T> {
-                fn $fn_name(&mut self, other: Self) {
-                    $trait::$fn_name(&mut self.0, other.0)
-                }
-            }
-        )*
-    };
-}
-
-impl_binary_bitops!(
-    BitAnd, bitand;
-    BitOr, bitor;
-    BitXor, bitxor;
-);
-
-impl_bitops_assign!(
-    BitAndAssign, bitand_assign;
-    BitOrAssign, bitor_assign;
-    BitXorAssign, bitxor_assign;
-);
-
-impl<T: SetElement> Not for Set<T>
-where
-    Self: PartialEq + Copy
-{
-    type Output = Self;
-    fn not(self) -> Self {
-        Self::ALL.without(self)
-    }
-}
-
-impl<T: SetElement> Set<T>
-where
-    // TODO: properly implement the traits for Set and SetIter
-    //       bounded on T::Storage, not on T (which derive does)
-    Self: PartialEq + Copy
-{
-    pub const ALL: Set<T> = Set(<T as SetElement>::ALL);
-    pub const NONE: Set<T> = Set(<T as SetElement>::NONE);
-
-    pub fn new(mask: T::Storage) -> Self {
-        Set(mask)
-    }
-
-    pub fn without(self, other: Self) -> Self {
-        Set(self.0 & !other.0)
-    }
-
-    pub fn remove(&mut self, other: Self) {
-        self.0 &= !other.0;
-    }
-
-    pub fn overlaps(&self, other: Self) -> bool {
-        *self & other != Set::NONE
-    }
-
-    pub fn len(&self) -> u8 {
-        T::count_possibilities(self.0) as u8
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-
-    pub fn is_full(&self) -> bool {
-        *self == Self::ALL
-    }
-
-    // TODO: make enum for return value
-    pub fn unique(self) -> Result<Option<T>, Unsolvable>
-    where
-        SetIter<T>: Iterator<Item = T>,
-    {
-        match self.len() {
-            0 => Err(Unsolvable),
-            1 => Ok({
-                let element = self.into_iter().next();
-                debug_assert!(element.is_some());
-                element
-            }),
-            _ => Ok(None),
-        }
-    }
-
-    pub fn one_possibility(self) -> T
-    where
-        SetIter<T>: Iterator<Item = T>,
-    {
-        self.into_iter().next().expect("mask is empty")
-    }
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////
-
-// TODO: Decide about visibility
-use self::set_element::SetElement;
-pub mod set_element {
-    use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not, BitXor, BitXorAssign};
-    use super::Set;
-
-    pub trait SetElement: Sized {
-        const ALL: Self::Storage;
-        const NONE: Self::Storage;
-
-        type Storage:
-            BitAnd<Output = Self::Storage> + BitAndAssign
-            + BitOr<Output = Self::Storage> + BitOrAssign
-            + BitXor<Output = Self::Storage> + BitXorAssign
-            + Not<Output = Self::Storage>
-            + Copy;
-
-        fn count_possibilities(set: Self::Storage) -> u32;
-        fn as_set(self) -> Set<Self>;
-    }
-}
-
-macro_rules! impl_setelement {
-    ( $( $type:ty => $storage_ty:ty, $all:expr),* $(,)* ) => {
-        $(
-            impl SetElement for $type {
-                const ALL: $storage_ty = $all;
-                const NONE: $storage_ty = 0;
-
-                type Storage = $storage_ty;
-
-                fn count_possibilities(set: Self::Storage) -> u32 {
-                    set.count_ones()
-                }
-
-                fn as_set(self) -> Set<Self> {
-                    Set(1 << self.as_index() as u8)
-                }
-            }
-        )*
-    };
-}
-
-impl_setelement!(
-    // 81 cells
-    Cell => u128, 0o777_777_777___777_777_777___777_777_777,
-    // 9 digits
-    Digit => u16, 0o777,
-
-    // 9 of each house
-    //Row => u16, 0o777,
-    //Col => u16, 0o777,
-    //Block => u16, 0o777,
-    Line => u32, 0o777_777,      // both Rows and Cols
-    //House => u32, 0o777_777_777, // Rows, Cols, Blocks
-
-    // 9 positions per house
-    //Position<Row> => u16, 0o777,
-    //Position<Col> => u16, 0o777,
-    Position<Line> => u16, 0o777,
-    Position<House> => u16, 0o777,
-    // 27 positions per chute
-    //Position<Band> => u32, 0o777_777_777,
-    //Position<Stack> => u32, 0o777_777_777,
-    //Position<Chute> => u32, 0o777_777_777,
-);
-
-macro_rules! impl_iter_for_setiter {
-    ( $( $type:ty => $constructor:expr ),* $(,)* ) => {
-        $(
-            impl Iterator for SetIter<$type> {
-                type Item = $type;
-
-                fn next(&mut self) -> Option<Self::Item> {
-                    debug_assert!(self.0 <= <Set<$type>>::ALL.0, "{:o}", self.0);
-                    if self.0 == 0 {
-                        return None;
-                    }
-                    let lowest_bit = self.0 & (!self.0 + 1);
-                    let bit_pos = lowest_bit.trailing_zeros() as u8;
-                    self.0 ^= lowest_bit;
-                    Some($constructor(bit_pos))
-                }
-            }
-        )*
-    };
-}
-
-// can't do this generically
-impl_iter_for_setiter!(
-    Cell => Cell::new,
-    Digit => Digit::from_index,
-    Line => Line::new,
-    //Position<Row> => Position::new,
-    //Position<Col> => Position::new,
-    Position<Line> => Position::new,
-    Position<House> => Position::new,
-    //Position<Band> => Position::new,
-    //Position<Stack> => Position::new,
-    //Position<Chute> => Position::new,
-);
 
 macro_rules! into_cells {
     ( $( $name:ident => |$arg:ident| $code:block );* $(;)* ) => {
@@ -557,6 +446,14 @@ impl Cell {
     pub fn houses(self) -> [House; 3] {
             [self.row().house(), self.col().house(), self.block().house() ]
     }
+
+    #[inline(always)]
+    pub(crate) fn neighbors(self) -> impl IntoIterator<Item = Cell> {
+        HOUSE_NEIGHBORS_OF_CELL[self.as_index()]
+            .iter()
+            .cloned()
+            .map(Cell::new)
+    }
 }
 
 impl Chute {
@@ -575,9 +472,9 @@ impl Line {
 }
 
 impl MiniLine {
-    pub fn neighbours(self) -> ([MiniLine; 2], [MiniLine; 2]) {
-        // line neighbour, field neighbour
-        let (ln, bn) = MINILINE_NEIGHBOURS[self.as_index()];
+    pub fn neighbors(self) -> ([MiniLine; 2], [MiniLine; 2]) {
+        // line neighbor, field neighbor
+        let (ln, bn) = MINILINE_NEIGHBORS[self.as_index()];
         (
             [ MiniLine(ln[0]), MiniLine(ln[1]) ],
             [ MiniLine(bn[0]), MiniLine(bn[1]) ],
@@ -666,11 +563,11 @@ macro_rules! impl_from_raw {
 
 impl_from!(
     Row, Line, |r| { r },
-    Col, Line, |c| { c + 9 },
+    Col, Line, |c| { c + COL_OFFSET },
     Row, House, |r| { r },
-    Col, House, |c| { c + 9 },
+    Col, House, |c| { c + COL_OFFSET },
     Line, House, |l| { l },
-    Block, House, |b| { b + 18 },
+    Block, House, |b| { b + BLOCK_OFFSET },
     Band, Chute, |b| { b },
     Stack, Chute, |s| { s + 3 },
 );
@@ -697,41 +594,14 @@ impl_from!(
     //Cell, Position<Stack>, |c| { row(c) % 3 * 3 + col(c) % 3 }, // not sure how to lay this out, yet
 );
 
-impl<T: SetElement> From<T> for Set<T> {
-    fn from(arg: T) -> Set<T> {
-        arg.as_set()
-    }
-}
-
-impl_from_raw!(
+/*impl_from_raw!(
     Position<Row>, Set<Position<Line>>, |pos| { Position::<Line>::from(pos).as_set() },
     Position<Col>, Set<Position<Line>>, |pos| { Position::<Line>::from(pos).as_set() },
     Position<Row>, Set<Position<House>>, |pos| { Position::<House>::from(pos).as_set() },
     Position<Col>, Set<Position<House>>, |pos| { Position::<House>::from(pos).as_set() },
     Position<Line>, Set<Position<House>>, |pos| { Position::<House>::from(pos).as_set() },
     Position<Block>, Set<Position<House>>, |pos| { Position::<House>::from(pos).as_set() },
-);
-
-fn row(cell: u8) -> u8 {
-    cell / 9
-}
-
-fn col(cell: u8) -> u8 {
-    cell % 9
-}
-
-fn band(cell: u8) -> u8 {
-    cell / 27
-}
-
-fn stack(cell: u8) -> u8 {
-    col(cell) / 3
-}
-
-pub fn neighbours2(cell: Cell) -> impl IntoIterator<Item = Cell> {
-    use positions::neighbours;
-    neighbours(cell.as_index() as u8).into_iter().cloned().map(Cell::new)
-}
+);*/
 
 // TODO: generalize
 impl Set<Position<House>> {
@@ -741,7 +611,7 @@ impl Set<Position<House>> {
     }
 }
 
-pub trait IntoHouse: Into<House> {
+pub(crate) trait IntoHouse: Into<House> {
     #[inline(always)]
     fn house(self) -> House {
         self.into()
@@ -750,7 +620,7 @@ pub trait IntoHouse: Into<House> {
 
 impl<T: Into<House>> IntoHouse for T {}
 
-static MINILINE_NEIGHBOURS: [([u8; 2], [u8; 2]); 54] = [
+static MINILINE_NEIGHBORS: [([u8; 2], [u8; 2]); 54] = [
         ([1, 2], [3, 6]),
         ([2, 0], [4, 7]),
         ([0, 1], [5, 8]),

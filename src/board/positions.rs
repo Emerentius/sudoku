@@ -290,11 +290,11 @@ impl MiniLine {
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
-pub struct Position<IN>(pub(crate) u8, std::marker::PhantomData<IN>);
+pub struct Position<IN>(pub(crate) u8, ::std::marker::PhantomData<IN>);
 
 impl<IN> Position<IN> {
     pub fn new(pos: u8) -> Self {
-        Position(pos, std::marker::PhantomData)
+        Position(pos, ::std::marker::PhantomData)
     }
 
     pub fn as_index(self) -> usize {

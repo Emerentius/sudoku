@@ -110,8 +110,12 @@ where
     pub const ALL: Set<T> = Set(<T as SetElement>::ALL);
     pub const NONE: Set<T> = Set(<T as SetElement>::NONE);
 
-    pub fn new(mask: T::Storage) -> Self {
+    pub fn from_bits(mask: T::Storage) -> Self {
         Set(mask)
+    }
+
+    pub fn bits(self) -> T::Storage {
+        self.0
     }
 
     pub fn without(self, other: Self) -> Self {
@@ -177,6 +181,7 @@ mod set_element {
             + BitOr<Output = Self::Storage> + BitOrAssign
             + BitXor<Output = Self::Storage> + BitXorAssign
             + Not<Output = Self::Storage>
+            + ::std::fmt::Binary
             + Copy;
 
         fn count_possibilities(set: Self::Storage) -> u32;
@@ -269,3 +274,10 @@ impl_iter_for_setiter!(
     //Position<Stack> => Position::new,
     //Position<Chute> => Position::new,
 );
+
+use ::std::fmt;
+impl<T: SetElement> fmt::Binary for Set<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:b}", self.0)
+    }
+}

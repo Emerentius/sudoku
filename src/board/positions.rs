@@ -607,7 +607,7 @@ impl_from!(
 impl Set<Position<House>> {
     pub fn as_line_set(self) -> Set<Position<Line>> {
         debug_assert!(self.0 <= Set::<Position<Line>>::ALL.0);
-        Set::new(self.0)
+        Set::from_bits(self.0)
     }
 }
 

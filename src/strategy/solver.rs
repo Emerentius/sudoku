@@ -725,31 +725,33 @@ impl StrategySolver {
 		Ok(())
 	}
 
-	pub(crate) fn find_xwings(&mut self, stop_after_first: bool) {
+	pub(crate) fn find_xwings(&mut self, stop_after_first: bool) -> Result<(), Unsolvable> {
 		self.find_fish(2, stop_after_first)
 	}
 
 
-	pub(crate) fn find_swordfish(&mut self, stop_after_first: bool) {
+	pub(crate) fn find_swordfish(&mut self, stop_after_first: bool) -> Result<(), Unsolvable> {
 		self.find_fish(3, stop_after_first)
 	}
 
 
-	pub(crate) fn find_jellyfish(&mut self, stop_after_first: bool) {
+	pub(crate) fn find_jellyfish(&mut self, stop_after_first: bool) -> Result<(), Unsolvable> {
 		self.find_fish(4, stop_after_first)
 	}
 
-	fn find_fish(&mut self, max_size: u8, stop_after_first: bool) {
-		self.update_house_poss_positions().unwrap();
+	fn find_fish(&mut self, max_size: u8, stop_after_first: bool) -> Result<(), Unsolvable> {
+		self.update_house_poss_positions().unwrap(); // TODO: why is there an unwrap here?
+		self.update_cell_poss_house_solved()?;
 		let mut stack = Set::NONE;
 		for digit in (1..10).map(Digit::new) {
 			// 0..9 = rows, 9..18 = cols
 			for &lines in &[Line::ALL_ROWS, Line::ALL_COLS] {
 				if basic_fish_walk_combinations(self, digit, max_size, &mut stack, lines.into_iter(), lines, Set::NONE, stop_after_first) {
-					return
+					return Ok(());
 				};
 			}
 		}
+		Ok(())
 	}
 
 	pub(crate) fn find_singles_chain(&mut self) -> Result<(), Unsolvable> {
@@ -923,7 +925,6 @@ fn basic_fish_walk_combinations(
 
 		let rg_eliminations = n_eliminated..sudoku.eliminated_entries.len();
 		if rg_eliminations.len() > 0 {
-
 			let lines = stack.clone();
 			let positions = union_poss_pos;
 			let conflicts = rg_eliminations;
@@ -1049,5 +1050,3 @@ mod test {
         strategy_solver_correct_solution(sudokus, solved_sudokus, StrategySolver::solve);
     }
 }
-
-//

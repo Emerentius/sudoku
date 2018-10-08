@@ -55,9 +55,9 @@ impl Strategy {
 			HiddenPairs => state.find_hidden_subsets(2, stop_after_first),
 			HiddenTriples => state.find_hidden_subsets(3, stop_after_first),
 			HiddenQuads => state.find_hidden_subsets(4, stop_after_first),
-			XWing => { state.find_xwings(stop_after_first); Ok(()) },
-			Swordfish => { state.find_swordfish(stop_after_first); Ok(()) },
-			Jellyfish => { state.find_jellyfish(stop_after_first); Ok(()) },
+			XWing => state.find_xwings(stop_after_first),
+			Swordfish => state.find_swordfish(stop_after_first),
+			Jellyfish => state.find_jellyfish(stop_after_first),
 			SinglesChain if !stop_after_first => state.find_singles_chain(), // TODO: Implement non-eager SinglesChain
             _ => unimplemented!(),
         }

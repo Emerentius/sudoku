@@ -54,7 +54,12 @@ pub enum Deduction<T> {
 	Given(Candidate), // by user
     NakedSingles(Candidate),
     HiddenSingles(Candidate, HouseType),
-    LockedCandidates(MiniLine, Set<Digit>, T), // which miniline is affected and what's unique
+    LockedCandidates {
+		miniline: MiniLine,
+		digit: Digit,
+		is_pointing: bool,
+		conflicts: T,
+	}, // which miniline is affected and what's unique
     NakedSubsets {
 		house: House,
 		positions: Set<Position<House>>,     // 2-4 positions
@@ -124,7 +129,11 @@ impl _Deduction {
 			Given(c) => Given(c),
 			NakedSingles(c) => NakedSingles(c),
 			HiddenSingles(c, h) => HiddenSingles(c, h),
-			LockedCandidates(ml, s, conflicts) => LockedCandidates(ml, s, &eliminated[conflicts]),
+
+			LockedCandidates {
+				miniline, digit, is_pointing,
+				conflicts
+			} => LockedCandidates { miniline, digit, is_pointing, conflicts: &eliminated[conflicts] },
 
 			NakedSubsets {
 				house, positions, digits,

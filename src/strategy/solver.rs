@@ -553,14 +553,14 @@ impl StrategySolver {
 				let (line_neighbors, field_neighbors) = miniline.neighbors();
 
 				let eliminated_entries = &mut self.eliminated_entries;
-				let mut find_impossibles = |uniques, neighbors: &[MiniLine; 2]| {
+				let mut find_impossibles = |digit: Digit, neighbors: &[MiniLine; 2]| {
 					let n_eliminated = eliminated_entries.len();
 					for &neighbor in neighbors {
-						let conflicts: Set<_> = miniline_poss_digits[neighbor.chute().as_index()] & uniques;
+						let conflicts: Set<_> = miniline_poss_digits[neighbor.chute().as_index()] & digit.as_set();
 						if conflicts.is_empty() { continue }
 
 						for cell in neighbor.cells() {
-							let conflicts = cell_poss_digits[cell] & uniques;
+							let conflicts = cell_poss_digits[cell] & digit.as_set();
 							for digit in conflicts {
 								eliminated_entries.push( Candidate { cell, digit } )
 							}
@@ -569,16 +569,23 @@ impl StrategySolver {
 					n_eliminated..eliminated_entries.len()
 				};
 
-				for &(uniques, neighbors) in [(line_uniques, &field_neighbors), (field_uniques, &line_neighbors)].iter()
-					.filter(|&&(uniques, _)| !uniques.is_empty())
+				for &(uniques, neighbors, is_pointing) in [(line_uniques, &field_neighbors, true), (field_uniques, &line_neighbors, false)].iter()
+					.filter(|&&(uniques, _, _)| !uniques.is_empty())
 				{
-					let rg_eliminations = find_impossibles(uniques, neighbors);
-					if rg_eliminations.len() > 0 {
-						// TODO: If stop_after_first is true, only enter the number whose conflicts were eliminated
-						self.deductions.push(Deduction::LockedCandidates(miniline, uniques, rg_eliminations));
+					for digit in uniques {
+						let rg_eliminations = find_impossibles(digit, neighbors);
+						if rg_eliminations.len() > 0 {
+							// TODO: If stop_after_first is true, only enter the number whose conflicts were eliminated
+							self.deductions.push(
+								Deduction::LockedCandidates {
+									miniline, digit, is_pointing,
+									conflicts: rg_eliminations,
+								}
+							);
 
-						if stop_after_first {
-							return Ok(());
+							if stop_after_first {
+								return Ok(());
+							}
 						}
 					}
 				}

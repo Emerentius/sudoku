@@ -58,15 +58,10 @@ pub struct StrategySolver {
 }
 
 impl StrategySolver {
-	pub fn from_sudoku(sudoku: Sudoku) -> StrategySolver {
-		let deduced_entries = sudoku.iter()
-			.enumerate()
-			.filter_map(|(cell, opt_num)| {
-				opt_num.map(|digit| Candidate::new(cell as u8, digit))
-			}).collect();
+	fn empty() -> StrategySolver {
 		StrategySolver {
 			deductions: vec![],
-			deduced_entries,
+			deduced_entries: vec![],
 			eliminated_entries: vec![],
 			n_solved: 0,
 			grid: State::from(Sudoku([0; 81])),
@@ -74,7 +69,41 @@ impl StrategySolver {
 			house_solved_digits: State::from(HouseArray([Set::NONE; 27])),
 			house_poss_positions: State::from(HouseArray([DigitArray([Set::ALL; 9]); 27])),
 		}
+	}
 
+	pub fn from_sudoku(sudoku: Sudoku) -> StrategySolver {
+		let deduced_entries = sudoku.iter()
+			.enumerate()
+			.filter_map(|(cell, opt_num)| {
+				opt_num.map(|digit| Candidate::new(cell as u8, digit))
+			}).collect();
+
+		StrategySolver {
+			deduced_entries,
+			..StrategySolver::empty()
+		}
+	}
+
+	pub fn from_grid_state(grid_state: [CellState; 81]) -> StrategySolver {
+		let mut entries = vec![];
+		let mut eliminated_candidates = vec![];
+
+		for (cell, &cell_state) in Cell::all().zip(grid_state.iter()) {
+			match cell_state {
+				CellState::Digit(digit) => entries.push(Candidate { cell, digit }),
+				CellState::Candidates(cands) => {
+					for digit in !cands {
+						eliminated_candidates.push(Candidate { cell, digit });
+					}
+				}
+			}
+		}
+
+		StrategySolver {
+			deduced_entries: entries,
+			eliminated_entries: eliminated_candidates,
+			..StrategySolver::empty()
+		}
 	}
 
 	/// Returns the current state of the Sudoku

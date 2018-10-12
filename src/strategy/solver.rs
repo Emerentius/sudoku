@@ -9,7 +9,7 @@ use consts::*;
 use board::*;
 use strategy::{
 	deduction::{Deduction, Deductions},
-	strategies::Strategy,
+	strategies::*,
 };
 
 type EliminationsRange = ::std::ops::Range<usize>;
@@ -435,67 +435,49 @@ impl StrategySolver {
 	pub(crate) fn find_naked_singles(&mut self, stop_after_first: bool) -> Result<(), Unsolvable> {
 		self.update_cell_poss_house_solved()?;
 
-		for (cell, poss_digits) in Cell::all().zip(self.cell_poss_digits.state.iter()) {
-			// if Err(_), then it's Set::NONE and the cell is already solved (or impossible)
-			// skip in that case (via unwrap_or(None))
-			if let Some(digit) = poss_digits.unique().unwrap_or(None) {
-				let candidate = Candidate { cell, digit };
+		{
+			let cell_poss_digits = &self.cell_poss_digits.state;
+			let grid = &mut self.grid.state;
+			let deduced_entries = &mut self.deduced_entries;
+			let deductions = &mut self.deductions;
 
-				Self::push_new_candidate(&mut self.grid.state, &mut self.deduced_entries, candidate, &mut self.deductions, Deduction::NakedSingles(candidate))?;
-				self.deduced_entries.push(candidate);
-				if stop_after_first {
-					break
-				}
-			}
+			naked_singles::find_naked_singles(
+				cell_poss_digits,
+				stop_after_first,
+				|candidate| {
+					deduced_entries.push(candidate);
+					Self::push_new_candidate(grid, deduced_entries, candidate, deductions, Deduction::NakedSingles(candidate))
+				},
+			)?;
 		}
+
 		// call update again so newly found entries are inserted
 		self.update_cell_poss_house_solved()
 	}
 
 	pub(crate) fn find_hidden_singles(&mut self, stop_after_first: bool) -> Result<(), Unsolvable> {
-		// TODO: remove auto-deducing naked singles inside update procedure
 		self.update_cell_poss_house_solved()?;
 
-		for house in House::all() {
-			let mut unsolved: Set<Digit> = Set::NONE;
-			let mut multiple_unsolved = Set::NONE;
+		{
+			let cell_poss_digits = &self.cell_poss_digits.state;
+			let house_solved_digits = &self.house_solved_digits.state;
+			let grid = &mut self.grid.state;
+			let deduced_entries = &mut self.deduced_entries;
+			let deductions = &mut self.deductions;
 
-			let cells = house.cells();
-			for cell in cells {
-				let poss_digits = self.cell_poss_digits.state[cell];
-				multiple_unsolved |= unsolved & poss_digits;
-				unsolved |= poss_digits;
-			}
-			if unsolved | self.house_solved_digits.state[house] != Set::ALL {
-				return Err(Unsolvable);
-			}
-
-			let mut singles = unsolved.without(multiple_unsolved);
-			if singles.is_empty() { continue }
-
-			for cell in cells {
-				let mask = self.cell_poss_digits.state[cell];
-
-				if let Ok(maybe_unique) = (mask & singles).unique() {
-					let digit = maybe_unique.ok_or(Unsolvable)?;
-					let candidate = Candidate { cell, digit };
-					let strat_res = Deduction::HiddenSingles(candidate, house.categorize());
-					Self::push_new_candidate(&mut self.grid.state, &mut self.deduced_entries, candidate, &mut self.deductions, strat_res)?;
-
-					// mark num as found
-					singles.remove(digit.as_set());
-
-					// everything in this house found
-					// return to insert numbers immediately
-					match stop_after_first {
-						true => return Ok(()),
-						false if singles.is_empty() => break, // continue next house
-						_ => (), // find rest of singles in house
-					}
+			hidden_singles::find_hidden_singles(
+				cell_poss_digits,
+				house_solved_digits,
+				stop_after_first,
+				|candidate, house| {
+					let deduction = Deduction::HiddenSingles(candidate, house.categorize());
+					Self::push_new_candidate(grid, deduced_entries, candidate, deductions, deduction)
 				}
-			}
+			)?;
 		}
-		Ok(())
+
+		// call update again so newly found entries are inserted
+		self.update_cell_poss_house_solved()
 	}
 
 	// stop after first will only eliminate line OR field neighbors for ONE number
@@ -503,233 +485,113 @@ impl StrategySolver {
 	pub(crate) fn find_locked_candidates(&mut self, stop_after_first: bool) -> Result<(), Unsolvable> {
         self.update_cell_poss_house_solved()?;
 		let (_, _, cell_poss_digits) = self.cell_poss_digits.get_mut();
+		let eliminated_entries = &mut self.eliminated_entries;
+		let deductions = &mut self.deductions;
 
-		for chute in Chute::all() {
-			let mut miniline_poss_digits: [Set<Digit>; 9] = [Set::NONE; 9];
+		locked_candidates::find_locked_candidates(
+			&cell_poss_digits,
+			stop_after_first,
+			|miniline, digit, miniline_poss_digits, neighbors, is_pointing| {
 
-			{ // compute possible digits for each miniline
-			// TODO: switch to using house_solved_digits?
-				let minilines = chute.minilines();
-				for (&miniline, poss_digs) in minilines.iter().zip(miniline_poss_digits.iter_mut()) {
-					for cell in miniline.cells() {
-						*poss_digs |= cell_poss_digits[cell];
-					}
-				}
-			}
+				let n_eliminated = eliminated_entries.len();
+				for &neighbor in neighbors {
+					let conflicts: Set<_> = miniline_poss_digits[neighbor.chute().as_index()] & digit.as_set();
+					if conflicts.is_empty() { continue }
 
-			let mut line_unique_digits: [Set<Digit>; 3] = [Set::NONE; 3];
-			let mut field_unique_digits: [Set<Digit>; 3] = [Set::NONE; 3];
-
-			{
-				let poss_digits = |chute_line, chute_field| miniline_poss_digits[ chute_line*3 + chute_field];
-				for chute_line in 0..3 {
-					let poss_digits_iter = (0..3)
-						.map(|chute_field| poss_digits(chute_line, chute_field) );
-
-					let (_, _, unique) = find_unique(poss_digits_iter);
-					line_unique_digits[chute_line] = unique;
-				}
-				for chute_field in 0..3 {
-					let poss_digits_iter = (0..3)
-						.map(|chute_line| poss_digits(chute_line, chute_field) );;
-
-					let (_, _, unique) = find_unique(poss_digits_iter);
-					field_unique_digits[chute_field] = unique;
-				}
-			}
-
-			// find minilines that contain the computed unique digits
-			// remove them from the appropriate neighbors
-			for (i, (&miniline, &poss_digits)) in chute.minilines().iter()
-				.zip(miniline_poss_digits.iter())
-				.enumerate()
-			{
-				let chute_line = i / 3;
-				let chute_field = i % 3;
-
-				let line_uniques =  poss_digits & line_unique_digits[chute_line];
-				let field_uniques = poss_digits & field_unique_digits[chute_field];
-
-				let (line_neighbors, field_neighbors) = miniline.neighbors();
-
-				let eliminated_entries = &mut self.eliminated_entries;
-				let mut find_impossibles = |digit: Digit, neighbors: &[MiniLine; 2]| {
-					let n_eliminated = eliminated_entries.len();
-					for &neighbor in neighbors {
-						let conflicts: Set<_> = miniline_poss_digits[neighbor.chute().as_index()] & digit.as_set();
-						if conflicts.is_empty() { continue }
-
-						for cell in neighbor.cells() {
-							let conflicts = cell_poss_digits[cell] & digit.as_set();
-							for digit in conflicts {
-								eliminated_entries.push( Candidate { cell, digit } )
-							}
-						}
-					}
-					n_eliminated..eliminated_entries.len()
-				};
-
-				for &(uniques, neighbors, is_pointing) in [(line_uniques, &field_neighbors, true), (field_uniques, &line_neighbors, false)].iter()
-					.filter(|&&(uniques, _, _)| !uniques.is_empty())
-				{
-					for digit in uniques {
-						let rg_eliminations = find_impossibles(digit, neighbors);
-						if rg_eliminations.len() > 0 {
-							// TODO: If stop_after_first is true, only enter the number whose conflicts were eliminated
-							self.deductions.push(
-								Deduction::LockedCandidates {
-									miniline, digit, is_pointing,
-									conflicts: rg_eliminations,
-								}
-							);
-
-							if stop_after_first {
-								return Ok(());
-							}
+					for cell in neighbor.cells() {
+						let conflicts = cell_poss_digits[cell] & digit.as_set();
+						for digit in conflicts {
+							eliminated_entries.push( Candidate { cell, digit } )
 						}
 					}
 				}
-			}
-		}
-		Ok(())
+
+				let rg_eliminations = n_eliminated..eliminated_entries.len();
+
+				if rg_eliminations.len() > 0 {
+					deductions.push(Deduction::LockedCandidates {
+						miniline, digit, is_pointing,
+						conflicts: rg_eliminations
+					});
+					true
+				} else {
+					false
+				}
+			},
+		)
 	}
 
 
 	pub(crate) fn find_naked_subsets(&mut self, subset_size: u8, stop_after_first: bool) -> Result<(), Unsolvable> 	{
-		fn walk_combinations(
-			state: &mut StrategySolver,
-			total_poss_digs: Set<Digit>,
-			positions: SetIter<Position<House>>,
-			house: House,
-			stack: &mut Set<Position<House>>,
-			subset_size: u8,
-			stop_after_first: bool,
-		) -> bool {
-			// subsets of 5 and more numbers always have complementary subsets
-			// of 9 - subset_size
-			if stack.len() > subset_size { return false }
-			if stack.len() == subset_size && total_poss_digs.len() == stack.len() {
-				// found a subset
-				let n_eliminated = state.eliminated_entries.len();
-				for pos in !*stack {
+        self.update_cell_poss_house_solved()?;
+		let (_, _, cell_poss_digits) = self.cell_poss_digits.get_mut();
+		let house_solved_digits = &mut self.house_solved_digits.state;
+		let eliminated_entries = &mut self.eliminated_entries;
+		let deductions = &mut self.deductions;
+
+		naked_subsets::find_naked_subsets(
+			cell_poss_digits,
+			house_solved_digits,
+			subset_size,
+			stop_after_first,
+			|house, positions, digits| {
+				let n_eliminated = eliminated_entries.len();
+				for pos in !positions {
 					let cell = house.cell_at(pos);
-				//for cell in house.cells().into_iter().filter(|cell| !stack.contains(cell)) {
-					let conflicts = state.cell_poss_digits.state[cell] & total_poss_digs;
+					let conflicts = cell_poss_digits[cell] & digits;
 					for digit in conflicts {
-						state.eliminated_entries.push(Candidate{ cell, digit });
+						eliminated_entries.push(Candidate{ cell, digit });
 					}
 				}
-				let rg_eliminations = n_eliminated..state.eliminated_entries.len();
+				let rg_eliminations = n_eliminated .. eliminated_entries.len();
 				if rg_eliminations.len() > 0 {
-					state.deductions.push(Deduction::NakedSubsets {
-						house,
-						positions: *stack,
-						digits: total_poss_digs,
+					deductions.push(Deduction::NakedSubsets {
+						house, positions, digits,
 						conflicts: rg_eliminations
 					});
-					if stop_after_first {
-						return true
-					}
+					true
+				} else {
+					false
 				}
-			}
-
-			let mut positions = positions;
-			while let Some(position) = positions.next() {
-				let pos_set = position.as_set();
-				let cell = house.cell_at(position);
-				let cell_poss_digits = state.cell_poss_digits.state[cell];
-				// solved cell
-				if cell_poss_digits.is_empty() { continue }
-				*stack |= pos_set;
-				let new_total_poss_digs = total_poss_digs | cell_poss_digits;
-
-				// if true, then a subset was found and stop_after_first is set
-				// stop recursion
-				if walk_combinations(state, new_total_poss_digs, positions.clone(), house, stack, subset_size, stop_after_first) {
-					return true
-				};
-				stack.remove(pos_set);
-			}
-			false
-		}
-		self.update_cell_poss_house_solved()?;
-
-		let mut stack = Set::NONE;
-		for house in House::all() {
-			if self.house_solved_digits.state[house].is_full() { continue }
-			// if true, then a subset was found and stop_after_first is set
-			// stop looking
-			if walk_combinations(self, Set::NONE, Set::ALL.into_iter(), house, &mut stack, subset_size, stop_after_first) {
-				break
-			};
-		}
-		Ok(())
+			},
+		)
 	}
 
 	pub(crate) fn find_hidden_subsets(&mut self, subset_size: u8, stop_after_first: bool) -> Result<(), Unsolvable> {
-		fn walk_combinations(
-			state: &mut StrategySolver,
-			house: House,
-			total_poss_pos: Set<Position<House>>,
-			digits: SetIter<Digit>,
-			stack: &mut Set<Digit>,
-			subset_size: u8,
-			stop_after_first: bool,
-		) -> bool {
-			if stack.len() > subset_size { return false }
-			let house_poss_positions = state.house_poss_positions.state[house];
+		self.update_cell_poss_house_solved()?;
+		self.update_house_poss_positions()?;
+		let house_poss_positions = &self.house_poss_positions.state;
+		let house_solved_digits = &self.house_solved_digits.state;
+		let eliminated_entries = &mut self.eliminated_entries;
+		let deductions = &mut self.deductions;
 
-			if stack.len() == subset_size && total_poss_pos.len() == stack.len() {
-
-				let n_eliminated = state.eliminated_entries.len();
-				for digit in !*stack {
-					let conflicts = house_poss_positions[digit] & total_poss_pos;
+		hidden_subsets::find_hidden_subsets(
+			house_solved_digits,
+			house_poss_positions,
+			subset_size,
+			stop_after_first,
+			|house, digits, positions| {
+				let house_poss_positions = house_poss_positions[house];
+				let n_eliminated = eliminated_entries.len();
+				for digit in !digits {
+					let conflicts = house_poss_positions[digit] & positions;
 					for pos in conflicts {
 						let cell = house.cell_at(pos);
-						state.eliminated_entries.push(Candidate{ cell, digit });
+						eliminated_entries.push(Candidate{ cell, digit });
 					}
 				}
-				let rg_eliminations = n_eliminated..state.eliminated_entries.len();
+				let rg_eliminations = n_eliminated .. eliminated_entries.len();
 				if rg_eliminations.len() > 0 {
-					state.deductions.push(Deduction::HiddenSubsets {
-						house,
-						digits: stack.clone(),
-						positions: total_poss_pos,
+					deductions.push(Deduction::HiddenSubsets {
+						house, digits, positions,
 						conflicts: rg_eliminations
 					});
-					if stop_after_first {
-						return true
-					}
+					true
+				} else {
+					false
 				}
-			}
-
-			let mut digits = digits;
-			while let Some(digit) = digits.next() {
-				let digit_set = digit.as_set();
-				let num_poss_pos = house_poss_positions[digit];
-				// solved cell
-				if num_poss_pos.is_empty() { continue }
-				*stack |= digit_set;
-				let new_total_poss_pos = total_poss_pos | num_poss_pos;
-				if walk_combinations(state, house, new_total_poss_pos, digits.clone(), stack, subset_size, stop_after_first) {
-					return true
-				};
-				stack.remove(digit_set);
-			}
-			false
-		}
-
-		self.update_house_poss_positions()?;
-
-		let mut stack = Set::NONE;
-		for house in House::all() {
-			if self.house_solved_digits.state[house].is_full() { continue }
-			let digits = Set::ALL;
-			if walk_combinations(self, house, Set::NONE, digits.into_iter(), &mut stack, subset_size, stop_after_first) {
-				break
-			};
-		}
-		Ok(())
+			},
+		)
 	}
 
 	pub(crate) fn find_xwings(&mut self, stop_after_first: bool) -> Result<(), Unsolvable> {
@@ -746,19 +608,46 @@ impl StrategySolver {
 		self.find_fish(4, stop_after_first)
 	}
 
-	fn find_fish(&mut self, max_size: u8, stop_after_first: bool) -> Result<(), Unsolvable> {
+	fn find_fish(&mut self, target_size: u8, stop_after_first: bool) -> Result<(), Unsolvable> {
 		self.update_house_poss_positions().unwrap(); // TODO: why is there an unwrap here?
 		self.update_cell_poss_house_solved()?;
-		let mut stack = Set::NONE;
-		for digit in (1..10).map(Digit::new) {
-			// 0..9 = rows, 9..18 = cols
-			for &lines in &[Line::ALL_ROWS, Line::ALL_COLS] {
-				if basic_fish_walk_combinations(self, digit, max_size, &mut stack, lines.into_iter(), lines, Set::NONE, stop_after_first) {
-					return Ok(());
-				};
+
+		let cell_poss_digits = &self.cell_poss_digits.state;
+		let eliminated_entries = &mut self.eliminated_entries;
+		let deductions = &mut self.deductions;
+		let house_poss_positions = &self.house_poss_positions.state;
+
+		basic_fish::find_fish(
+			house_poss_positions,
+			target_size,
+			stop_after_first,
+			|all_lines, digit, lines, positions_in_line| {
+				let n_eliminated = eliminated_entries.len();
+				for line in all_lines.without(lines) {
+					for pos in positions_in_line {
+						let cell = line.cell_at(pos);
+						let cell_mask = cell_poss_digits[cell];
+						if cell_mask.overlaps(digit.as_set()) {
+							eliminated_entries.push(Candidate{ cell, digit });
+						}
+					}
+				}
+
+				let rg_eliminations = n_eliminated .. eliminated_entries.len();
+				if rg_eliminations.len() > 0 {
+					deductions.push(
+						Deduction::BasicFish {
+							lines, digit,
+							positions: positions_in_line,
+							conflicts: rg_eliminations,
+						}
+					);
+					true
+				} else {
+					false
+				}
 			}
-		}
-		Ok(())
+		)
 	}
 
 	pub(crate) fn find_singles_chain(&mut self) -> Result<(), Unsolvable> {
@@ -899,73 +788,6 @@ impl StrategySolver {
 		Ok(())
 	}
 }
-
-//             goal_depth
-// <degenerated>   1 (basically a naked/hidden single, not supported by this fn)
-// x-wing          2
-// swordfish       3
-// jellyfish       4
-fn basic_fish_walk_combinations(
-	sudoku: &mut StrategySolver,
-	digit: Digit,
-	goal_depth: u8,
-	stack: &mut Set<Line>,
-	lines: SetIter<Line>,
-	all_lines: Set<Line>,
-	union_poss_pos: Set<Position<Line>>,
-	stop_after_first: bool,
-) -> bool {
-	if stack.len() == goal_depth {
-		// nothing of interest found
-		if union_poss_pos.len() != goal_depth as u8 { return false }
-		// found xwing, swordfish, jellyfish, whatever-the-name
-		let n_eliminated = sudoku.eliminated_entries.len();
-		for line in all_lines.without(*stack) {
-			for pos in union_poss_pos {
-				let cell = line.cell_at(pos);
-				let cell_mask = sudoku.cell_poss_digits.state[cell];
-				if cell_mask.overlaps(digit.as_set()) {
-					sudoku.eliminated_entries.push(Candidate{ cell, digit });
-				}
-			}
-		}
-
-		let rg_eliminations = n_eliminated..sudoku.eliminated_entries.len();
-		if rg_eliminations.len() > 0 {
-			let lines = stack.clone();
-			let positions = union_poss_pos;
-			let conflicts = rg_eliminations;
-
-			sudoku.deductions.push(
-				Deduction::BasicFish {
-					lines, digit, conflicts, positions,
-				}
-			);
-			if stop_after_first {
-				return true
-			}
-		}
-	}
-
-	let mut lines = lines;
-	while let Some(line) = lines.next() {
-		let line_set = line.as_set();
-		let possible_pos = sudoku.house_poss_positions.state[line][digit];
-		let n_poss = possible_pos.len();
-		let new_union_poss_pos = union_poss_pos | possible_pos.as_line_set(); // TODO: remove the "cast"
-
-		// n_poss == 0 => solved row (or impossible)
-		// n_poss == 1 => hidden single
-		if n_poss < 2 || new_union_poss_pos.len() > goal_depth as u8 { continue }
-		*stack |= line_set;
-		if basic_fish_walk_combinations(sudoku, digit, goal_depth, stack, lines.clone(), all_lines, new_union_poss_pos, stop_after_first) {
-			return true
-		};
-		stack.remove(line_set);
-	}
-	false
-}
-
 
 #[derive(Debug, Clone)]
 pub(crate) struct State<T> {

@@ -1,3 +1,10 @@
+pub(crate) mod naked_singles;
+pub(crate) mod hidden_singles;
+pub(crate) mod locked_candidates;
+pub(crate) mod naked_subsets;
+pub(crate) mod hidden_subsets;
+pub(crate) mod basic_fish;
+
 use super::StrategySolver;
 use helper::Unsolvable;
 

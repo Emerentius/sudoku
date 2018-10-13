@@ -44,6 +44,10 @@ pub struct StrategySolver {
 	pub(crate) deduced_entries: Vec<Candidate>,
 	pub(crate) eliminated_entries: Vec<Candidate>,
 	pub(crate) n_solved: u8, // deduced_entries can contain duplicates so a separate counter is necessary
+
+	// optimization hints for strategies
+	pub(crate) hidden_singles_last_house: u8,
+
 	// current state of the sudoku
 	// for when it's faster to recompute from the end state
 	// than update through the new entries
@@ -64,6 +68,7 @@ impl StrategySolver {
 			deduced_entries: vec![],
 			eliminated_entries: vec![],
 			n_solved: 0,
+			hidden_singles_last_house: 0,
 			grid: State::from(Sudoku([0; 81])),
 			cell_poss_digits: State::from(CellArray([Set::ALL; 81])),
 			house_solved_digits: State::from(HouseArray([Set::NONE; 27])),
@@ -181,7 +186,7 @@ impl StrategySolver {
 
 	// FIXME: change name
 	/// Try to solve the sudoku using the given `strategies`. Returns `true` if new deductions were made.
-	pub fn try_solve(&mut self, strategies: &[Strategy]) -> bool {
+	fn try_solve(&mut self, strategies: &[Strategy]) -> bool {
 		// first strategy can be optimized
 		let (first, rest) = match strategies.split_first() {
 			Some(tup) => tup,
@@ -223,8 +228,10 @@ impl StrategySolver {
 	}
 
 	pub(crate) fn _update_cell_poss_house_solved(&mut self, find_naked_singles: bool) -> Result<(), Unsolvable> {
+		let new_eliminations;
 		{
 			let (_, le_cp, cell_poss) = self.cell_poss_digits.get_mut();
+			new_eliminations = *le_cp as usize > self.eliminated_entries.len();
 
 			for &candidate in &self.eliminated_entries[*le_cp as _..] {
 				let impossibles = candidate.digit_set();
@@ -236,7 +243,7 @@ impl StrategySolver {
 			*le_cp = self.eliminated_entries.len() as _;
 		}
 
-		self.insert_entries(find_naked_singles)
+		self.insert_entries(find_naked_singles, new_eliminations)
 	}
 
 	fn update_house_poss_positions(&mut self) -> Result<(), Unsolvable> {
@@ -297,15 +304,16 @@ impl StrategySolver {
 	}
 
 	#[inline(always)]
-	fn insert_entries(&mut self, find_naked_singles: bool) -> Result<(), Unsolvable> {
+	fn insert_entries(&mut self, find_naked_singles: bool, new_eliminations: bool) -> Result<(), Unsolvable> {
 		// code hereafter depends on this
 		// but it's not necessary in general
 		assert!(self.cell_poss_digits.next_deduced == self.house_solved_digits.next_deduced);
 
-		// TODO: Delete?
-		// start off with batch insertion so every cell is visited at least once
-		// because other strategies may have touched their possibilities which singly_insertion may miss
-		self.batch_insert_entries(find_naked_singles)?;
+		if new_eliminations {
+			// start off with batch insertion so every cell is visited at least once
+			// because other strategies may have touched their possibilities which singly_insertion may miss
+			self.batch_insert_entries(find_naked_singles)?;
+		}
 		loop {
 			match self.deduced_entries.len() - self.cell_poss_digits.next_deduced as usize {
 				0 => break Ok(()),
@@ -495,6 +503,7 @@ impl StrategySolver {
 			let deductions = &mut self.deductions;
 
 			hidden_singles::find_hidden_singles(
+				&mut self.hidden_singles_last_house,
 				cell_poss_digits,
 				house_solved_digits,
 				stop_after_first,

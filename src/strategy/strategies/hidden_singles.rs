@@ -9,12 +9,14 @@ use board::{
 };
 
 pub(crate) fn find_hidden_singles(
+    last_house: &mut u8,
     cell_poss_digits: &CellArray<Set<Digit>>,
     house_solved_digits: &HouseArray<Set<Digit>>,
     stop_after_first: bool,
     mut on_new_entry: impl FnMut(Candidate, House) -> Result<(), Unsolvable>,
 ) -> Result<(), Unsolvable> {
-    for house in House::all() {
+    for house in House::all().chain(House::all()).skip(*last_house as usize).take(27) {
+        *last_house = if *last_house < 27 { *last_house + 1 } else { 0 };
         let mut unsolved: Set<Digit> = Set::NONE;
         let mut multiple_unsolved = Set::NONE;
 

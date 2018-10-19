@@ -67,7 +67,7 @@ pub(crate) fn find_locked_candidates(
 
             let (line_neighbors, field_neighbors) = miniline.neighbors();
 
-            for &(uniques, neighbors, is_pointing) in [(line_uniques, &field_neighbors, true), (block_uniques, &line_neighbors, false)].iter()
+            for &(uniques, neighbors, is_pointing) in [(line_uniques, &field_neighbors, false), (block_uniques, &line_neighbors, true)].iter()
                 .filter(|&&(uniques, _, _)| !uniques.is_empty())
             {
                 for digit in uniques {

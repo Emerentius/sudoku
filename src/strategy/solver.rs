@@ -533,7 +533,7 @@ impl StrategySolver {
 
 				let n_eliminated = eliminated_entries.len();
 				for &neighbor in neighbors {
-					let conflicts: Set<_> = miniline_poss_digits[neighbor.chute().as_index()] & digit.as_set();
+					let conflicts: Set<_> = miniline_poss_digits[neighbor.as_index() % 9] & digit.as_set();
 					if conflicts.is_empty() { continue }
 
 					for cell in neighbor.cells() {

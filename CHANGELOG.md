@@ -59,17 +59,17 @@ Version 0.6.2 (2018-06-24)
 --------------------------
 * Add `solve_at_most_buffer`, primarily for C FFI
 
-Unreleased
-==========
+Version 0.7.0 (2018-08-19)
+==========================
 * Raise minimum Rust version to 1.28
 * Add `StrategySolver` for solving sudokus using human strategies
-  as well as various helper types.
-  For a start, 7 kinds of strategies are available which separate
-  into a total of 15 strategies, one of which is unfinished.
+  as well as various helper types, including a set of position types.
+  For a start, 6 kinds of strategies are available which separate
+  into a total of 12 strategies.
 * Switch default sudoku print format to the line format
 * Add `SudokuBlock` wrapper to print a grid representation
   created by `display_block()` on `Sudoku`
-* Remove `Sudoku::solve`
+* Remove `Sudoku::solve`. Use `solve_one`, `solve_unique` or `solve_at_most`.
 * Rename <br>
    `(Pub)Entry`  -> `InvalidEntry` <br>
    `LineFormatParseError` -> `LineParseError` <br>

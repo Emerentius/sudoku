@@ -4,12 +4,13 @@ description = "A sudoku solver library"
 license = "AGPL-3.0"
 repository = "https://github.com/emerentius/sudoku"
 documentation = "https://docs.rs/sudoku"
-version = "0.6.2"
+readme = "readme.md"
+version = "0.7.0"
 authors = ["Emerentius"]
 
 [dependencies]
-rand = "0.5.2"
-serde = { version = "1.0.66", optional = true }
+rand = "0.5.5"
+serde = { version = "1.0.80", optional = true }
 crunchy = "0.2.1"
 
 [features]

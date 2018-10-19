@@ -1,3 +1,6 @@
+//! Types for positions in the sudoku
+//!
+//! A sudoku consists of 81 cells, arranged into 9 rows, 9 columns and 9 blocks.
 #![allow(unused, missing_docs)]
 
 use std::num::NonZeroU8;
@@ -161,30 +164,26 @@ static HOUSE_NEIGHBORS_OF_CELL: [[u8; 20]; 81] = [
 ];
 
 macro_rules! define_types(
-    ($( $vis:tt $name:ident : $limit:expr ),* $(,)*) => {
+    ($( $name:ident : $limit:expr ),* $(,)*) => {
         $(
-            define_types!(@internal $vis $name : $limit );
+            define_types!(@internal $name $limit , concat!("`0..", stringify!($limit), "`"));
         )*
     };
-    (@internal priv $name:ident : $limit:expr) => {
-        #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
-        struct $name(u8);
+    (@internal $name:ident $limit:expr , $limit_doc:expr) => {
 
-        define_types!(@internal $name $limit);
-    };
-    (@internal pub $name:ident : $limit:expr) => {
-        #[derive(Copy, Clone, Eq, PartialEq, PartialOrd, Ord, Debug, Hash)]
-        pub struct $name(u8);
 
-        define_types!(@internal $name $limit);
-    };
-    (@internal $name:ident $limit:expr) => {
         impl $name {
+            /// Construct a new instance of this type. `num` needs to be inside
+            #[doc = $limit_doc]
+            ///
+            /// # Panics
+            /// Panics, if the argument is outside the allowed range.
             pub fn new(num: u8) -> Self {
                 debug_assert!(num < $limit);
                 $name(num)
             }
 
+            /// Construct a new instance of this type. If `num` is outside the allowed range, then `None` is returned.
             pub fn new_checked(num: u8) -> Option<Self> {
                 if num < $limit {
                     Some($name(num))
@@ -193,14 +192,18 @@ macro_rules! define_types(
                 }
             }
 
+            /// Returns the number contained within.
             pub fn get(self) -> u8 {
                 self.0
             }
 
+            /// Returns the number contained within as `usize`. Guarantees that the numbering starts from `0`.
+            /// For position structs such as this one, it's equivalent to `.get() as usize`.
             pub fn as_index(self) -> usize {
                 self.0 as _
             }
 
+            /// Iterator over all positions of this type.
             pub fn all() -> impl Iterator<Item = Self> {
                 (0..$limit).map(Self::new)
             }
@@ -208,21 +211,70 @@ macro_rules! define_types(
     };
 );
 
+/// One of the 81 cells of the sudoku
+#[derive(Copy, Clone, Eq, PartialEq, PartialOrd, Ord, Debug, Hash)]
+pub struct Cell(u8);
+
+/// Set of 9 cells in a horizontal line
+#[derive(Copy, Clone, Eq, PartialEq, PartialOrd, Ord, Debug, Hash)]
+pub struct Row(u8);
+
+/// Set of 9 cells in a vertical line
+#[derive(Copy, Clone, Eq, PartialEq, PartialOrd, Ord, Debug, Hash)]
+pub struct Col(u8);
+
+/// Set of 9 cells in a 3x3 box shape
+#[derive(Copy, Clone, Eq, PartialEq, PartialOrd, Ord, Debug, Hash)]
+pub struct Block(u8);
+
+/// A [`Row`] or [`Col`]
+#[derive(Copy, Clone, Eq, PartialEq, PartialOrd, Ord, Debug, Hash)]
+pub struct Line(u8);
+
+/// A [`Row`], [`Col`] or [`Block`]
+#[derive(Copy, Clone, Eq, PartialEq, PartialOrd, Ord, Debug, Hash)]
+pub struct House(u8);
+
+/// Intersection of a [`Block`] and a [`Row`], 3 cells in a row.
+#[derive(Copy, Clone, Eq, PartialEq, PartialOrd, Ord, Debug, Hash)]
+pub struct MiniRow(u8);
+
+/// Intersection of a [`Block`] and a [`Col`], 3 cells in a column.
+#[derive(Copy, Clone, Eq, PartialEq, PartialOrd, Ord, Debug, Hash)]
+pub struct MiniCol(u8);
+
+/// A [`MiniRow`] or [`MiniCol`]
+#[derive(Copy, Clone, Eq, PartialEq, PartialOrd, Ord, Debug, Hash)]
+pub struct MiniLine(u8);
+
+/// Set of 3 [`Row`]s and 3 [`Block`]s where each [`Row`] intersects each [`Block`]
+#[derive(Copy, Clone, Eq, PartialEq, PartialOrd, Ord, Debug, Hash)]
+pub struct Band(u8);
+
+/// Set of 3 [`Col`]s and 3 [`Block`]s where each [`Col`] intersects each [`Block`]
+#[derive(Copy, Clone, Eq, PartialEq, PartialOrd, Ord, Debug, Hash)]
+pub struct Stack(u8);
+
+/// A [`Band`] or [`Stack`]
+#[derive(Copy, Clone, Eq, PartialEq, PartialOrd, Ord, Debug, Hash)]
+pub struct Chute(u8);
+
 define_types!(
-    pub Cell: 81,
-    pub Row: 9,
-    pub Col: 9,
-    pub Block: 9,
-    pub Line: 18,
-    pub House: 27,
-    pub MiniRow: 27,
-    pub MiniCol: 27,
-    pub MiniLine: 54,
-    pub Band: 3,
-    pub Stack: 3,
-    pub Chute: 6,
+    Cell: 81,
+    Row: 9,
+    Col: 9,
+    Block: 9,
+    Line: 18,
+    House: 27,
+    MiniRow: 27,
+    MiniCol: 27,
+    MiniLine: 54,
+    Band: 3,
+    Stack: 3,
+    Chute: 6,
 );
 
+/// A [`Row`] or [`Col`]
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
 pub enum LineType {
     Row(Row),
@@ -230,6 +282,7 @@ pub enum LineType {
 }
 
 impl Line {
+    /// Determine whether this line is a [`Row`] or a [`Col`]
     pub fn categorize(self) -> LineType {
         debug_assert!(self.0 < BLOCK_OFFSET);
         match self.0 < COL_OFFSET {
@@ -239,6 +292,7 @@ impl Line {
     }
 }
 
+/// A [`Row`], [`Col`] or [`Block`]
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
 pub enum HouseType {
     Row(Row),
@@ -247,6 +301,7 @@ pub enum HouseType {
 }
 
 impl House {
+    /// Determine whether this house is a [`Row`], [`Col`] or [`Block`]
     pub fn categorize(self) -> HouseType {
         debug_assert!(self.0 < 27);
         match self.0 {
@@ -257,6 +312,7 @@ impl House {
     }
 }
 
+/// A [`Band`] or [`Stack`]
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
 pub enum ChuteType {
     Band(Band),
@@ -264,6 +320,7 @@ pub enum ChuteType {
 }
 
 impl Chute {
+    /// Determine whether this chute is a [`Band`] or [`Stack`]
     pub fn categorize(self) -> ChuteType {
         debug_assert!(self.0 < 6);
         match self.0 < 3 {
@@ -273,6 +330,7 @@ impl Chute {
     }
 }
 
+/// A [`MiniRow`] or [`MiniCol`]
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
 pub enum MiniLineType {
     MiniRow(MiniRow),
@@ -280,6 +338,7 @@ pub enum MiniLineType {
 }
 
 impl MiniLine {
+    /// Determine whether this miniline is a [`MiniRow`] or [`MiniCol`]
     pub fn categorize(self) -> MiniLineType {
         debug_assert!(self.0 < 54);
         match self.0 < 27 {
@@ -289,14 +348,24 @@ impl MiniLine {
     }
 }
 
+/// Generic struct for a cell inside a given set of cells, like e.g. a [`House`]
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
 pub struct Position<IN>(pub(crate) u8, ::std::marker::PhantomData<IN>);
 
 impl<IN> Position<IN> {
+    /// Construct a new instance of this type.
     pub fn new(pos: u8) -> Self {
+        // TODO: make panic on invalid positions
         Position(pos, ::std::marker::PhantomData)
     }
 
+    /// Returns the number contained within.
+    pub fn get(self) -> u8 {
+        self.0
+    }
+
+    /// Returns the number contained within as `usize`. Guarantees that the numbering starts from `0`.
+    /// For position structs such as this one, it's equivalent to `.get() as usize`.
     pub fn as_index(self) -> usize {
         self.0 as _
     }
@@ -306,6 +375,7 @@ macro_rules! into_cells {
     ( $( $name:ident => |$arg:ident| $code:block );* $(;)* ) => {
         $(
             impl $name {
+                /// Returns a bitset of the cells belonging to this grouping.
                 pub fn cells(self) -> Set<Cell> {
                     let $arg = self;
                     Set($code)
@@ -427,15 +497,15 @@ define_conversion_shortcuts!(
 );
 
 impl Cell {
-    pub fn row_pos(self) -> Position<House> {
+    pub(crate) fn row_pos(self) -> Position<House> {
         Position::<Row>::from(self).into()
     }
 
-    pub fn col_pos(self) -> Position<House> {
+    pub(crate) fn col_pos(self) -> Position<House> {
         Position::<Col>::from(self).into()
     }
 
-    pub fn block_pos(self) -> Position<House> {
+    pub(crate) fn block_pos(self) -> Position<House> {
         Position::<Block>::from(self).into()
     }
 }
@@ -443,10 +513,13 @@ impl Cell {
 ///////////////////////////////////////////////////////////////////////////////////////////////
 
 impl Cell {
-    pub fn houses(self) -> [House; 3] {
+    /// Returns an array of the row, column and block this cell belongs to, in that order.
+    pub(crate) fn houses(self) -> [House; 3] {
             [self.row().house(), self.col().house(), self.block().house() ]
     }
 
+    /// Returns an iterator over the 20 cells that share a house with this one. The iteration
+    /// order is unspecified.
     #[inline(always)]
     pub(crate) fn neighbors(self) -> impl IntoIterator<Item = Cell> {
         HOUSE_NEIGHBORS_OF_CELL[self.as_index()]
@@ -457,7 +530,10 @@ impl Cell {
 }
 
 impl Chute {
-    pub fn minilines(self) -> [MiniLine; 9] {
+    /// Returns an array of all minilines in this chute, ordered first by lines, then by block.
+    /// This means that minirows are given from left to right, then top to bottom and minicols
+    /// the other way around.
+    pub(crate) fn minilines(self) -> [MiniLine; 9] {
         let mut slices = [MiniLine(0); 9];
         for (i, slice) in (0..9).zip(slices.iter_mut()) {
                 *slice = MiniLine(self.0 * 9 + i);
@@ -467,13 +543,15 @@ impl Chute {
 }
 
 impl Line {
-    pub const ALL_ROWS: Set<Line> = Set(0o000_777);
-    pub const ALL_COLS: Set<Line> = Set(0o777_000);
+    pub(crate) const ALL_ROWS: Set<Line> = Set(0o000_777);
+    pub(crate) const ALL_COLS: Set<Line> = Set(0o777_000);
 }
 
 impl MiniLine {
-    pub fn neighbors(self) -> ([MiniLine; 2], [MiniLine; 2]) {
-        // line neighbor, field neighbor
+    /// Returns the line and block neighbors of this miniline. The neighbors within the same
+    /// line are given in the first array.
+    pub(crate) fn neighbors(self) -> ([MiniLine; 2], [MiniLine; 2]) {
+        // line neighbor, block neighbor
         let (ln, bn) = MINILINE_NEIGHBORS[self.as_index()];
         (
             [ MiniLine(ln[0]), MiniLine(ln[1]) ],
@@ -482,27 +560,33 @@ impl MiniLine {
     }
 
     // TODO: refactor to be part of the define_conversion_shortcuts macro
-    pub fn chute(self) -> Chute {
+    pub(crate) fn chute(self) -> Chute {
         Chute::new(self.0 / 9)
     }
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 
-impl Row {
-    pub fn cell_at(self, pos: Position<Row>) -> Cell {
+/// Trait for cell groupings that have all of their cells enumerated
+pub trait CellAt: Sized {
+    /// Return the cell at the given position in this cell grouping
+    fn cell_at(self, pos: Position<Self>) -> Cell;
+}
+
+impl CellAt for Row {
+    fn cell_at(self, pos: Position<Row>) -> Cell {
         Cell::new(self.0 * 9 + pos.0)
     }
 }
 
-impl Col {
-    pub fn cell_at(self, pos: Position<Col>) -> Cell {
+impl CellAt for Col {
+    fn cell_at(self, pos: Position<Col>) -> Cell {
         Cell::new(pos.0 * 9 + self.0)
     }
 }
 
-impl Block {
-    pub fn cell_at(self, pos: Position<Block>) -> Cell {
+impl CellAt for Block {
+    fn cell_at(self, pos: Position<Block>) -> Cell {
         // TODO: use (implement) methods for getting band of block and such
         let band = self.0 / 3;
         let stack = self.0 % 3;
@@ -514,8 +598,8 @@ impl Block {
     }
 }
 
-impl Line {
-    pub fn cell_at(self, pos: Position<Line>) -> Cell {
+impl CellAt for Line {
+    fn cell_at(self, pos: Position<Line>) -> Cell {
         match self.categorize() {
             LineType::Row(row) => row.cell_at(Position::new(pos.0)),
             LineType::Col(col) => col.cell_at(Position::new(pos.0)),
@@ -523,8 +607,8 @@ impl Line {
     }
 }
 
-impl House {
-    pub fn cell_at(self, pos: Position<House>) -> Cell {
+impl CellAt for House {
+    fn cell_at(self, pos: Position<House>) -> Cell {
         match self.categorize() {
             HouseType::Row(row) => row.cell_at(Position::new(pos.0)),
             HouseType::Col(col) => col.cell_at(Position::new(pos.0)),
@@ -612,6 +696,7 @@ impl Set<Position<House>> {
 }
 
 pub(crate) trait IntoHouse: Into<House> {
+    /// Return the [`House`] corresponding to this value. Equivalent to `House::from(self)`.
     #[inline(always)]
     fn house(self) -> House {
         self.into()
@@ -624,54 +709,77 @@ static MINILINE_NEIGHBORS: [([u8; 2], [u8; 2]); 54] = [
         ([1, 2], [3, 6]),
         ([2, 0], [4, 7]),
         ([0, 1], [5, 8]),
+
         ([4, 5], [6, 0]),
         ([5, 3], [7, 1]),
         ([3, 4], [8, 2]),
+
         ([7, 8], [0, 3]),
         ([8, 6], [1, 4]),
         ([6, 7], [2, 5]),
+
+
         ([10, 11], [12, 15]),
         ([11, 9], [13, 16]),
         ([9, 10], [14, 17]),
+
         ([13, 14], [15, 9]),
         ([14, 12], [16, 10]),
         ([12, 13], [17, 11]),
+
         ([16, 17], [9, 12]),
         ([17, 15], [10, 13]),
         ([15, 16], [11, 14]),
+
+
         ([19, 20], [21, 24]),
         ([20, 18], [22, 25]),
         ([18, 19], [23, 26]),
+
         ([22, 23], [24, 18]),
         ([23, 21], [25, 19]),
         ([21, 22], [26, 20]),
+
         ([25, 26], [18, 21]),
         ([26, 24], [19, 22]),
         ([24, 25], [20, 23]),
+
+        // above: rows, below: cols
+
         ([28, 29], [30, 33]),
         ([29, 27], [31, 34]),
         ([27, 28], [32, 35]),
+
         ([31, 32], [33, 27]),
-        ([32, 30], [34, 28]),
+        ([32, 30], [34, 28]),       // stack 0
         ([30, 31], [35, 29]),
+
         ([34, 35], [27, 30]),
         ([35, 33], [28, 31]),
         ([33, 34], [29, 32]),
+
+
         ([37, 38], [39, 42]),
         ([38, 36], [40, 43]),
         ([36, 37], [41, 44]),
+
         ([40, 41], [42, 36]),
-        ([41, 39], [43, 37]),
+        ([41, 39], [43, 37]),       // stack 1
         ([39, 40], [44, 38]),
+
         ([43, 44], [36, 39]),
         ([44, 42], [37, 40]),
         ([42, 43], [38, 41]),
+
+
         ([46, 47], [48, 51]),
         ([47, 45], [49, 52]),
         ([45, 46], [50, 53]),
+
         ([49, 50], [51, 45]),
-        ([50, 48], [52, 46]),
+        ([50, 48], [52, 46]),       // stack 2
         ([48, 49], [53, 47]),
+
         ([52, 53], [45, 48]),
         ([53, 51], [46, 49]),
         ([51, 52], [47, 50]),

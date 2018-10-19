@@ -1,11 +1,7 @@
-#![allow(unused)]
-#![warn(unused_variables, unused_mut, unused_must_use)]
-#![allow(missing_docs)]
 use ::Sudoku;
-use bitset::{Set, Iter as SetIter};
+use bitset::Set;
 use board::Candidate;
 use helper::{HouseArray, CellArray, DigitArray, Unsolvable};
-use consts::*;
 use board::*;
 use strategy::{
 	deduction::{Deduction, Deductions},
@@ -76,6 +72,7 @@ impl StrategySolver {
 		}
 	}
 
+	/// Construct a new StrategySolver
 	pub fn from_sudoku(sudoku: Sudoku) -> StrategySolver {
 		let deduced_entries = sudoku.iter()
 			.enumerate()
@@ -89,6 +86,10 @@ impl StrategySolver {
 		}
 	}
 
+	/// Construct a new StrategySolver from an array of [`CellState`s](::board::CellState).
+	/// This allows communicating the impossibility of some candidates, that aren't already
+	/// trivially conflicting with entries. The cell order in the array is the same as for
+	/// [`::Sudoku`s], i.e. left-to-right, top-to-bottom.
 	pub fn from_grid_state(grid_state: [CellState; 81]) -> StrategySolver {
 		let mut entries = vec![];
 		let mut eliminated_candidates = vec![];
@@ -117,7 +118,7 @@ impl StrategySolver {
 		self.grid.state
 	}
 
-	/// Returns the current state of the Sudoku
+	/// Returns the current state of the Sudoku including potential candidates
 	pub fn grid_state(&mut self) -> [CellState; 81] {
 		let mut grid = [CellState::Candidates(Set::NONE); 81];
 		self.update_grid();
@@ -133,7 +134,7 @@ impl StrategySolver {
 		grid
 	}
 
-	/// Returns the current state of the cell
+	/// Returns the current state of the given `cell`
 	pub fn cell_state(&mut self, cell: Cell) -> CellState {
 		self.update_grid();
 		let _ = self._update_cell_poss_house_solved(false);
@@ -155,9 +156,11 @@ impl StrategySolver {
 			&mut self.deduced_entries,
 			candidate,
 			&mut self.deductions,
-			Deduction::Given(candidate)
+			Deduction::NakedSingles(candidate)
 		)
 		.map_err(|Unsolvable| ())?;
+		// TODO: remove the initial strategy insertion
+		self.deductions.pop();
 
 		Ok(())
 	}
@@ -219,6 +222,7 @@ impl StrategySolver {
 		lens < (self.deduced_entries.len(), self.eliminated_entries.len())
 	}
 
+	/// Check whether the sudoku has been completely solved.
 	pub fn is_solved(&self) -> bool {
 		self.n_solved == 81
 	}
@@ -448,7 +452,7 @@ impl StrategySolver {
 		{
 			use self::Deduction::*;
 			match strategy {
-				NakedSingles(..) | HiddenSingles(..) | Given(_) => (),
+				NakedSingles(..) | HiddenSingles(..) => (),
 				_ => panic!("Internal error: Called push_new_candidate with wrong strategy type")
 			};
 		}
@@ -583,7 +587,7 @@ impl StrategySolver {
 				}
 				let rg_eliminations = n_eliminated .. eliminated_entries.len();
 				if rg_eliminations.len() > 0 {
-					deductions.push(Deduction::NakedSubsets {
+					deductions.push(Deduction::Subsets {
 						house, positions, digits,
 						conflicts: rg_eliminations
 					});
@@ -620,7 +624,7 @@ impl StrategySolver {
 				}
 				let rg_eliminations = n_eliminated .. eliminated_entries.len();
 				if rg_eliminations.len() > 0 {
-					deductions.push(Deduction::HiddenSubsets {
+					deductions.push(Deduction::Subsets {
 						house, digits, positions,
 						conflicts: rg_eliminations
 					});
@@ -688,15 +692,17 @@ impl StrategySolver {
 		)
 	}
 
-	pub(crate) fn find_singles_chain(&mut self) -> Result<(), Unsolvable> {
+	/*
+	pub(crate) fn find_singles_chain(&mut self, stop_after_first: bool) -> Result<(), Unsolvable> {
         #[derive(Copy, Clone, PartialEq, Eq)]
-        enum Colour {
-            Uncoloured,
+        enum Color {
             A,
             B,
         }
 
-        fn follow_links(digit: Digit, cell: Cell, is_a: bool, sudoku: &StrategySolver, cell_color: &mut CellArray<Colour>, link_nr: u8, cell_linked: &mut CellArray<u8>) {
+		/// Recursively visit all cells connected by being the only 2 possible candidates in a house.
+		/// mark all visited cells
+        fn follow_links(digit: Digit, cell: Cell, is_a: bool, sudoku: &StrategySolver, cell_color: &mut CellArray<Option<Color>>, link_nr: u8, cell_linked: &mut CellArray<u8>) {
             if cell_linked[cell] <= link_nr { return }
 
             for &(con_house, current_pos) in &[
@@ -714,7 +720,7 @@ impl StrategySolver {
                         false => cell_linked[other_cell] = link_nr,
                     };
 
-                    cell_color[other_cell] = if is_a { Colour::A } else { Colour::B };
+                    cell_color[other_cell] = if is_a { Some(Color::A) } else { Some(Color::B) };
 
                     follow_links(digit, other_cell, !is_a, sudoku, cell_color, link_nr, cell_linked);
                 }
@@ -722,11 +728,10 @@ impl StrategySolver {
         }
 
         for digit in Set::<Digit>::ALL {
-            let mut cell_touched = [false; N_CELLS];
             let mut link_nr = 0;
 
             let mut cell_linked = CellArray([0; 81]);
-            let mut cell_color = CellArray([Colour::Uncoloured; 81]);
+            let mut cell_color = CellArray([None; 81]);
 
             for house in House::all() {
                 let house_poss_positions = self.house_poss_positions.state[house][digit];
@@ -734,13 +739,10 @@ impl StrategySolver {
                     let first = house_poss_positions.one_possibility();
                     let cell = house.cell_at(first);
 
-                    match cell_touched[cell.as_index()] {
-                        true => continue,
-                        false => cell_touched[cell.as_index()] = true,
+                    if cell_color[cell].is_none() {
+                    	follow_links(digit, cell, true, self, &mut cell_color, link_nr, &mut cell_linked);
+                    	link_nr += 1;
                     };
-
-                    follow_links(digit, cell, true, self, &mut cell_color, link_nr, &mut cell_linked);
-                    link_nr += 1;
                 }
             }
 
@@ -749,14 +751,14 @@ impl StrategySolver {
                 // if two cells in the same row, part of the same chain
                 // have the same color, those cells must not contain the number
                 // Rule 2:
-                // if one cell is neighbor to two cells with opposite colours
+                // if one cell is neighbor to two cells with opposite colors
                 // it can not contain the number
 
 
                 // ===== Rule 1 ======
                 for house in House::all() {
-                    // Collect colours in this link chain and this house
-                    let mut house_colors = [Colour::Uncoloured; 9];
+                    // Collect colors in this link chain and this house
+                    let mut house_colors = [None; 9];
                     for (pos, cell) in house.cells()
                         .into_iter()
                         .enumerate()
@@ -768,52 +770,52 @@ impl StrategySolver {
                     }
 
                     let (n_a, n_b) = house_colors.iter()
-                        .fold((0, 0), |(n_a, n_b), &colour| {
-                            match colour {
-                                Colour::A => (n_a+1, n_b),
-                                Colour::B => (n_a, n_b+1),
-                                Colour::Uncoloured => (n_a, n_b),
+                        .fold((0, 0), |(n_a, n_b), &color| {
+                            match color {
+                                Some(Color::A) => (n_a+1, n_b),
+                                Some(Color::B) => (n_a, n_b+1),
+                                None => (n_a, n_b),
                             }
                         });
 
-                    fn mark_impossible(digit: Digit, link_nr: u8, colour: Colour, cell_color: CellArray<Colour>, cell_linked: CellArray<u8>, impossible_entries: &mut Vec<Candidate>) {
+                    fn mark_impossible(digit: Digit, link_nr: u8, color: Color, cell_color: CellArray<Option<Color>>, cell_linked: CellArray<u8>, impossible_entries: &mut Vec<Candidate>) {
                         Cell::all().zip(cell_color.iter()).zip(cell_linked.iter())
-                            .filter(|&((_, &cell_colour), &cell_link_nr)| link_nr == cell_link_nr && colour == cell_colour)
+                            .filter(|&((_, &cell_color), &cell_link_nr)| link_nr == cell_link_nr && Some(color) == cell_color)
                             .for_each(|((cell, _), _)| impossible_entries.push( Candidate { cell, digit }));
                     }
 
-                    let impossible_colour;
+                    let impossible_color;
                     match (n_a >= 2, n_b >= 2) {
                         (true, true) => return Err(Unsolvable),
-                        (true, false) => impossible_colour = Colour::A,
-                        (false, true) => impossible_colour = Colour::B,
+                        (true, false) => impossible_color = Color::A,
+                        (false, true) => impossible_color = Color::B,
                         (false, false) => continue,
                     };
-                    mark_impossible(digit, link_nr, impossible_colour, cell_color, cell_linked, &mut self.eliminated_entries);
+                    mark_impossible(digit, link_nr, impossible_color, cell_color, cell_linked, &mut self.eliminated_entries);
                     // chain handled, go to next
-                    // note: as this eagerly marks a colour impossible as soon as a double in any colour is found
+                    // note: as this eagerly marks a color impossible as soon as a double in any color is found
                     //       a case of two doubles in some later house will not always be found
                     //       impossibility is then detected further down the strategy chain
                     break
                 }
 
                 // ===== Rule 2 =====
-                let mut cell_sees_colour = CellArray([(false, false); 81]);
-                for ((cell, &cell_colour), _) in Cell::all()
+                let mut cell_sees_color = CellArray([(false, false); 81]);
+                for ((cell, &cell_color), _) in Cell::all()
 					.zip(cell_color.iter())
                     .zip(cell_linked.iter())
-                    .filter(|&((_, &cell_colour), &cell_link_nr)| link_nr == cell_link_nr && cell_colour != Colour::Uncoloured)
+                    .filter(|&((_, &cell_color), &cell_link_nr)| link_nr == cell_link_nr && cell_color.is_some())
                 {
                     for &house in &cell.houses() {
                         for neighbor_cell in house.cells().into_iter().filter(|&c| cell != c) {
-                            let (sees_a, sees_b) = cell_sees_colour[neighbor_cell];
-                            if cell_colour == Colour::A && !sees_a {
-                                cell_sees_colour[neighbor_cell].0 = true;
+                            let (sees_a, sees_b) = cell_sees_color[neighbor_cell];
+                            if cell_color == Some(Color::A) && !sees_a {
+                                cell_sees_color[neighbor_cell].0 = true;
                                 if sees_b {
                                     self.eliminated_entries.push( Candidate{ cell: neighbor_cell, digit })
                                 }
-                            } else if cell_colour == Colour::B && !sees_b {
-                                cell_sees_colour[neighbor_cell].1 = true;
+                            } else if cell_color == Some(Color::B) && !sees_b {
+                                cell_sees_color[neighbor_cell].1 = true;
                                 if sees_a {
                                     self.eliminated_entries.push( Candidate{ cell: neighbor_cell, digit })
                                 }
@@ -825,6 +827,7 @@ impl StrategySolver {
         }
 		Ok(())
 	}
+	*/
 }
 
 #[derive(Debug, Clone)]
@@ -849,19 +852,6 @@ impl<T> State<T> {
 		let State { next_deduced: ld, last_eliminated: le, state } = self;
 		(ld, le, state)
 	}
-}
-
-#[inline]
-fn find_unique<I: Iterator<Item=Set<Digit>>>(possibilities: I) -> (Set<Digit>, Set<Digit>, Set<Digit>) {
-	let mut unsolved = Set::NONE;
-	let mut multiple_unsolved = Set::NONE;
-
-	for poss_digits in possibilities {
-		multiple_unsolved |= unsolved & poss_digits;
-		unsolved |= poss_digits;
-	}
-	// >= 1, >1, =1 occurences
-	(unsolved, multiple_unsolved, unsolved.without(multiple_unsolved) )
 }
 
 #[cfg(test)]

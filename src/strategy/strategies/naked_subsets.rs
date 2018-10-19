@@ -4,7 +4,8 @@ use board::{
     Digit,
     positions::{
         Position,
-        House
+        House,
+        CellAt
     }
 };
 

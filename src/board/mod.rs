@@ -1,3 +1,4 @@
+//! Types for cells, digits and other things on a sudoku board
 mod sudoku;
 mod digit;
 pub mod positions;

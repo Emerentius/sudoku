@@ -1,4 +1,4 @@
-//#![warn(missing_docs)]
+#![warn(missing_docs)]
 #![allow(renamed_and_removed_lints, unknown_lints)]
 #![cfg_attr(
     feature = "cargo-clippy",

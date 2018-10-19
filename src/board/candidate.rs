@@ -3,6 +3,7 @@ use board::{Digit, Cell, Row, Col, Block};
 
 /// Represents a digit in a specific cell
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[allow(missing_docs)]
 pub struct Candidate {
     pub cell: Cell,
     pub digit: Digit,

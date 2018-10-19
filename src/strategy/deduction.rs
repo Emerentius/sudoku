@@ -1,3 +1,5 @@
+//! Results of strategy applications
+
 use board::{Candidate};
 use super::Strategy;
 use board::*;
@@ -14,6 +16,7 @@ pub struct Deductions {
 	pub(crate) eliminated_entries: Vec<Candidate>,
 }
 
+/// Borrowing iterator over [`Deductions`]
 pub struct Iter<'a> {
 	deductions: ::std::slice::Iter<'a, _Deduction>,
 	eliminated_entries: &'a [Candidate]
@@ -49,46 +52,59 @@ impl Deductions {
 	}
 }
 
+/// Result of a single, successful strategy application
+///
+/// This enum contains the data necessary to explain why the step could be taken.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[allow(missing_docs)]
 pub enum Deduction<T> {
-	Given(Candidate), // by user
+	/// Result of [`NakedSingles`](super::Strategy::NakedSingles)
     NakedSingles(Candidate),
+	/// Result of [`HiddenSingles`](super::Strategy::HiddenSingles)
     HiddenSingles(Candidate, HouseType),
+	/// Result of [`LockedCandidates`](super::Strategy::LockedCandidates)
     LockedCandidates {
-		miniline: MiniLine,
 		digit: Digit,
+		/// The miniline which is the only one in the block or line, that contains `digit`
+		miniline: MiniLine,
+		/// In the "Pointing" variant, only one miniline in a block can contain the digit and all candidates
+		/// in other blocks in the same line are impossible. In the "Claiming" variant, it's the other way around.
 		is_pointing: bool,
 		conflicts: T,
 	}, // which miniline is affected and what's unique
-    NakedSubsets {
+
+	/// Result of naked or hidden subsets, i.e. [`NakedPairs`](super::Strategy::NakedPairs), [`NakedTriples`](super::Strategy::NakedTriples), [`NakedQuads`](super::Strategy::NakedQuads),
+	/// [`HiddenPairs`](super::Strategy::HiddenPairs), [`HiddenTriples`](super::Strategy::HiddenTriples) or [`HiddenQuads`](super::Strategy::HiddenQuads).
+    Subsets {
+		/// A house that contains all cells of the locked set.
 		house: House,
-		positions: Set<Position<House>>,     // 2-4 positions
-		digits: Set<Digit>,                  // digits restricted to cells
-		conflicts: T,          				 // link to impossible entries
+		/// The cells that contain the locked set. Can be 2-4 positions.
+		positions: Set<Position<House>>,
+		/// The digits that are part of the locked set. The number of digits is always equal to the number of
+		/// positions
+		digits: Set<Digit>,
+		conflicts: T,
 	},
-    HiddenSubsets {
-		house: House,
-		digits: Set<Digit>,                  // 2-4 digits
-		positions: Set<Position<House>>,     // positions restricted to digits
-		conflicts: T,           			 // link to impossible entries
-	},
+	/// Result of [`XWing`](super::Strategy::XWing), [`Swordfish`](super::Strategy::Swordfish) or [`Jellyfish`](super::Strategy::Jellyfish)
     BasicFish {
-		lines: Set<Line>, 					 // 2-4 lines
-		positions: Set<Position<Line>>,		 // which positions in all lines
 		digit: Digit,
+		/// The lines that contain the fish. Can be 2-4 lines.
+		lines: Set<Line>,
+		/// The union of possible positions in the `lines`. The number of positions is always equal to the number
+		/// of lines.
+		positions: Set<Position<Line>>,
 		conflicts: T,
 	},
 
-	// TODO: expand information in variants below
-    SinglesChain(T),
+    //SinglesChain(T),
     #[doc(hidden)] __NonExhaustive
 }
 
-impl<T> Deduction<T> {
+impl<'a> Deduction<&'a [Candidate]> {
+	/// Returns the type of strategy that was used to make this deduction.
 	pub fn strategy(&self) -> Strategy {
 		use self::Deduction::*;
 		match self {
-			Given(_) => unimplemented!(),
 			NakedSingles { .. } => Strategy::NakedSingles,
 			HiddenSingles { .. } => Strategy::HiddenSingles,
 			LockedCandidates { .. } => Strategy::LockedCandidates,
@@ -100,33 +116,45 @@ impl<T> Deduction<T> {
 					_ => unreachable!(),
 				}
 			}
-			SinglesChain { .. } => Strategy::SinglesChain,
-			NakedSubsets { positions, .. } => {
-				match positions.len() {
-					2 => Strategy::NakedPairs,
-					3 => Strategy::NakedTriples,
-					4 => Strategy::NakedQuads,
+			//SinglesChain { .. } => Strategy::SinglesChain,
+			Subsets { house, positions, conflicts, .. } => {
+				use board::positions::HouseType::*;
+				let conflict_cell = conflicts[0].cell;
+				let conflict_pos = match house.categorize() {
+					Row(_) => conflict_cell.row_pos(),
+					Col(_) => conflict_cell.col_pos(),
+					Block(_) => conflict_cell.block_pos(),
+				};
+				let is_hidden_subset = conflict_pos.as_set().overlaps(*positions);
+				match (is_hidden_subset, positions.len()) {
+					(false, 2) => Strategy::NakedPairs,
+					(false, 3) => Strategy::NakedTriples,
+					(false, 4) => Strategy::NakedQuads,
+					(true, 2) => Strategy::HiddenPairs,
+					(true, 3) => Strategy::HiddenTriples,
+					(true, 4) => Strategy::HiddenQuads,
 					_ => unreachable!(),
 				}
 			}
-			HiddenSubsets { digits, .. } => {
+			/*HiddenSubsets { digits, .. } => {
 				match digits.len() {
 					2 => Strategy::HiddenPairs,
 					3 => Strategy::HiddenTriples,
 					4 => Strategy::HiddenQuads,
 					_ => unreachable!(),
 				}
-			}
+			}*/
 			__NonExhaustive => unreachable!(),
 		}
 	}
 }
 
 impl _Deduction {
+	/// Replace the index ranges from the internal representation with slices
+	/// for the external API
 	fn with_slices(self, eliminated: &[Candidate]) -> Deduction<&[Candidate]> {
 		use self::Deduction::*;
 		match self {
-			Given(c) => Given(c),
 			NakedSingles(c) => NakedSingles(c),
 			HiddenSingles(c, h) => HiddenSingles(c, h),
 
@@ -135,16 +163,11 @@ impl _Deduction {
 				conflicts
 			} => LockedCandidates { miniline, digit, is_pointing, conflicts: &eliminated[conflicts] },
 
-			NakedSubsets {
+			Subsets {
 				house, positions, digits,
 				conflicts
 			}
-			=> NakedSubsets { house, positions, digits, conflicts: &eliminated[conflicts]},
-
-			HiddenSubsets {
-				house, digits, positions, conflicts,
-			}
-			=> HiddenSubsets { house, digits, positions, conflicts: &eliminated[conflicts] },
+			=> Subsets { house, positions, digits, conflicts: &eliminated[conflicts]},
 
 			BasicFish {
 				lines, positions, digit,
@@ -152,7 +175,7 @@ impl _Deduction {
 			}
 			=> BasicFish { lines, positions, digit, conflicts: &eliminated[conflicts]},
 
-			SinglesChain(x) => SinglesChain(&eliminated[x]),
+			//SinglesChain(x) => SinglesChain(&eliminated[x]),
 			__NonExhaustive => __NonExhaustive
 		}
 	}

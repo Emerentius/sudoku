@@ -1,10 +1,19 @@
+//! Generic, fixed-size bitsets
+//!
+//! Sudoku strategies deal with sets of various things such as [`Digit`s](::board::Digit) and [`House`s](::board::House) a lot.
+//! Efficient storage is important for maximal performance, but it should not be possible
+//! to confuse bitmasks for different things. This module contains type-safe, space-efficient
+//! fixed-length bitsets for digits and various sudoku positions.
+
 use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not, BitXor, BitXorAssign};
 use helper::Unsolvable;
 use board::{Digit, Cell, Line, House, Position};
 
+/// Generic, fixed-size bitset
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Set<T: SetElement>(pub(crate) T::Storage);
 
+/// Iterator over the elements contained in a [`Set`]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Iter<T: SetElement>(T::Storage);
 
@@ -92,11 +101,12 @@ where
     }
 }
 
+/// Potential return value for [`Set::unique`]
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
-pub struct Zero;
+pub struct Empty;
 
-impl From<Zero> for Unsolvable {
-    fn from(_: Zero) -> Unsolvable {
+impl From<Empty> for Unsolvable {
+    fn from(_: Empty) -> Unsolvable {
         Unsolvable
     }
 }
@@ -107,42 +117,60 @@ where
     //       bounded on T::Storage, not on T (which derive does)
     Self: PartialEq + Copy
 {
+    /// Set containing all possible elements
     pub const ALL: Set<T> = Set(<T as SetElement>::ALL);
+
+    /// Empty Set
     pub const NONE: Set<T> = Set(<T as SetElement>::NONE);
 
+    /// Construct a bitset from a raw integer.
+    ///
+    /// # Panic
+    /// Panics, if the integer contains bits above [`Set::ALL`]
     pub fn from_bits(mask: T::Storage) -> Self {
+        assert!(mask <= <T as SetElement>::ALL);
         Set(mask)
     }
 
+    /// Return the raw integer backing the set.
     pub fn bits(self) -> T::Storage {
         self.0
     }
 
+    /// Returns the set of elements in this set, that aren't present in `other`.
     pub fn without(self, other: Self) -> Self {
         Set(self.0 & !other.0)
     }
 
+    /// Deletes all elements from this set that are present in `other`.
     pub fn remove(&mut self, other: Self) {
         self.0 &= !other.0;
     }
 
+    /// Checks if `self` and `other` contain any common element.
     pub fn overlaps(&self, other: Self) -> bool {
         *self & other != Set::NONE
     }
 
+    /// Returns the number of elements in this set.
     pub fn len(&self) -> u8 {
         T::count_possibilities(self.0) as u8
     }
 
+    /// Checks whether this set contains any element.
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
+    /// Checks whether this set contains all possible elements.
     pub fn is_full(&self) -> bool {
         *self == Self::ALL
     }
 
-    pub fn unique(self) -> Result<Option<T>, Zero>
+    /// Returns the only element in this set, iff only 1 element exists.
+    /// If no elements exist, it returns `Err(Empty)`.
+    /// If more than 1 element exists, it returns `Ok(None)`.
+    pub fn unique(self) -> Result<Option<T>, Empty>
     where
         Iter<T>: Iterator<Item = T>,
     {
@@ -152,12 +180,18 @@ where
                 debug_assert!(element.is_some());
                 Ok(element)
             }
-            0 => Err(Zero),
+            0 => Err(Empty),
             _ => Ok(None),
         }
     }
 
-    pub fn one_possibility(self) -> T
+    /// Returns one of the elements in this set.
+    /// It is equivalent to `self.into_iter().next().unwrap()`
+    ///
+    /// # Panic
+    /// Panics, if the set is empty
+    #[allow(unused)]
+    pub(crate) fn one_possibility(self) -> T
     where
         Iter<T>: Iterator<Item = T>,
     {
@@ -181,6 +215,7 @@ mod set_element {
             + BitOr<Output = Self::Storage> + BitOrAssign
             + BitXor<Output = Self::Storage> + BitXorAssign
             + Not<Output = Self::Storage>
+            + PartialOrd
             + ::std::fmt::Binary
             + Copy;
 
@@ -208,6 +243,7 @@ macro_rules! impl_setelement {
             }
 
             impl $type {
+                /// Returns a `Set<Self>` with the bit corresponding to this element set.
                 pub fn as_set(self) -> Set<Self> {
                     SetElement::as_set(self)
                 }

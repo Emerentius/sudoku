@@ -8,9 +8,12 @@ pub(crate) mod basic_fish;
 use super::StrategySolver;
 use helper::Unsolvable;
 
-/// The strategies that can be used with the `StrategySolver` to find hints, solve or grade a `Sudoku`.
+/// The strategies that can be used to find hints, solve or grade a sudoku.
+///
+/// This can be used with [`StrategySolver::solve`].
 /// May be expanded in the future.
 #[derive(Debug, Clone)]
+#[allow(missing_docs)]
 pub enum Strategy {
     NakedSingles,
     HiddenSingles,
@@ -24,12 +27,14 @@ pub enum Strategy {
     XWing,
     Swordfish,
     Jellyfish,
-    SinglesChain,
+    //SinglesChain,
     #[doc(hidden)] __NonExhaustive
 }
 
 impl Strategy {
-	pub const ALL: &'static [Strategy] = &[
+	/// Set of all available strategies, for test purposes
+	#[allow(unused)]
+	pub(crate) const ALL: &'static [Strategy] = &[
 		                            // difficulty as assigned by
 									// SudokuExplainer
 		Strategy::NakedSingles,     // 23
@@ -65,7 +70,7 @@ impl Strategy {
 			XWing => state.find_xwings(stop_after_first),
 			Swordfish => state.find_swordfish(stop_after_first),
 			Jellyfish => state.find_jellyfish(stop_after_first),
-			SinglesChain if !stop_after_first => state.find_singles_chain(), // TODO: Implement non-eager SinglesChain
+			//SinglesChain => state.find_singles_chain(stop_after_first), // TODO: Implement non-eager SinglesChain
             _ => unimplemented!(),
         }
 	}

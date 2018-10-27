@@ -11,6 +11,26 @@ fn read_sudokus(sudokus_str: &str) -> Vec<Sudoku> {
         .collect()
 }
 
+/// Set of all available strategies, for test purposes
+#[allow(unused)]
+const ALL_STRATEGIES: &'static [Strategy] = &[
+                                // difficulty as assigned by
+                                // SudokuExplainer
+    Strategy::NakedSingles,     // 23
+    Strategy::HiddenSingles,    // 15
+    Strategy::LockedCandidates, // 28
+    Strategy::NakedPairs,       // 30
+    Strategy::XWing,            // 32
+    Strategy::HiddenPairs,      // 34
+    Strategy::NakedTriples,     // 36
+    Strategy::Swordfish,        // 38
+    Strategy::HiddenTriples,    // 40
+    Strategy::NakedQuads,       // 50
+    Strategy::Jellyfish,        // 52
+    Strategy::HiddenQuads,      // 54
+    //Strategy::SinglesChain,
+];
+
 macro_rules! make_benches {
     ( $sudokus_folder:expr; $($name:ident, $f:expr, $file_name:expr);* ) => {
         $(
@@ -117,7 +137,7 @@ fn is_solved_on_solved(b: &mut test::Bencher) {
 fn strategy_solver_1_easy_sudokus(b: &mut test::Bencher) {
     let sudokus = read_sudokus( include_str!("../sudokus/Lines/easy_sudokus.txt") );
     let sudokus_100 = sudokus.iter().cycle().cloned().take(100).collect::<Vec<_>>();
-    let strategies = Strategy::ALL;
+    let strategies = ALL_STRATEGIES;
     b.iter(|| {
         for sudoku in sudokus_100.iter().cloned() {
             StrategySolver::from_sudoku(sudoku).solve(&strategies).unwrap(); //.unwrap();
@@ -129,7 +149,7 @@ fn strategy_solver_1_easy_sudokus(b: &mut test::Bencher) {
 fn strategy_solver_2_medium_sudokus(b: &mut test::Bencher) {
     let sudokus = read_sudokus( include_str!("../sudokus/Lines/medium_sudokus.txt") );
     let sudokus_100 = sudokus.iter().cycle().cloned().take(100).collect::<Vec<_>>();
-    let strategies = Strategy::ALL;
+    let strategies = ALL_STRATEGIES;
     b.iter(|| {
         for sudoku in sudokus_100.iter().cloned() {
             // solution not guaranteed yet, discard error.

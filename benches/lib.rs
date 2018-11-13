@@ -157,3 +157,12 @@ fn strategy_solver_2_medium_sudokus(b: &mut test::Bencher) {
         }
     })
 }
+
+#[bench]
+fn canonicalize(b: &mut test::Bencher) {
+    let sudoku = Sudoku::generate_filled();
+
+	b.iter(|| {
+		sudoku.canonicalized();
+	})
+}

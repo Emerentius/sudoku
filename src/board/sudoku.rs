@@ -608,6 +608,21 @@ impl Sudoku {
         }
     }
 
+    /// Returns a canonical representation of this sudoku's equivalence class.
+	/// All sudokus that can be translated into each other via validity preserving transformations belong to the same
+	/// equivalence class (see [`Sudoku::shuffle`] docs for a list of transformations). This function can therefore
+	/// be used to check whether two sudokus are equivalent. The canonical form used here is the
+	/// lexicographically minimal permutation.
+	///
+	/// Limited to fully solved, valid sudokus. Returns `None` if the sudoku does not fit these conditions.
+	pub fn canonicalized(&self) -> Option<Sudoku> {
+		if self.is_solved() {
+			Some(super::canonicalization::canonicalize_solved_sudoku(*self))
+		} else {
+			None
+		}
+	}
+
     #[inline]
     fn shuffle_digits(&mut self, rng: &mut R) {
         // 0 (empty cell) always maps to 0
@@ -661,27 +676,31 @@ impl Sudoku {
     }
 
     #[inline]
-    fn swap_rows(&mut self, row1: u8, row2: u8) {
+    pub(crate) fn swap_rows(&mut self, row1: u8, row2: u8) {
         if row1 == row2 {
             return;
         }
         let start1 = (row1 * 9) as usize;
         let start2 = (row2 * 9) as usize;
-        self.swap_cells((start1..start1 + 9).zip(start2..start2 + 9))
+        self.swap_cells(
+            (start1..start1 + 9).zip(start2..start2 + 9)
+        )
     }
 
     #[inline]
-    fn swap_cols(&mut self, col1: u8, col2: u8) {
+    pub(crate) fn swap_cols(&mut self, col1: u8, col2: u8) {
         if col1 == col2 {
             return;
         }
         debug_assert!(col1 < 9);
         debug_assert!(col2 < 9);
-        self.swap_cells((0..9).map(|row| (row * 9 + col1 as usize, row * 9 + col2 as usize)))
+        self.swap_cells(
+            (0..9).map(|row| (row * 9 + col1 as usize, row * 9 + col2 as usize))
+        )
     }
 
     #[inline]
-    fn swap_stacks(&mut self, stack1: u8, stack2: u8) {
+    pub(crate) fn swap_stacks(&mut self, stack1: u8, stack2: u8) {
         if stack1 == stack2 {
             return;
         }
@@ -693,19 +712,19 @@ impl Sudoku {
     }
 
     #[inline]
-    fn swap_bands(&mut self, band1: u8, band2: u8) {
+    pub(crate) fn swap_bands(&mut self, band1: u8, band2: u8) {
         if band1 == band2 {
             return;
         }
         debug_assert!(band1 < 3);
         debug_assert!(band2 < 3);
         for inner_row in 0..3 {
-            self.swap_cols(band1 * 3 + inner_row, band2 * 3 + inner_row);
+            self.swap_rows(band1 * 3 + inner_row, band2 * 3 + inner_row);
         }
     }
 
     #[inline]
-    fn transpose(&mut self) {
+    pub(crate) fn transpose(&mut self) {
         use std::iter::repeat;
         self.swap_cells(
             (0..9)

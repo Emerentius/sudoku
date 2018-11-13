@@ -74,3 +74,8 @@ Version 0.7.0 (2018-08-19)
    `(Pub)Entry`  -> `InvalidEntry` <br>
    `LineFormatParseError` -> `LineParseError` <br>
    `BlockFormatParseError` -> `BlockParseError`
+
+Unreleased
+==========
+* Add `Sudoku::canonicalized`. Maps all sudokus of an equivalence class to the same sudoku.
+  Limited to fully solved, valid sudokus (for now).

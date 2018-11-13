@@ -4,6 +4,7 @@ mod digit;
 pub mod positions;
 mod candidate;
 mod cell_state;
+mod canonicalization;
 
 pub(crate) use self::{
     positions::*,

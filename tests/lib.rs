@@ -348,6 +348,31 @@ fn parse_permissive() {
     }
 }
 
+#[test]
+fn canonicalize() {
+    let mut sudoku = Sudoku::generate_filled();
+    let canonical = sudoku.canonicalized().unwrap();
+
+    for i in 0..1_000 {
+        sudoku.shuffle();
+        let recanonicalized = sudoku.canonicalized().unwrap();
+        if recanonicalized != canonical {
+            panic!("canonicalize(shuffle(canonical_grid)) != canonical_grid on attempt nr {}\nbefore {}\nafter  {}", i, canonical.to_str_line(), recanonicalized.to_str_line());
+        }
+    }
+}
+
+#[test]
+fn canonicalize_idempotency() {
+    for _ in 0..1_000 {
+        let mut sudoku = Sudoku::generate_filled().canonicalized().unwrap();
+        let recanonicalized = sudoku.canonicalized().unwrap();
+        if sudoku != recanonicalized {
+            panic!("canonicalize(canonicalize(sudoku)) != canonicalize(sudoku)\n1. {}\n2. {}", recanonicalized.to_str_line(), sudoku.to_str_line());
+        }
+    }
+}
+
 #[allow(unused)]
 // as it stands SudokuLine seems to be unnameable because it is not exported
 // compile time check to see if it is constructable and printable

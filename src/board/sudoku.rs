@@ -558,11 +558,29 @@ impl Sudoku {
     }
 
     /// Check whether the sudoku is solved.
+    //
+    // iterates through all cells and checks for each row, col and block
+    // if all 9 digits are present
     pub fn is_solved(&self) -> bool {
-        SudokuSolver::from_sudoku(*self)
-            .ok()
-            .as_ref()
-            .map_or(false, SudokuSolver::is_solved)
+        use ::bitset::Set;
+        use ::board::*;
+        use ::helper::HouseArray;
+
+        // collection of digit sets for all 9 rows, 9 cols and 9 blocks
+        let mut house_digits = HouseArray([Set::NONE; N_HOUSES]);
+
+        for (cell, &content) in Cell::all().zip(self.0.iter()) {
+            let digit = match Digit::new_checked(content) {
+                None => return false,
+                Some(digit) => digit.as_set(),
+            };
+
+            house_digits[cell.row()] |= digit;
+            house_digits[cell.col()] |= digit;
+            house_digits[cell.block()] |= digit;
+        }
+
+        house_digits == HouseArray([Set::ALL; N_HOUSES])
     }
 
     /// Returns number of filled cells

@@ -50,7 +50,7 @@ impl<T> IndexMut<Cell> for CellArray<T> {
 }
 
 ///////////////////////////////
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub(crate) struct HouseArray<T>(pub [T; 27]);
 
 impl<T, IDX: Into<House>> Index<IDX> for HouseArray<T> {

@@ -6,7 +6,7 @@ pub(crate) mod hidden_subsets;
 pub(crate) mod basic_fish;
 
 use super::StrategySolver;
-use helper::Unsolvable;
+use crate::helper::Unsolvable;
 
 /// The strategies that can be used to find hints, solve or grade a sudoku.
 ///

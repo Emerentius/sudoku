@@ -1,4 +1,4 @@
-use ::std::num::NonZeroU8;
+use std::num::NonZeroU8;
 
 // define digit separately because it has an offset
 /// A digit that can be entered in a cell of a sudoku.

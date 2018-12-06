@@ -1,6 +1,6 @@
-use helper::{Unsolvable, CellArray};
-use bitset::Set;
-use board::{
+use crate::helper::{Unsolvable, CellArray};
+use crate::bitset::Set;
+use crate::board::{
     Digit,
     positions::{
         Chute,

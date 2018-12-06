@@ -1,5 +1,5 @@
-use board::Digit;
-use bitset::Set;
+use crate::board::Digit;
+use crate::bitset::Set;
 
 /// Contains either a digit or all the candidates for an unsolved cell
 #[derive(Copy, Clone)]

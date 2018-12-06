@@ -1,6 +1,6 @@
-use helper::{Unsolvable, CellArray, HouseArray};
-use bitset::{Set, Iter as SetIter};
-use board::{
+use crate::helper::{Unsolvable, CellArray, HouseArray};
+use crate::bitset::{Set, Iter as SetIter};
+use crate::board::{
     Digit,
     positions::{
         Position,

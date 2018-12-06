@@ -1,5 +1,5 @@
-use bitset::Set;
-use board::{Digit, Cell, Row, Col, Block};
+use crate::bitset::Set;
+use crate::board::{Digit, Cell, Row, Col, Block};
 
 /// Represents a digit in a specific cell
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]

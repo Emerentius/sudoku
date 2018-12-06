@@ -1,9 +1,9 @@
 use rand::Rng;
 
-use consts::*;
-use generator::SudokuGenerator;
-use solver::SudokuSolver;
-use parse_errors::{BlockParseError, LineParseError, NotEnoughRows, InvalidEntry};
+use crate::consts::*;
+use crate::generator::SudokuGenerator;
+use crate::solver::SudokuSolver;
+use crate::parse_errors::{BlockParseError, LineParseError, NotEnoughRows, InvalidEntry};
 
 #[cfg(feature = "serde")]
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
@@ -41,7 +41,7 @@ struct ByteSudoku; // 81 byte format
 struct StrSudoku; // 81 char format (line sudoku)
 
 #[cfg(feature = "serde")]
-impl<'de> de::Visitor<'de> for ByteSudoku {
+impl de::Visitor<'_> for ByteSudoku {
     type Value = Sudoku;
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         write!(formatter, "81 numbers from 0 to 9 inclusive")
@@ -58,7 +58,7 @@ impl<'de> de::Visitor<'de> for ByteSudoku {
 }
 
 #[cfg(feature = "serde")]
-impl<'de> de::Visitor<'de> for StrSudoku {
+impl de::Visitor<'_> for StrSudoku {
     type Value = Sudoku;
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         write!(formatter, "81 numbers from 0 to 9 inclusive")
@@ -125,7 +125,7 @@ impl fmt::Debug for Sudoku {
     }
 }
 
-type R = ::rand::rngs::ThreadRng;
+type R = rand::rngs::ThreadRng;
 pub type Iter<'a> = iter::Map<slice::Iter<'a, u8>, fn(&u8) -> Option<u8>>; // Iter over Sudoku cells
 
 impl Sudoku {
@@ -161,7 +161,7 @@ impl Sudoku {
             .iter_mut()
             .enumerate()
             .for_each(|(cell, place)| *place = cell);
-        ::rand::thread_rng().shuffle(&mut cell_order);
+        rand::thread_rng().shuffle(&mut cell_order);
 
         // remove cell content if possible without destroying uniqueness of solution
         const CUTOFF: usize = 20;
@@ -562,9 +562,9 @@ impl Sudoku {
     // iterates through all cells and checks for each row, col and block
     // if all 9 digits are present
     pub fn is_solved(&self) -> bool {
-        use ::bitset::Set;
-        use ::board::*;
-        use ::helper::HouseArray;
+        use crate::bitset::Set;
+        use crate::board::*;
+        use crate::helper::HouseArray;
 
         // collection of digit sets for all 9 rows, 9 cols and 9 blocks
         let mut house_digits = HouseArray([Set::NONE; N_HOUSES]);
@@ -611,8 +611,8 @@ impl Sudoku {
     pub fn shuffle(&mut self) {
         // SmallRng is a good 10% faster, but it uses XorShiftRng which can fail some statistical tests
         // There are some adaptions that fix this, but I don't know if Rust implements them.
-        //let rng = &mut ::rand::rngs::SmallRng::from_rng(::rand::thread_rng()).unwrap();
-        let rng = &mut ::rand::thread_rng();
+        //let rng = &mut rand::rngs::SmallRng::from_rng(rand::thread_rng()).unwrap();
+        let rng = &mut rand::thread_rng();
 
         self.shuffle_digits(rng);
         self.shuffle_bands(rng);
@@ -953,7 +953,7 @@ impl fmt::Debug for SudokuBlock {
 
 impl fmt::Display for SudokuBlock {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use board::{Digit, Cell};
+        use crate::board::{Digit, Cell};
         for (digit, cell) in self.0.iter().cloned().map(Digit::new_checked).zip(Cell::all()) {
             #[cfg_attr(rustfmt, rustfmt_skip)]
             match (cell.row().get(), cell.col().get()) {

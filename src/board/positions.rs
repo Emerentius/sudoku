@@ -4,10 +4,10 @@
 #![allow(unused, missing_docs)]
 
 use std::num::NonZeroU8;
-use bitset::Set;
-use helper::Unsolvable;
-use board::Digit;
-use consts::*;
+use crate::bitset::Set;
+use crate::helper::Unsolvable;
+use crate::board::Digit;
+use crate::consts::*;
 
 #[inline(always)]
 pub(crate) fn row(cell: u8) -> u8 {
@@ -350,13 +350,13 @@ impl MiniLine {
 
 /// Generic struct for a cell inside a given set of cells, like e.g. a [`House`]
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
-pub struct Position<IN>(pub(crate) u8, ::std::marker::PhantomData<IN>);
+pub struct Position<IN>(pub(crate) u8, std::marker::PhantomData<IN>);
 
 impl<IN> Position<IN> {
     /// Construct a new instance of this type.
     pub fn new(pos: u8) -> Self {
         // TODO: make panic on invalid positions
-        Position(pos, ::std::marker::PhantomData)
+        Position(pos, std::marker::PhantomData)
     }
 
     /// Returns the number contained within.

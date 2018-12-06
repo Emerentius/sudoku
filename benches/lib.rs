@@ -1,5 +1,4 @@
 #![feature(test)]
-extern crate sudoku;
 extern crate test;
 use sudoku::Sudoku;
 use sudoku::strategy::{Strategy, StrategySolver};

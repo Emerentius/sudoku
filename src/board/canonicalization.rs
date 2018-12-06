@@ -1,4 +1,4 @@
-use ::Sudoku;
+use crate::Sudoku;
 
 pub(crate) fn canonicalize_solved_sudoku(sudoku: Sudoku) -> Sudoku {
     let mut min_transformations = vec![];
@@ -53,7 +53,7 @@ pub(crate) fn canonicalize_solved_sudoku(sudoku: Sudoku) -> Sudoku {
                 min_sudoku.swap_rows(offset + 1, offset + 1 + second_choice);
             }
 
-            if &min_sudoku.0[27..54] > &min_sudoku.0[54..] {
+            if min_sudoku.0[27..54] > min_sudoku.0[54..] {
                 min_sudoku.swap_bands(1, 2);
             };
 
@@ -86,11 +86,11 @@ impl Permutation3 {
         Permutation3(perm % 3, perm / 3)
     }
 
-    fn choice3(&self) -> u8 {
+    fn choice3(self) -> u8 {
         self.0
     }
 
-    fn choice2(&self) -> u8 {
+    fn choice2(self) -> u8 {
         self.1
     }
 }

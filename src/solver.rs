@@ -38,8 +38,9 @@
 //  for a port under the AGPLv3 license in the forum thread
 //		http://forum.enjoysudoku.com/3-77us-solver-2-8g-cpu-testcase-17sodoku-t30470-270.html#p262718
 
-use ::Sudoku;
-use helper::Unsolvable;
+use crate::Sudoku;
+use crate::helper::Unsolvable;
+use crunchy::unroll;
 
 // masks of 27 bits
 const NONE: u32 = 0;
@@ -54,7 +55,7 @@ enum Solutions<'a> {
     Buffer(&'a mut [[u8; 81]], usize),
 }
 
-impl<'a> Solutions<'a> {
+impl Solutions<'_> {
     fn len(&self) -> usize {
         match self {
             Solutions::Vector(v) => v.len(),
@@ -220,7 +221,7 @@ impl SudokuSolver {
             self.pairs[band] = cells2 ^ cells3;
 
             // new singles, ignore previously solved ones
-            let mut singles = (cells1 ^ cells2) & self.unsolved_cells[band];
+            let singles = (cells1 ^ cells2) & self.unsolved_cells[band];
 
             'singles: for cell_mask_single in mask_iter(singles) {
                 single_applied = true;
@@ -515,7 +516,6 @@ impl SudokuSolver {
     fn extract_solution(&self) -> Sudoku {
         let mut sudoku = [0; 81];
         for (subband, &mask) in (0..27).zip(self.poss_cells.0.iter()) {
-            let mut mask = mask;
             let digit = subband / 3;
             let base_cell_in_band = subband % 3 * 27;
             for cell_mask in mask_iter(mask) {
@@ -918,27 +918,27 @@ struct UncheckedIndexArray3([u32; 3]);
 #[derive(Clone, Copy)]
 struct UncheckedIndexArray27([u32; 27]);
 
-impl ::std::ops::Index<usize> for UncheckedIndexArray3 {
+impl std::ops::Index<usize> for UncheckedIndexArray3 {
     type Output = u32;
     fn index(&self, idx: usize) -> &Self::Output {
         index(&self.0, idx)
     }
 }
 
-impl ::std::ops::IndexMut<usize> for UncheckedIndexArray3 {
+impl std::ops::IndexMut<usize> for UncheckedIndexArray3 {
     fn index_mut(&mut self, idx: usize) -> &mut Self::Output {
         index_mut(&mut self.0, idx)
     }
 }
 
-impl ::std::ops::Index<usize> for UncheckedIndexArray27 {
+impl std::ops::Index<usize> for UncheckedIndexArray27 {
     type Output = u32;
     fn index(&self, idx: usize) -> &Self::Output {
         index(&self.0, idx)
     }
 }
 
-impl ::std::ops::IndexMut<usize> for UncheckedIndexArray27 {
+impl std::ops::IndexMut<usize> for UncheckedIndexArray27 {
     fn index_mut(&mut self, idx: usize) -> &mut Self::Output {
         index_mut(&mut self.0, idx)
     }
@@ -946,7 +946,7 @@ impl ::std::ops::IndexMut<usize> for UncheckedIndexArray27 {
 
 // for each set bit in mask, return a mask with only that bit set
 fn mask_iter(mask: u32) -> impl Iterator<Item = u32> {
-    ::std::iter::repeat(()).scan(mask, |mask, ()| {
+    std::iter::repeat(()).scan(mask, |mask, ()| {
         if *mask == 0 {
             return None;
         }

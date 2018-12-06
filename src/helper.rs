@@ -1,10 +1,10 @@
 // A collection of internal helper types
 // like arrays that can only be indexed by the right position structs
 
-use consts::N_CELLS;
-use board::{Cell, House, Digit};
-use ::std::ops::{Deref, DerefMut, Index, IndexMut};
-use ::std::fmt;
+use crate::consts::N_CELLS;
+use crate::board::{Cell, House, Digit};
+use std::ops::{Deref, DerefMut, Index, IndexMut};
+use std::fmt;
 
 #[derive(Debug)]
 pub(crate) struct Unsolvable;
@@ -13,7 +13,7 @@ pub(crate) struct Unsolvable;
 pub(crate) struct CellArray<T>(pub [T; N_CELLS]);
 
 impl<T: fmt::Debug> fmt::Debug for CellArray<T> {
-    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> Result<(), ::std::fmt::Error> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
         (&self.0[..]).fmt(f)
     }
 }

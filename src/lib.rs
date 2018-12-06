@@ -1,15 +1,16 @@
 #![warn(missing_docs)]
-#![allow(renamed_and_removed_lints, unknown_lints)]
-#![cfg_attr(
-    feature = "cargo-clippy",
-    allow(
-        clippy_complexity,
-        match_bool,
-        unreadable_literal,
-        needless_pass_by_value,
-        wrong_self_convention,
-        write_with_newline,
-    )
+#![allow(
+    clippy::complexity,
+    clippy::match_bool,
+    clippy::unreadable_literal,
+    clippy::needless_pass_by_value,
+    clippy::wrong_self_convention,
+    clippy::write_with_newline,
+    clippy::inconsistent_digit_grouping,
+    clippy::len_zero,
+    clippy::len_without_is_empty,
+    clippy::needless_range_loop,
+    clippy::trivially_copy_pass_by_ref
 )]
 //! Utilities for classical 9x9 sudokus.
 //!
@@ -42,11 +43,6 @@
 //!     let cell_contents: [u8; 81] = solution.to_bytes();
 //! }
 //! ```
-#[macro_use]
-extern crate crunchy;
-extern crate rand;
-#[cfg(feature = "serde")]
-extern crate serde;
 
 pub mod bitset;
 mod consts;
@@ -57,4 +53,4 @@ pub mod strategy;
 pub mod board;
 pub mod parse_errors;
 
-pub use board::Sudoku;
+pub use crate::board::Sudoku;

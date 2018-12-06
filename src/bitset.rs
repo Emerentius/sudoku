@@ -6,8 +6,8 @@
 //! fixed-length bitsets for digits and various sudoku positions.
 
 use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not, BitXor, BitXorAssign};
-use helper::Unsolvable;
-use board::{Digit, Cell, Line, House, Position};
+use crate::helper::Unsolvable;
+use crate::board::{Digit, Cell, Line, House, Position};
 
 /// Generic, fixed-size bitset
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -216,7 +216,7 @@ mod set_element {
             + BitXor<Output = Self::Storage> + BitXorAssign
             + Not<Output = Self::Storage>
             + PartialOrd
-            + ::std::fmt::Binary
+            + std::fmt::Binary
             + Copy;
 
         fn count_possibilities(set: Self::Storage) -> u32;
@@ -311,7 +311,7 @@ impl_iter_for_setiter!(
     //Position<Chute> => Position::new,
 );
 
-use ::std::fmt;
+use std::fmt;
 impl<T: SetElement> fmt::Binary for Set<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:b}", self.0)

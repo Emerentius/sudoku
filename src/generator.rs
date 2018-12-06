@@ -1,11 +1,11 @@
 use rand::Rng;
 
-use consts::*;
-use board::*;
-use ::Sudoku;
-use board::{Candidate};
-use helper::{CellArray, HouseArray, Unsolvable};
-use bitset::Set;
+use crate::consts::*;
+use crate::board::*;
+use crate::Sudoku;
+use crate::board::{Candidate};
+use crate::helper::{CellArray, HouseArray, Unsolvable};
+use crate::bitset::Set;
 
 // Sudoku generation is done via randomized solving of empty grids
 // the solver is based on jsolve
@@ -209,7 +209,7 @@ impl SudokuGenerator {
     fn find_good_random_guess(&mut self) -> Candidate {
         let best_cell = self.find_cell_min_poss();
         let poss_digits = self.cell_poss_digits[best_cell];
-        let choice = ::rand::thread_rng().gen_range(0, poss_digits.len());
+        let choice = rand::thread_rng().gen_range(0, poss_digits.len());
         let digit = poss_digits.into_iter().nth(choice as usize).unwrap();
         Candidate { digit, cell: best_cell }
     }
@@ -262,7 +262,7 @@ impl SudokuGenerator {
         // not necessary, but ~15% faster
         let mut stack = Vec::with_capacity(N_CELLS);
         let mut perm = [1, 2, 3, 4, 5, 6, 7, 8, 9];
-        ::rand::thread_rng().shuffle(&mut perm);
+        rand::thread_rng().shuffle(&mut perm);
 
         stack.extend((0..9).zip(perm.iter()).map(|(cell, &digit)| Candidate::new(cell, digit)));
 

@@ -1,6 +1,6 @@
-use helper::{Unsolvable, HouseArray, DigitArray};
-use bitset::{Set, Iter as SetIter};
-use board::{
+use crate::helper::{Unsolvable, HouseArray, DigitArray};
+use crate::bitset::{Set, Iter as SetIter};
+use crate::board::{
     Digit,
     positions::{
         Position,
@@ -37,10 +37,11 @@ pub(crate) fn find_hidden_subsets (
         // subsets of 5 and more numbers always have complementary subsets
         // of 9 - subset_size
         if digit_set.len() > subset_size { return false }
-        if digit_set.len() == subset_size && total_poss_pos.len() == subset_size {
-            if on_subset(house, digit_set, total_poss_pos) {
-                return true;
-            }
+        if digit_set.len() == subset_size
+            && total_poss_pos.len() == subset_size
+            && on_subset(house, digit_set, total_poss_pos)
+        {
+            return true;
         }
 
         let mut digits = digits;

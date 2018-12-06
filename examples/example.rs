@@ -1,5 +1,3 @@
-extern crate sudoku;
-
 use sudoku::Sudoku;
 
 fn main() {

@@ -1,11 +1,11 @@
 //! Results of strategy applications
 
-use board::{Candidate};
+use crate::board::{Candidate};
 use super::Strategy;
-use board::*;
-use bitset::Set;
+use crate::board::*;
+use crate::bitset::Set;
 
-type DeductionRange = ::std::ops::Range<usize>;
+type DeductionRange = std::ops::Range<usize>;
 type _Deduction = Deduction<DeductionRange>;
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
@@ -18,7 +18,7 @@ pub struct Deductions {
 
 /// Borrowing iterator over [`Deductions`]
 pub struct Iter<'a> {
-	deductions: ::std::slice::Iter<'a, _Deduction>,
+	deductions: std::slice::Iter<'a, _Deduction>,
 	eliminated_entries: &'a [Candidate]
 }
 
@@ -100,7 +100,7 @@ pub enum Deduction<T> {
     #[doc(hidden)] __NonExhaustive
 }
 
-impl<'a> Deduction<&'a [Candidate]> {
+impl Deduction<&'_ [Candidate]> {
 	/// Returns the type of strategy that was used to make this deduction.
 	pub fn strategy(&self) -> Strategy {
 		use self::Deduction::*;
@@ -118,7 +118,7 @@ impl<'a> Deduction<&'a [Candidate]> {
 			}
 			//SinglesChain { .. } => Strategy::SinglesChain,
 			Subsets { house, positions, conflicts, .. } => {
-				use board::positions::HouseType::*;
+				use crate::board::positions::HouseType::*;
 				let conflict_cell = conflicts[0].cell;
 				let conflict_pos = match house.categorize() {
 					Row(_) => conflict_cell.row_pos(),

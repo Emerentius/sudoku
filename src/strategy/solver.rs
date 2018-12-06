@@ -1,14 +1,14 @@
-use ::Sudoku;
-use bitset::Set;
-use board::Candidate;
-use helper::{HouseArray, CellArray, DigitArray, Unsolvable};
-use board::*;
-use strategy::{
+use crate::Sudoku;
+use crate::bitset::Set;
+use crate::board::Candidate;
+use crate::helper::{HouseArray, CellArray, DigitArray, Unsolvable};
+use crate::board::*;
+use crate::strategy::{
 	deduction::{Deduction, Deductions},
 	strategies::*,
 };
 
-type EliminationsRange = ::std::ops::Range<usize>;
+type EliminationsRange = std::ops::Range<usize>;
 type _Deduction = Deduction<EliminationsRange>;
 
 /// The `StrategySolver` is the struct for solving sudokus with
@@ -432,10 +432,8 @@ impl StrategySolver {
 				let candidate = Candidate { cell, digit };
 				Self::push_new_candidate(sudoku, deduced_entries, candidate, deductions, Deduction::NakedSingles(candidate))?;
 			}
-		} else {
-			if cell_mask.is_empty() {
-				return Err(Unsolvable)
-			}
+		} else if cell_mask.is_empty() {
+			return Err(Unsolvable);
 		}
 		Ok(())
 	}

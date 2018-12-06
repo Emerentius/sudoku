@@ -1,5 +1,5 @@
 //! Errors that may be encountered when reading a sudoku from a string
-use board::{row, col, block};
+use crate::board::{row, col, block};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 /// An invalid sudoku entry encountered during parsing.

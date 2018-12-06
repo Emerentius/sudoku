@@ -4,7 +4,6 @@
 // For demonstration purposes only. If you're gonna use this
 // you may as well not do the problem at all
 
-extern crate sudoku;
 use sudoku::Sudoku;
 
 fn main() {

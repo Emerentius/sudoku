@@ -1,4 +1,3 @@
-extern crate sudoku;
 use sudoku::Sudoku;
 
 fn read_sudokus(sudokus_str: &str) -> Vec<Sudoku> {
@@ -365,7 +364,7 @@ fn canonicalize() {
 #[test]
 fn canonicalize_idempotency() {
     for _ in 0..1_000 {
-        let mut sudoku = Sudoku::generate_filled().canonicalized().unwrap();
+        let sudoku = Sudoku::generate_filled().canonicalized().unwrap();
         let recanonicalized = sudoku.canonicalized().unwrap();
         if sudoku != recanonicalized {
             panic!("canonicalize(canonicalize(sudoku)) != canonicalize(sudoku)\n1. {}\n2. {}", recanonicalized.to_str_line(), sudoku.to_str_line());

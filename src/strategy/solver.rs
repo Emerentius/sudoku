@@ -112,6 +112,35 @@ impl StrategySolver {
 		}
 	}
 
+	/// Construct a new StrategySolver from a printout of cell candidates.
+	/// This allows communicating the impossibility of some candidates, that aren't already
+	/// trivially conflicting with entries.
+	pub(crate) fn from_grid_state_str(grid_state: &str) -> StrategySolver {
+		let mut _grid_state = [CellState::Candidates(Set::NONE); 81];
+		let entries = grid_state.lines()
+			.flat_map(|line| line.split_whitespace())
+			.filter(|entry| entry.parse::<u32>().is_ok());
+
+		for (cell_state, entries) in _grid_state.iter_mut().zip(entries) {
+			let entries = entries.as_bytes();
+			if entries.len() == 1 {
+				let digit = Digit::new(entries[0] - b'0');
+				*cell_state = CellState::Digit(digit);
+				continue
+			}
+
+			let mut candidates = Set::NONE;
+			for digit in entries.iter()
+				.map(|byte| Digit::new(byte - b'0'))
+			{
+				candidates |= digit;
+			}
+			*cell_state = CellState::Candidates(candidates);
+		}
+
+		Self::from_grid_state(_grid_state)
+	}
+
 	/// Returns the current state of the Sudoku
 	pub fn to_sudoku(&mut self) -> Sudoku {
 		self.update_grid();
@@ -119,16 +148,20 @@ impl StrategySolver {
 	}
 
 	/// Returns the current state of the Sudoku including potential candidates
-	pub fn grid_state(&mut self) -> [CellState; 81] {
-		let mut grid = [CellState::Candidates(Set::NONE); 81];
-		self.update_grid();
-		// TODO: continue despite error
-		let _ = self._update_cell_poss_house_solved(false);
+	pub fn grid_state(&self) -> [CellState; 81] {
+		// cloning so .update_grid() can be called which updates caches
+		let mut solver = self.clone();
 
-		for (cell, &digits) in self.cell_poss_digits.state.iter().enumerate() {
+		let mut grid = [CellState::Candidates(Set::NONE); 81];
+
+		solver.update_grid();
+		// TODO: continue despite error
+		let _ = solver._update_cell_poss_house_solved(false);
+
+		for (cell, &digits) in solver.cell_poss_digits.state.iter().enumerate() {
 			grid[cell] = CellState::Candidates(digits);
 		}
-		for (cell, &digit) in self.grid.state.0.iter().enumerate().filter(|(_, &digit)| digit != 0) {
+		for (cell, &digit) in solver.grid.state.0.iter().enumerate().filter(|(_, &digit)| digit != 0) {
 			grid[cell] = CellState::Digit(Digit::new(digit));
 		}
 		grid
@@ -828,6 +861,45 @@ impl StrategySolver {
 	*/
 }
 
+impl std::fmt::Display for StrategySolver {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+		let mut solver = self.clone();
+
+		// naked singles and solved entries aren't distinguishable in the string representation
+		// so treat them as naked singles uniformly and remove all conflicting candidates
+		solver.try_solve(&[Strategy::NakedSingles]);
+
+		print_gridstate(
+			f,
+			solver.grid_state(),
+			"┌",
+			"┐",
+			"└",
+			"┘",
+			"├",
+			"┤",
+			"┬",
+			"┴",
+			"┼",
+			"─",
+			"│",
+			/*
+			"+",
+			"+",
+			"+",
+			"+",
+			"+",
+			"+",
+			"+",
+			"+",
+			"+",
+			"-",
+			"|",
+			*/
+		)
+	}
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct State<T> {
 	next_deduced: u16,
@@ -904,4 +976,96 @@ mod test {
         let solved_sudokus = filter_9(read_sudokus( include_str!("../../sudokus/Lines/solved_medium_sudokus.txt") ));
         strategy_solver_correct_solution(sudokus, solved_sudokus, StrategySolver::solve);
     }
+
+	#[test]
+	fn roundtrip_grid_state_str() {
+        let sudokus = read_sudokus( include_str!("../../sudokus/Lines/easy_sudokus.txt") );
+
+		for sudoku in sudokus {
+			let solver = StrategySolver::from_sudoku(sudoku);
+			let grid_state_string = solver.to_string();
+			let solver2 = StrategySolver::from_grid_state_str(&grid_state_string);
+			let grid_state_string2 = solver2.to_string();
+			if grid_state_string != grid_state_string2 {
+				panic!("\n{} \n{}", grid_state_string, grid_state_string2);
+			}
+		}
+
+	}
+}
+
+fn print_gridstate(
+	f: &mut std::fmt::Formatter,
+	grid_state: [CellState; 81],
+	upper_left_corner: &str,
+	upper_right_corner: &str,
+	lower_left_corner: &str,
+	lower_right_corner: &str,
+
+	left_junction: &str,
+	right_junction: &str,
+	upper_junction: &str,
+	lower_junction: &str,
+	middle_junction: &str,
+
+	horizontal_bar: &str,
+	vertical_bar: &str,
+) -> Result<(), std::fmt::Error> {
+	let mut column_widths = [0; 9];
+	for col in 0..9 {
+		let max_width = (0..9).map(|row| row * 9 + col)
+			.map(|cell| match grid_state[cell] {
+				CellState::Digit(_) => 1,
+				CellState::Candidates(digits) => digits.len(),
+			})
+			.max()
+			.unwrap();
+
+		column_widths[col] = max_width;
+	}
+
+	let mut lengths = [0; 3];
+	for stack in 0..3 {
+		lengths[stack] = column_widths[stack*3..][..3].iter().sum::<u8>() as usize;
+	}
+	_print_separator(f, upper_left_corner, upper_junction, upper_right_corner, horizontal_bar, lengths)?;
+	for band in 0..3 {
+		for row in 0..3 {
+			write!(f, "{}", vertical_bar)?;
+			for stack in 0..3 {
+				for col in 0..3 {
+					let full_row = band * 3 + row;
+					let full_col = stack * 3 + col;
+					let cell_state = grid_state[full_row * 9 + full_col];
+					match cell_state {
+						CellState::Digit(digit) => write!(f, " {:<1$} ", digit.get(), column_widths[full_col] as usize)?,
+						CellState::Candidates(cands) => {
+							write!(f, " ")?;
+							for digit in cands {
+								write!(f, "{}", digit.get())?;
+							}
+							write!(f, "{:1$}", ' ', (1 + column_widths[full_col] - cands.len()) as usize)?;
+						}
+					}
+				}
+				write!(f, "{}", vertical_bar)?;
+			}
+			writeln!(f)?;
+		}
+		if band != 2 {
+			_print_separator(f, left_junction, middle_junction, right_junction, horizontal_bar, lengths)?;
+		}
+	}
+	_print_separator(f, lower_left_corner, lower_junction, lower_right_corner, horizontal_bar, lengths)
+}
+
+fn _print_separator(f: &mut std::fmt::Formatter, left_junction: &str, middle_junction: &str, right_junction: &str, horizontal_bar: &str, lengths: [usize; 3]) -> Result<(), std::fmt::Error> {
+	writeln!(f, "{left}{line0}{middle}{line1}{middle}{line2}{right}",
+		line0 = horizontal_bar.repeat(lengths[0] + 6),
+		line1 = horizontal_bar.repeat(lengths[1] + 6),
+		line2 = horizontal_bar.repeat(lengths[2] + 6),
+		left = left_junction,
+		middle = middle_junction,
+		right = right_junction,
+	)
 }

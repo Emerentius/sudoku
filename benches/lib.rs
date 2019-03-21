@@ -24,6 +24,8 @@ const ALL_STRATEGIES: &'static [Strategy] = &[
     Strategy::NakedTriples,     // 36
     Strategy::Swordfish,        // 38
     Strategy::HiddenTriples,    // 40
+    Strategy::XyWing,           // 42
+    Strategy::XyzWing,          // 44
     Strategy::NakedQuads,       // 50
     Strategy::Jellyfish,        // 52
     Strategy::HiddenQuads,      // 54

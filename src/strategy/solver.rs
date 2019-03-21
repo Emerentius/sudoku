@@ -723,6 +723,90 @@ impl StrategySolver {
 		)
 	}
 
+	pub(crate) fn find_xy_wing(&mut self, stop_after_first: bool) -> Result<(), Unsolvable> {
+		self.update_cell_poss_house_solved()?;
+		let cell_poss_digits = &self.cell_poss_digits.state;
+		let eliminated_entries = &mut self.eliminated_entries;
+		let deductions = &mut self.deductions;
+
+		xy_wing::find_xy_wing(
+			cell_poss_digits,
+			stop_after_first,
+			|(cell_hinge, poss_digits_hinge), [(cell_pincer1, poss_digs1), (cell_pincer2, poss_digs2)]| {
+				// TODO: pass common digit as argument to closure
+				let common_digit = (poss_digs1 & poss_digs2).unique().unwrap().unwrap();
+				let common_neighbors = cell_pincer1.neighbors_set() & cell_pincer2.neighbors_set();
+
+				let n_eliminated = eliminated_entries.len();
+
+				let conflicts = common_neighbors.into_iter()
+					.filter(|&cell| cell_poss_digits[cell].contains(common_digit) )
+					.map(|cell| Candidate {
+						cell, digit: common_digit
+					});
+				eliminated_entries.extend(conflicts);
+
+				let rg_eliminations = n_eliminated .. eliminated_entries.len();
+				if rg_eliminations.len() > 0 {
+					deductions.push(
+						Deduction::Wing {
+							hinge: cell_hinge,
+							hinge_digits: poss_digits_hinge,
+							pincers: cell_pincer1.as_set() | cell_pincer2,
+							conflicts: rg_eliminations,
+						}
+					);
+					true
+				} else {
+					false
+				}
+			}
+		)
+	}
+
+	pub(crate) fn find_xyz_wing(&mut self, stop_after_first: bool) -> Result<(), Unsolvable> {
+		self.update_cell_poss_house_solved()?;
+		let cell_poss_digits = &self.cell_poss_digits.state;
+		let eliminated_entries = &mut self.eliminated_entries;
+		let deductions = &mut self.deductions;
+
+		xyz_wing::find_xyz_wing(
+			cell_poss_digits,
+			stop_after_first,
+			|(cell_hinge, poss_digits_hinge), [(cell_pincer1, poss_digs1), (cell_pincer2, poss_digs2)]| {
+				// TODO: pass common digit as argument to closure
+				let common_digit = (poss_digs1 & poss_digs2).unique().unwrap().unwrap();
+				let common_neighbors = cell_hinge.neighbors_set() & cell_pincer1.neighbors_set() & cell_pincer2.neighbors_set();
+
+				assert_eq!(common_neighbors.len(), 2);
+
+				let n_eliminated = eliminated_entries.len();
+
+				let conflicts = common_neighbors.into_iter()
+					.filter(|&cell| cell_poss_digits[cell].contains(common_digit) )
+					.map(|cell| Candidate {
+						cell, digit: common_digit
+					});
+				eliminated_entries.extend(conflicts);
+
+				let rg_eliminations = n_eliminated .. eliminated_entries.len();
+				if rg_eliminations.len() > 0 {
+					deductions.push(
+						Deduction::Wing {
+							hinge: cell_hinge,
+							hinge_digits: poss_digits_hinge,
+							pincers: cell_pincer1.as_set() | cell_pincer2,
+							conflicts: rg_eliminations,
+						}
+					);
+					true
+				} else {
+					false
+				}
+			}
+		)
+	}
+
 	/*
 	pub(crate) fn find_singles_chain(&mut self, stop_after_first: bool) -> Result<(), Unsolvable> {
         #[derive(Copy, Clone, PartialEq, Eq)]

@@ -6,6 +6,8 @@ pub(crate) mod locked_candidates;
 pub(crate) mod naked_subsets;
 pub(crate) mod hidden_subsets;
 pub(crate) mod basic_fish;
+pub(crate) mod xy_wing;
+pub(crate) mod xyz_wing;
 
 use super::StrategySolver;
 use crate::helper::Unsolvable;
@@ -29,6 +31,8 @@ pub enum Strategy {
     XWing,
     Swordfish,
     Jellyfish,
+	XyWing,
+	XyzWing,
     //SinglesChain,
     #[doc(hidden)] __NonExhaustive
 }
@@ -48,6 +52,8 @@ impl Strategy {
 		Strategy::NakedTriples,     // 36
 		Strategy::Swordfish,        // 38
 		Strategy::HiddenTriples,    // 40
+		Strategy::XyWing,           // 42
+		Strategy::XyzWing,          // 44
 		Strategy::NakedQuads,       // 50
 		Strategy::Jellyfish,        // 52
 		Strategy::HiddenQuads,      // 54
@@ -72,6 +78,8 @@ impl Strategy {
 			XWing => state.find_xwings(stop_after_first),
 			Swordfish => state.find_swordfish(stop_after_first),
 			Jellyfish => state.find_jellyfish(stop_after_first),
+			XyWing => state.find_xy_wing(stop_after_first),
+			XyzWing => state.find_xyz_wing(stop_after_first),
 			//SinglesChain => state.find_singles_chain(stop_after_first), // TODO: Implement non-eager SinglesChain
             _ => unimplemented!(),
         }

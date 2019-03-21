@@ -4,7 +4,7 @@
 #![allow(unused, missing_docs)]
 
 use std::num::NonZeroU8;
-use crate::bitset::Set;
+use crate::bitset::{Set, SetElement};
 use crate::helper::Unsolvable;
 use crate::board::Digit;
 use crate::consts::*;
@@ -527,6 +527,13 @@ impl Cell {
             .cloned()
             .map(Cell::new)
     }
+
+    /// Returns a set of the 20 cells that share a house with this one.
+    #[inline(always)]
+    pub(crate) fn neighbors_set(self) -> Set<Cell> {
+        (self.row().cells() | self.col().cells() | self.block().cells())
+            ^ self
+    }
 }
 
 impl Chute {
@@ -692,6 +699,12 @@ impl Set<Position<House>> {
     pub fn as_line_set(self) -> Set<Position<Line>> {
         debug_assert!(self.0 <= Set::<Position<Line>>::ALL.0);
         Set::from_bits(self.0)
+    }
+}
+
+impl<T: SetElement> From<T> for Set<T> {
+    fn from(element: T) -> Self {
+        element.as_set()
     }
 }
 

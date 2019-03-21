@@ -95,7 +95,16 @@ pub enum Deduction<T> {
 		positions: Set<Position<Line>>,
 		conflicts: T,
 	},
-
+	/// Result of [`XyWing`](super::Strategy::XyWing), [`XyzWing`](super::Strategy::XyzWing)
+	Wing {
+		hinge: Cell,
+		// TODO: having just an identifier of Xy-, Xyz-, etc-wing is ugly
+		//       but so is just having the hinge_digits as a set and not the pincer digits
+		//       Find a way to get rid of that
+		hinge_digits: Set<Digit>,
+		pincers: Set<Cell>,
+		conflicts: T,
+	},
     //SinglesChain(T),
     #[doc(hidden)] __NonExhaustive
 }
@@ -144,6 +153,13 @@ impl Deduction<&'_ [Candidate]> {
 					_ => unreachable!(),
 				}
 			}*/
+			Wing { hinge_digits, .. } => {
+				match hinge_digits.len() {
+					2 => Strategy::XyWing,
+					3 => Strategy::XyzWing,
+					_ => unreachable!(),
+				}
+			},
 			__NonExhaustive => unreachable!(),
 		}
 	}
@@ -174,6 +190,12 @@ impl _Deduction {
 				conflicts
 			}
 			=> BasicFish { lines, positions, digit, conflicts: &eliminated[conflicts]},
+
+			Wing {
+				hinge, hinge_digits, pincers,
+				conflicts
+			}
+			=> Wing { hinge, hinge_digits, pincers, conflicts: &eliminated[conflicts] },
 
 			//SinglesChain(x) => SinglesChain(&eliminated[x]),
 			__NonExhaustive => __NonExhaustive

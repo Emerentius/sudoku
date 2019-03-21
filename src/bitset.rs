@@ -7,7 +7,7 @@
 
 use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not, BitXor, BitXorAssign};
 use crate::helper::Unsolvable;
-use crate::board::{Digit, Cell, Line, House, Position};
+use crate::board::{Digit, Cell, Row, Col, Line, House, Position};
 
 /// Generic, fixed-size bitset
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -152,6 +152,12 @@ where
         *self & other != Set::NONE
     }
 
+    /// Checks if `self` contains `other`.
+    pub fn contains(&self, other: impl Into<Self>) -> bool {
+        let other = other.into();
+        *self & other == other
+    }
+
     /// Returns the number of elements in this set.
     pub fn len(&self) -> u8 {
         T::count_possibilities(self.0) as u8
@@ -201,26 +207,38 @@ where
 
 ///////////////////////////////////////////////////////////////////////////////////////////////
 
-use self::set_element::SetElement;
+/// Trait for types that can be stored in a [`Set`]
+#[allow(missing_docs)]
+pub trait SetElement: Sized + set_element::Sealed {
+    const ALL: Self::Storage;
+    const NONE: Self::Storage;
+
+    type Storage:
+        BitAnd<Output = Self::Storage> + BitAndAssign
+        + BitOr<Output = Self::Storage> + BitOrAssign
+        + BitXor<Output = Self::Storage> + BitXorAssign
+        + Not<Output = Self::Storage>
+        + PartialOrd
+        + std::fmt::Binary
+        + Copy;
+
+    fn count_possibilities(set: Self::Storage) -> u32;
+    fn as_set(self) -> Set<Self>;
+}
 mod set_element {
-    use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not, BitXor, BitXorAssign};
-    use super::Set;
+    use super::*;
+    pub trait Sealed {}
 
-    pub trait SetElement: Sized {
-        const ALL: Self::Storage;
-        const NONE: Self::Storage;
+    macro_rules! impl_sealed {
+        ($($type:ty),*) => {
+            $(
+                impl Sealed for $type {}
+            )*
+        };
+    }
 
-        type Storage:
-            BitAnd<Output = Self::Storage> + BitAndAssign
-            + BitOr<Output = Self::Storage> + BitOrAssign
-            + BitXor<Output = Self::Storage> + BitXorAssign
-            + Not<Output = Self::Storage>
-            + PartialOrd
-            + std::fmt::Binary
-            + Copy;
-
-        fn count_possibilities(set: Self::Storage) -> u32;
-        fn as_set(self) -> Set<Self>;
+    impl_sealed!{
+        Cell, Digit, Row, Col, House, Line, Position<Line>, Position<House>
     }
 }
 

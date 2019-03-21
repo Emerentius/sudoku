@@ -1,3 +1,5 @@
+pub(crate) mod prelude;
+
 pub(crate) mod naked_singles;
 pub(crate) mod hidden_singles;
 pub(crate) mod locked_candidates;

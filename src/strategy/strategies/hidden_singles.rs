@@ -1,12 +1,4 @@
-use crate::helper::{Unsolvable, CellArray, HouseArray};
-use crate::bitset::Set;
-use crate::board::{
-    Digit,
-    Candidate,
-    positions::{
-        House,
-    }
-};
+use super::prelude::*;
 
 pub(crate) fn find_hidden_singles(
     last_house: &mut u8,

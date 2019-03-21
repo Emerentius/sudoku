@@ -1,12 +1,4 @@
-use crate::helper::{Unsolvable, HouseArray, DigitArray};
-use crate::bitset::{Set, Iter as SetIter};
-use crate::board::{
-    Digit,
-    positions::{
-        Position,
-        House
-    }
-};
+use super::prelude::*;
 
 pub(crate) fn find_hidden_subsets (
     house_solved_digits: &HouseArray<Set<Digit>>,
@@ -40,6 +32,7 @@ pub(crate) fn find_hidden_subsets (
         if digit_set.len() == subset_size
             && total_poss_pos.len() == subset_size
             && on_subset(house, digit_set, total_poss_pos)
+            && stop_after_first
         {
             return true;
         }

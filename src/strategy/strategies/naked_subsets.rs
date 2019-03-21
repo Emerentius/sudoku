@@ -1,13 +1,4 @@
-use crate::helper::{Unsolvable, CellArray, HouseArray};
-use crate::bitset::{Set, Iter as SetIter};
-use crate::board::{
-    Digit,
-    positions::{
-        Position,
-        House,
-        CellAt
-    }
-};
+use super::prelude::*;
 
 pub(crate) fn find_naked_subsets (
     cells_poss_digits: &CellArray<Set<Digit>>,
@@ -38,11 +29,12 @@ pub(crate) fn find_naked_subsets (
         // subsets of 5 and more numbers always have complementary subsets
         // of 9 - subset_size
         if position_set.len() > subset_size { return false }
-        if position_set.len() == subset_size && total_poss_digs.len() == position_set.len() {
+        if position_set.len() == subset_size
+            && total_poss_digs.len() == position_set.len()
+            && on_subset(house, position_set, total_poss_digs)
+            && stop_after_first {
             // found a subset
-            if on_subset(house, position_set, total_poss_digs) {
-                return true;
-            }
+            return true;
         }
 
         let mut positions = positions;

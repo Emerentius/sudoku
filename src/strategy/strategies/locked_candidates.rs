@@ -1,13 +1,4 @@
-use crate::helper::{Unsolvable, CellArray};
-use crate::bitset::Set;
-use crate::board::{
-    Digit,
-    positions::{
-        Chute,
-        MiniLine,
-    }
-};
-
+use super::prelude::*;
 
 // stop after first will only eliminate line OR field neighbors for ONE number
 // even if multiple are found at the same time

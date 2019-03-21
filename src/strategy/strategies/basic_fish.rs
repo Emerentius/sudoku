@@ -1,13 +1,4 @@
-use crate::helper::{Unsolvable, HouseArray, DigitArray};
-use crate::bitset::{Set, Iter as SetIter};
-use crate::board::{
-    Digit,
-    positions::{
-        Position,
-        House,
-        Line
-    }
-};
+use super::prelude::*;
 
 pub(crate) fn find_fish(
     house_poss_positions: &HouseArray<DigitArray<Set<Position<House>>>>,

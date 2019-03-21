@@ -1,6 +1,4 @@
-use crate::helper::{Unsolvable, CellArray};
-use crate::bitset::Set;
-use crate::board::{Digit, Candidate, Cell};
+use super::prelude::*;
 
 pub(crate) fn find_naked_singles(
     cell_poss_digits: &CellArray<Set<Digit>>,

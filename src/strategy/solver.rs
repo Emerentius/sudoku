@@ -123,19 +123,15 @@ impl StrategySolver {
 
 		for (cell_state, entries) in _grid_state.iter_mut().zip(entries) {
 			let entries = entries.as_bytes();
-			if entries.len() == 1 {
-				let digit = Digit::new(entries[0] - b'0');
-				*cell_state = CellState::Digit(digit);
-				continue
-			}
-
-			let mut candidates = Set::NONE;
-			for digit in entries.iter()
-				.map(|byte| Digit::new(byte - b'0'))
-			{
-				candidates |= digit;
-			}
-			*cell_state = CellState::Candidates(candidates);
+			let candidates = entries.iter()
+				.map(|byte| byte - b'0')
+				.map(Digit::new)
+				.fold(Set::NONE, std::ops::BitOr::bitor);
+			let state = match candidates.unique().unwrap_or(None) {
+				Some(digit) => CellState::Digit(digit),
+				None        => CellState::Candidates(candidates),
+			};
+			*cell_state = state;
 		}
 
 		Self::from_grid_state(_grid_state)
@@ -500,6 +496,25 @@ impl StrategySolver {
 		Ok(())
 	}
 
+	// Enter iterator of new impossible candidates.
+	// If there are any, enter deduction and return true, else false.
+	fn enter_conflicts(
+		eliminated: &mut Vec<Candidate>,
+		deductions: &mut Vec<Deduction<EliminationsRange>>,
+		conflicts: impl IntoIterator<Item = Candidate>,
+		deduction: impl FnOnce(EliminationsRange) -> Deduction<EliminationsRange>,
+	) -> bool {
+		let len_before = eliminated.len();
+		eliminated.extend(conflicts);
+		let conflicts_rg = len_before..eliminated.len();
+		let has_conflicts = conflicts_rg.len() > 0;
+
+		if has_conflicts {
+			deductions.push(deduction(conflicts_rg));
+		}
+		has_conflicts
+	}
+
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	////////      Strategies
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -564,32 +579,19 @@ impl StrategySolver {
 		locked_candidates::find_locked_candidates(
 			&cell_poss_digits,
 			stop_after_first,
-			|miniline, digit, miniline_poss_digits, neighbors, is_pointing| {
-
-				let n_eliminated = eliminated_entries.len();
-				for &neighbor in neighbors {
-					let conflicts: Set<_> = miniline_poss_digits[neighbor.as_index() % 9] & digit.as_set();
-					if conflicts.is_empty() { continue }
-
-					for cell in neighbor.cells() {
-						let conflicts = cell_poss_digits[cell] & digit.as_set();
-						for digit in conflicts {
-							eliminated_entries.push( Candidate { cell, digit } )
-						}
-					}
-				}
-
-				let rg_eliminations = n_eliminated..eliminated_entries.len();
-
-				if rg_eliminations.len() > 0 {
-					deductions.push(Deduction::LockedCandidates {
-						miniline, digit, is_pointing,
-						conflicts: rg_eliminations
+			|miniline, digit, _miniline_cands, neighbors, is_pointing| {
+				let conflicts = neighbors.iter()
+					// helps on some, hurts on others
+					//.filter(|neighb| _miniline_cands[neighb.as_index() % 9].contains(digit))
+					.flat_map(|neighb| neighb.cells())
+					.flat_map(|cell| {
+						let conflicts = cell_poss_digits[cell] & digit;
+						conflicts.into_iter()
+							.map(move |digit| Candidate { cell, digit })
 					});
-					true
-				} else {
-					false
-				}
+
+				let on_locked = |conflicts| Deduction::LockedCandidates { miniline, digit, is_pointing, conflicts };
+				Self::enter_conflicts(eliminated_entries, deductions, conflicts, on_locked)
 			},
 		)
 	}
@@ -608,24 +610,17 @@ impl StrategySolver {
 			subset_size,
 			stop_after_first,
 			|house, positions, digits| {
-				let n_eliminated = eliminated_entries.len();
-				for pos in !positions {
-					let cell = house.cell_at(pos);
-					let conflicts = cell_poss_digits[cell] & digits;
-					for digit in conflicts {
-						eliminated_entries.push(Candidate{ cell, digit });
-					}
-				}
-				let rg_eliminations = n_eliminated .. eliminated_entries.len();
-				if rg_eliminations.len() > 0 {
-					deductions.push(Deduction::Subsets {
-						house, positions, digits,
-						conflicts: rg_eliminations
+				let conflicts = (!positions).into_iter()
+					.map(|pos| house.cell_at(pos))
+					.flat_map(|cell| {
+						let conflicts = cell_poss_digits[cell] & digits;
+						conflicts.into_iter()
+							.map(move |digit| Candidate { cell, digit })
 					});
-					true
-				} else {
-					false
-				}
+
+				let on_conflict = |conflicts| Deduction::Subsets { house, positions, digits, conflicts };
+
+				Self::enter_conflicts(eliminated_entries, deductions, conflicts, on_conflict)
 			},
 		)
 	}
@@ -645,24 +640,18 @@ impl StrategySolver {
 			stop_after_first,
 			|house, digits, positions| {
 				let house_poss_positions = house_poss_positions[house];
-				let n_eliminated = eliminated_entries.len();
-				for digit in !digits {
-					let conflicts = house_poss_positions[digit] & positions;
-					for pos in conflicts {
-						let cell = house.cell_at(pos);
-						eliminated_entries.push(Candidate{ cell, digit });
-					}
-				}
-				let rg_eliminations = n_eliminated .. eliminated_entries.len();
-				if rg_eliminations.len() > 0 {
-					deductions.push(Deduction::Subsets {
-						house, digits, positions,
-						conflicts: rg_eliminations
+
+				let conflicts = (!digits).into_iter()
+					.flat_map(|digit| {
+						let conflicts = house_poss_positions[digit] & positions;
+						conflicts.into_iter()
+							.map(|pos| house.cell_at(pos))
+							.map(move |cell| Candidate { cell, digit })
 					});
-					true
-				} else {
-					false
-				}
+
+				let on_conflict = |conflicts| Deduction::Subsets { house, digits, positions, conflicts };
+
+				Self::enter_conflicts(eliminated_entries, deductions, conflicts, on_conflict)
 			},
 		)
 	}
@@ -695,30 +684,26 @@ impl StrategySolver {
 			target_size,
 			stop_after_first,
 			|all_lines, digit, lines, positions_in_line| {
-				let n_eliminated = eliminated_entries.len();
-				for line in all_lines.without(lines) {
-					for pos in positions_in_line {
-						let cell = line.cell_at(pos);
-						let cell_mask = cell_poss_digits[cell];
-						if cell_mask.overlaps(digit.as_set()) {
-							eliminated_entries.push(Candidate{ cell, digit });
-						}
-					}
-				}
+				let conflicts = all_lines.without(lines)
+					.into_iter()
+					.flat_map(|line| {
+						positions_in_line.into_iter()
+							.map(move |pos| line.cell_at(pos))
+					})
+					.filter(|&cell| cell_poss_digits[cell].contains(digit))
+					.map(|cell| Candidate { cell, digit });
 
-				let rg_eliminations = n_eliminated .. eliminated_entries.len();
-				if rg_eliminations.len() > 0 {
-					deductions.push(
-						Deduction::BasicFish {
-							lines, digit,
-							positions: positions_in_line,
-							conflicts: rg_eliminations,
-						}
-					);
-					true
-				} else {
-					false
-				}
+				let on_conflict = |conflicts| Deduction::BasicFish {
+					lines,
+					digit,
+					conflicts,
+					positions: positions_in_line,
+				};
+
+				Self::enter_conflicts(eliminated_entries, deductions, conflicts, on_conflict)
+			}
+		)
+	}
 			}
 		)
 	}
@@ -737,29 +722,20 @@ impl StrategySolver {
 				let common_digit = (poss_digs1 & poss_digs2).unique().unwrap().unwrap();
 				let common_neighbors = cell_pincer1.neighbors_set() & cell_pincer2.neighbors_set();
 
-				let n_eliminated = eliminated_entries.len();
-
 				let conflicts = common_neighbors.into_iter()
 					.filter(|&cell| cell_poss_digits[cell].contains(common_digit) )
 					.map(|cell| Candidate {
 						cell, digit: common_digit
 					});
-				eliminated_entries.extend(conflicts);
 
-				let rg_eliminations = n_eliminated .. eliminated_entries.len();
-				if rg_eliminations.len() > 0 {
-					deductions.push(
-						Deduction::Wing {
-							hinge: cell_hinge,
-							hinge_digits: poss_digits_hinge,
-							pincers: cell_pincer1.as_set() | cell_pincer2,
-							conflicts: rg_eliminations,
-						}
-					);
-					true
-				} else {
-					false
-				}
+				let on_conflict = |conflicts| Deduction::Wing {
+					hinge: cell_hinge,
+					hinge_digits: poss_digits_hinge,
+					pincers: cell_pincer1.as_set() | cell_pincer2,
+					conflicts,
+				};
+
+				Self::enter_conflicts(eliminated_entries, deductions, conflicts, on_conflict)
 			}
 		)
 	}
@@ -780,29 +756,20 @@ impl StrategySolver {
 
 				assert_eq!(common_neighbors.len(), 2);
 
-				let n_eliminated = eliminated_entries.len();
-
 				let conflicts = common_neighbors.into_iter()
 					.filter(|&cell| cell_poss_digits[cell].contains(common_digit) )
 					.map(|cell| Candidate {
 						cell, digit: common_digit
 					});
-				eliminated_entries.extend(conflicts);
 
-				let rg_eliminations = n_eliminated .. eliminated_entries.len();
-				if rg_eliminations.len() > 0 {
-					deductions.push(
-						Deduction::Wing {
-							hinge: cell_hinge,
-							hinge_digits: poss_digits_hinge,
-							pincers: cell_pincer1.as_set() | cell_pincer2,
-							conflicts: rg_eliminations,
-						}
-					);
-					true
-				} else {
-					false
-				}
+				let on_conflict = |conflicts| Deduction::Wing {
+					hinge: cell_hinge,
+					hinge_digits: poss_digits_hinge,
+					pincers: cell_pincer1.as_set() | cell_pincer2,
+					conflicts,
+				};
+
+				Self::enter_conflicts(eliminated_entries, deductions, conflicts, on_conflict)
 			}
 		)
 	}
@@ -1095,6 +1062,9 @@ fn print_gridstate(
 	horizontal_bar: &str,
 	vertical_bar: &str,
 ) -> Result<(), std::fmt::Error> {
+	// TODO: Decide what to print if a cell has no candidates anymore
+	//       leaving empty is possible, but more difficult to parse correctly
+	//       '_' is another good alternative
 	let mut column_widths = [0; 9];
 	for col in 0..9 {
 		let max_width = (0..9).map(|row| row * 9 + col)

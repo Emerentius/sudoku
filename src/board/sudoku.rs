@@ -626,19 +626,30 @@ impl Sudoku {
         }
     }
 
-    /// Returns a canonical representation of this sudoku's equivalence class.
+    /// Returns the canonical representation of this sudoku.
+    ///
 	/// All sudokus that can be translated into each other via validity preserving transformations belong to the same
-	/// equivalence class (see [`Sudoku::shuffle`] docs for a list of transformations). This function can therefore
-	/// be used to check whether two sudokus are equivalent. The canonical form used here is the
-	/// lexicographically minimal permutation.
+	/// equivalence class (see [`Sudoku::shuffle`] docs for a list of transformations). The sudoku returned from this
+    /// function is the same for all sudokus in the equivalence class, if fully solved. Non-solved sudokus will be in
+    /// the canonical form after solving. This function allows therefore to check whether two sudokus are
+    /// equivalent. It can be used for both for solved and unsolved puzzles.
+    ///
+    /// This function uses the lexicographically minimal permutation as the canonical form.
 	///
-	/// Limited to fully solved, valid sudokus. Returns `None` if the sudoku does not fit these conditions.
+	/// Limited to uniquely solvable sudokus. Returns `None` otherwise.
 	pub fn canonicalized(&self) -> Option<Sudoku> {
-		if self.is_solved() {
-			Some(super::canonicalization::canonicalize_solved_sudoku(*self))
-		} else {
-			None
-		}
+        let solved_sudoku = if self.is_solved() {
+            *self
+        } else if let Some(solved) = self.solve_unique() {
+            solved
+        } else {
+            return None;
+        };
+
+        let mut sudoku = *self;
+        let (_, transformation) = super::canonicalization::find_canonical_sudoku_and_transformation(solved_sudoku);
+        transformation.apply(&mut sudoku);
+        Some(sudoku)
 	}
 
     #[inline]

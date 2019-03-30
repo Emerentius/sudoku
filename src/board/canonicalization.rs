@@ -1,6 +1,64 @@
 use crate::Sudoku;
 
-pub(crate) fn canonicalize_solved_sudoku(sudoku: Sudoku) -> Sudoku {
+#[derive(PartialEq, Eq, Clone, Copy)]
+pub(crate) struct Transformation {
+    transpose: bool,
+    band_permutation: Permutation3,
+    stack_permutation: Permutation3,
+    row_permutations: ChuteLinePermutations,
+    col_permutations: ChuteLinePermutations,
+    digit_remapping: [u8; 9],
+}
+
+impl Transformation {
+    pub(crate) fn apply(self, sudoku: &mut Sudoku) {
+        // order of some operations is important
+        // transpose before stacks, bands
+        // stacks before cols
+        // bands before rows
+        if self.transpose {
+            sudoku.transpose();
+        }
+
+        self.band_permutation.apply(sudoku, 0, Sudoku::swap_bands);
+        self.stack_permutation.apply(sudoku, 0, Sudoku::swap_stacks);
+
+        self.col_permutations.apply(sudoku, Sudoku::swap_cols);
+        self.row_permutations.apply(sudoku, Sudoku::swap_rows);
+
+        apply_digit_mapping(self.digit_remapping, sudoku);
+    }
+}
+
+impl Permutation3 {
+    fn apply(self, sudoku: &mut Sudoku, offset: u8, f: impl FnMut(&mut Sudoku, u8, u8)) {
+        permute(sudoku, self, offset, f);
+    }
+}
+
+// permutations of the 3 lines in each of the 3 chutes.
+// The chutes have to be either all bands or all stacks.
+#[derive(PartialOrd, Ord, PartialEq, Eq, Clone, Copy)]
+struct ChuteLinePermutations([Permutation3; 3]);
+
+impl ChuteLinePermutations {
+    fn apply(self, sudoku: &mut Sudoku, mut f: impl FnMut(&mut Sudoku, u8, u8)) {
+        for (chute, perm) in (0..3).zip(self.0.iter()) {
+            perm.apply(sudoku, 3 * chute, &mut f);
+        }
+    }
+}
+
+fn apply_digit_mapping(digit_remapping: [u8; 9], sudoku: &mut Sudoku) {
+    for cell_digit in &mut sudoku.0[..] {
+        if *cell_digit == 0 {
+            continue;
+        }
+        *cell_digit = digit_remapping[ *cell_digit as usize - 1];
+    }
+}
+
+pub(crate) fn find_canonical_sudoku_and_transformation(sudoku: Sudoku) -> (Sudoku, Transformation) {
     let mut min_transformations = vec![];
 
     {
@@ -19,7 +77,7 @@ pub(crate) fn canonicalize_solved_sudoku(sudoku: Sudoku) -> Sudoku {
 
     min_transformations.into_iter()
         .map(|trans| {
-            let BandTransformation {
+            let MinBandTransformation {
                 band, transposed, row_permutation, stack_permutation, col_permutations, digit_remapping,
             } = trans;
             // apply the transformation for the minimal band
@@ -30,46 +88,60 @@ pub(crate) fn canonicalize_solved_sudoku(sudoku: Sudoku) -> Sudoku {
 
             min_sudoku.swap_bands(0, band);
 
-            permute(&mut min_sudoku, row_permutation, 0, Sudoku::swap_rows);
-            permute(&mut min_sudoku, stack_permutation, 0, Sudoku::swap_stacks);
+            row_permutation.apply(&mut min_sudoku, 0, Sudoku::swap_rows);
 
-            for (stack, perm) in (0..3).zip(col_permutations.iter()) {
-                permute(&mut min_sudoku, *perm, stack * 3, Sudoku::swap_cols);
-            }
+            stack_permutation.apply(&mut min_sudoku, 0, Sudoku::swap_stacks);
+            col_permutations.apply(&mut min_sudoku, Sudoku::swap_cols);
 
-            for cell in &mut min_sudoku.0[..] {
-                *cell = digit_remapping[ *cell as usize - 1];
-            }
+            apply_digit_mapping(digit_remapping, &mut min_sudoku);
 
             // now sort the remaining two bands
             // first, sort the rows in each band, then sort the two bands
-            for band in 1..3 {
-                let offset = band * 3;
+            let mut row_perm2 = sort_rows_in_band_and_find_permutation(&mut min_sudoku, 1);
+            let mut row_perm3 = sort_rows_in_band_and_find_permutation(&mut min_sudoku, 2);
 
-                let first_choice = (0..3).min_by_key(|&row| &min_sudoku.0[9*(offset + row) as usize..][..9]).unwrap();
-                min_sudoku.swap_rows(offset, offset + first_choice);
-
-                let second_choice = (0..2).min_by_key(|&row| &min_sudoku.0[9*(offset + 1 + row) as usize..][..9]).unwrap();
-                min_sudoku.swap_rows(offset + 1, offset + 1 + second_choice);
+            let needs_band_switch = min_sudoku.0[27..54] > min_sudoku.0[54..];
+            let band_choice2 = needs_band_switch as u8;
+            if needs_band_switch {
+                std::mem::swap(&mut row_perm2, &mut row_perm3);
             }
+            min_sudoku.swap_bands(1, 1 + band_choice2);
 
-            if min_sudoku.0[27..54] > min_sudoku.0[54..] {
-                min_sudoku.swap_bands(1, 2);
+            let transformation = Transformation {
+                transpose: transposed,
+                band_permutation: Permutation3::from_choices(band, band_choice2),
+                stack_permutation,
+                row_permutations: ChuteLinePermutations([row_permutation, row_perm2, row_perm3]),
+                col_permutations,
+                digit_remapping,
             };
 
-            min_sudoku
+            (min_sudoku, transformation)
         })
-        .min()
+        .min_by_key(|&(sudoku, _)| sudoku)
         .unwrap()
 }
 
+fn sort_rows_in_band_and_find_permutation(sudoku: &mut Sudoku, band: u8) -> Permutation3 {
+    let row_offset = band * 3;
+    let first_choice = (0..3).min_by_key(|&row| &sudoku.0[9*(row_offset + row) as usize..][..9]).unwrap();
+    sudoku.swap_rows(row_offset, row_offset + first_choice);
+
+    let second_choice = (0..2).min_by_key(|&row| &sudoku.0[9*(row_offset + 1 + row) as usize..][..9]).unwrap();
+    sudoku.swap_rows(row_offset + 1, row_offset + 1 + second_choice);
+    Permutation3::from_choices(first_choice, second_choice)
+}
+
+/// The transformation needed to get the lexicographically minimal first band.
+/// After finding this one, the other two bands need only be sorted and we have
+/// the minlex sudoku. This cuts the search space considerably.
 #[derive(PartialOrd, Ord, PartialEq, Eq)]
-pub(crate) struct BandTransformation {
+pub(crate) struct MinBandTransformation {
     band: u8,
     transposed: bool,
     row_permutation: Permutation3,
     stack_permutation: Permutation3,
-    col_permutations: [Permutation3; 3],
+    col_permutations: ChuteLinePermutations,
     digit_remapping: [u8; 9],
 }
 
@@ -79,10 +151,13 @@ struct Permutation3(u8, u8);
 
 impl Permutation3 {
     fn from_choices(choice3: u8, choice2: u8) -> Self {
+        debug_assert!(choice3 < 3);
+        debug_assert!(choice2 < 2);
         Permutation3(choice3, choice2)
     }
 
     fn new(perm: u8) -> Self {
+        debug_assert!(perm < 6);
         Permutation3(perm % 3, perm / 3)
     }
 
@@ -104,7 +179,7 @@ fn permute<T: ?Sized>(sudoku: &mut T, permutation: Permutation3, offset: u8, mut
 /// and returns the transformation required to get there.
 /// `band_minimum` is the lowest band seen so far. If no transformation results in a lower valued band,
 /// then no transformation is returned.
-pub(crate) fn find_minlex_band_transformation(sudoku: Sudoku, band_nr: u8, transposed: bool, band_minimum: &mut [u8; 16], minimal_transformations: &mut Vec<BandTransformation>) {
+pub(crate) fn find_minlex_band_transformation(sudoku: Sudoku, band_nr: u8, transposed: bool, band_minimum: &mut [u8; 16], minimal_transformations: &mut Vec<MinBandTransformation>) {
     let first_cell = band_nr * 27;
     let mut band = [0; 27];
     band.copy_from_slice(&sudoku.0[first_cell as usize..][..27]);
@@ -172,16 +247,16 @@ pub(crate) fn find_minlex_band_transformation(sudoku: Sudoku, band_nr: u8, trans
                             minimal_transformations.clear();
                         }
                         minimal_transformations.push(
-                            BandTransformation {
+                            MinBandTransformation {
                                 band: band_nr,
                                 transposed,
                                 row_permutation: rows_perm,
                                 stack_permutation: Permutation3::from_choices(first_box, second_box_choice),
-                                col_permutations: [
+                                col_permutations: ChuteLinePermutations([
                                     cols_perm,
                                     Permutation3::from_choices(second_box_first_col, second_box_second_col),
                                     last_box_cols_perm,
-                                ],
+                                ]),
                                 digit_remapping: mapping,
                             }
                         );
@@ -239,4 +314,25 @@ fn swap_cells(slice: &mut [u8], iter: impl Iterator<Item=(usize, usize)>) {
 		slice[idx1] = b;
 		slice[idx2] = a;
 	}
+}
+
+// check that the canonical sudoku found in the search
+// matches the original sudoku after transformation.apply()
+#[test]
+fn transformation_from_struct() {
+    fn read_sudokus(sudokus_str: &str) -> Vec<Sudoku> {
+        sudokus_str
+            .lines()
+            .map(|line| Sudoku::from_str_line(line).unwrap_or_else(|err| panic!("{:?}", err)))
+            .collect()
+    }
+
+    let sudokus = read_sudokus( include_str!("../../sudokus/Lines/easy_sudokus.txt") );
+
+    for sudoku in sudokus {
+        let mut solved_sudoku = sudoku.solve_unique().unwrap();
+        let (canonical_sudoku, transformation) = find_canonical_sudoku_and_transformation(solved_sudoku);
+        transformation.apply(&mut solved_sudoku);
+        assert_eq!(canonical_sudoku, solved_sudoku, "\n{}\n{}", canonical_sudoku, solved_sudoku);
+    }
 }

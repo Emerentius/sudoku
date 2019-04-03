@@ -161,9 +161,10 @@ fn strategy_solver_2_medium_sudokus(b: &mut test::Bencher) {
 
 #[bench]
 fn canonicalize(b: &mut test::Bencher) {
-    let sudoku = Sudoku::generate_filled();
+    let sudokus = (0..1000).map(|_| Sudoku::generate_filled()).collect::<Vec<_>>();
+    let mut sudokus = sudokus.iter().cycle();
 
 	b.iter(|| {
-		sudoku.canonicalized();
+		sudokus.next().unwrap().canonicalized();
 	})
 }

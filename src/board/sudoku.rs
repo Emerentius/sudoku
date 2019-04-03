@@ -125,7 +125,6 @@ impl fmt::Debug for Sudoku {
     }
 }
 
-type R = rand::rngs::ThreadRng;
 pub type Iter<'a> = iter::Map<slice::Iter<'a, u8>, fn(&u8) -> Option<u8>>; // Iter over Sudoku cells
 
 impl Sudoku {
@@ -634,133 +633,10 @@ impl Sudoku {
         };
 
         let mut sudoku = *self;
-        let (_, transformation) = super::canonicalization::find_canonical_sudoku_and_transformation(solved_sudoku);
+        let (_, transformation, _) = super::canonicalization::find_canonical_sudoku_and_transformation(solved_sudoku);
         transformation.apply(&mut sudoku);
         Some(sudoku)
 	}
-
-    #[inline]
-    fn shuffle_digits(&mut self, rng: &mut R) {
-        // 0 (empty cell) always maps to 0
-        let mut digits = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-
-        // manual top-down Fisher-Yates shuffle. Needs only 1 ranged random num rather than 9
-        let mut permutation = rng.gen_range(0, 362880u32); // 9!
-        for n_choices in (1..10).rev() {
-            let num = permutation % n_choices;
-            permutation /= n_choices;
-            digits.swap(n_choices as usize, 1 + num as usize);
-        }
-
-        for num in self.0.iter_mut() {
-            *num = digits[*num as usize];
-        }
-    }
-
-    #[inline]
-    fn shuffle_rows_of_band(&mut self, rng: &mut R, band: u8) {
-        debug_assert!(band < 3);
-        let first_row = band * 3;
-
-        // Fisher-Yates-Shuffle
-        self.swap_rows(first_row, rng.gen_range(first_row, first_row + 3));
-        self.swap_rows(first_row + 1, rng.gen_range(first_row + 1, first_row + 3));
-    }
-
-    #[inline]
-    fn shuffle_cols_of_stack(&mut self, rng: &mut R, stack: u8) {
-        debug_assert!(stack < 3);
-        let first_col = stack * 3;
-
-        // Fisher-Yates-Shuffle
-        self.swap_cols(first_col, rng.gen_range(first_col, first_col + 3));
-        self.swap_cols(first_col + 1, rng.gen_range(first_col + 1, first_col + 3));
-    }
-
-    #[inline]
-    fn shuffle_bands(&mut self, rng: &mut R) {
-        // Fisher-Yates-Shuffle
-        self.swap_bands(0, rng.gen_range(0, 3));
-        self.swap_bands(1, rng.gen_range(1, 3));
-    }
-
-    #[inline]
-    fn shuffle_stacks(&mut self, rng: &mut R) {
-        // Fisher-Yates-Shuffle
-        self.swap_stacks(0, rng.gen_range(0, 3));
-        self.swap_stacks(1, rng.gen_range(1, 3));
-    }
-
-    #[inline]
-    pub(crate) fn swap_rows(&mut self, row1: u8, row2: u8) {
-        if row1 == row2 {
-            return;
-        }
-        let start1 = (row1 * 9) as usize;
-        let start2 = (row2 * 9) as usize;
-        self.swap_cells(
-            (start1..start1 + 9).zip(start2..start2 + 9)
-        )
-    }
-
-    #[inline]
-    pub(crate) fn swap_cols(&mut self, col1: u8, col2: u8) {
-        if col1 == col2 {
-            return;
-        }
-        debug_assert!(col1 < 9);
-        debug_assert!(col2 < 9);
-        self.swap_cells(
-            (0..9).map(|row| (row * 9 + col1 as usize, row * 9 + col2 as usize))
-        )
-    }
-
-    #[inline]
-    pub(crate) fn swap_stacks(&mut self, stack1: u8, stack2: u8) {
-        if stack1 == stack2 {
-            return;
-        }
-        debug_assert!(stack1 < 3);
-        debug_assert!(stack2 < 3);
-        for inner_col in 0..3 {
-            self.swap_cols(stack1 * 3 + inner_col, stack2 * 3 + inner_col);
-        }
-    }
-
-    #[inline]
-    pub(crate) fn swap_bands(&mut self, band1: u8, band2: u8) {
-        if band1 == band2 {
-            return;
-        }
-        debug_assert!(band1 < 3);
-        debug_assert!(band2 < 3);
-        for inner_row in 0..3 {
-            self.swap_rows(band1 * 3 + inner_row, band2 * 3 + inner_row);
-        }
-    }
-
-    #[inline]
-    pub(crate) fn transpose(&mut self) {
-        use std::iter::repeat;
-        self.swap_cells(
-            (0..9)
-                .flat_map(|row| repeat(row).zip(row + 1..9))
-                .map(|(row, col)| (row * 9 + col, col * 9 + row)),
-        )
-    }
-
-    // takes iter of cell index pairs and swaps the corresponding cells
-    #[inline]
-    fn swap_cells(&mut self, iter: impl Iterator<Item = (usize, usize)>) {
-        for (idx1, idx2) in iter {
-            debug_assert!(idx1 != idx2);
-
-            let a = self.0[idx1];
-            let b = self.0[idx2];
-            self.0[idx1] = b;
-            self.0[idx2] = a;
-        }
-    }
 
     /// Returns an Iterator over sudoku, going from left to right, top to bottom
     pub fn iter(&self) -> Iter {

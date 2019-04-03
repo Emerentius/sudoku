@@ -609,21 +609,8 @@ impl Sudoku {
     //		 for some reason the shuffle_bands and shuffle_stacks functions work faster in their current form
     // 		 rather than with a generic function abstracting over both.
     pub fn shuffle(&mut self) {
-        // SmallRng is a good 10% faster, but it uses XorShiftRng which can fail some statistical tests
-        // There are some adaptions that fix this, but I don't know if Rust implements them.
-        //let rng = &mut rand::rngs::SmallRng::from_rng(rand::thread_rng()).unwrap();
-        let rng = &mut rand::thread_rng();
-
-        self.shuffle_digits(rng);
-        self.shuffle_bands(rng);
-        self.shuffle_stacks(rng);
-        for i in 0..3 {
-            self.shuffle_cols_of_stack(rng, i);
-            self.shuffle_rows_of_band(rng, i);
-        }
-        if rng.gen() {
-            self.transpose();
-        }
+        let transformation = crate::board::canonicalization::Transformation::random();
+        transformation.apply(self);
     }
 
     /// Returns the canonical representation of this sudoku.

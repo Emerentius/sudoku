@@ -320,7 +320,6 @@ fn permute<T: ?Sized>(sudoku: &mut T, permutation: Permutation3, offset: u8, mut
     swapper(sudoku, offset + 1, offset + 1 + permutation.choice2());
 }
 
-#[inline]
 fn transpose(sudoku: &mut [u8]) {
     use std::iter::repeat;
     swap_cells(
@@ -331,11 +330,12 @@ fn transpose(sudoku: &mut [u8]) {
     )
 }
 
-#[inline]
 fn swap_rows(sudoku: &mut [u8], row1: u8, row2: u8) {
     if row1 == row2 {
         return;
     }
+    debug_assert!(row1 < 9);
+    debug_assert!(row2 < 9);
     let start1 = (row1 * 9) as usize;
     let start2 = (row2 * 9) as usize;
     swap_cells(
@@ -344,7 +344,6 @@ fn swap_rows(sudoku: &mut [u8], row1: u8, row2: u8) {
     )
 }
 
-#[inline]
 fn swap_cols(sudoku: &mut [u8], col1: u8, col2: u8) {
     if col1 == col2 {
         return;
@@ -357,7 +356,6 @@ fn swap_cols(sudoku: &mut [u8], col1: u8, col2: u8) {
     )
 }
 
-#[inline]
 fn swap_stacks(sudoku: &mut [u8], stack1: u8, stack2: u8) {
     if stack1 == stack2 {
         return;
@@ -369,7 +367,6 @@ fn swap_stacks(sudoku: &mut [u8], stack1: u8, stack2: u8) {
     }
 }
 
-#[inline]
 fn swap_bands(sudoku: &mut [u8], band1: u8, band2: u8) {
     if band1 == band2 {
         return;
@@ -381,8 +378,7 @@ fn swap_bands(sudoku: &mut [u8], band1: u8, band2: u8) {
     }
 }
 
-#[inline(never)]
-pub(crate) fn swap_cols_in_band(band: &mut [u8], col1: u8, col2: u8) {
+fn swap_cols_in_band(band: &mut [u8], col1: u8, col2: u8) {
     if col1 == col2 { return }
     debug_assert!(col1 < 9);
     debug_assert!(col2 < 9);
@@ -393,8 +389,7 @@ pub(crate) fn swap_cols_in_band(band: &mut [u8], col1: u8, col2: u8) {
     )
 }
 
-#[inline(never)]
-pub(crate) fn swap_stack_in_band(band: &mut [u8], stack1: u8, stack2: u8) {
+fn swap_stack_in_band(band: &mut [u8], stack1: u8, stack2: u8) {
     if stack1 == stack2 { return }
     debug_assert!(stack1 < 3);
     debug_assert!(stack2 < 3);
@@ -404,21 +399,14 @@ pub(crate) fn swap_stack_in_band(band: &mut [u8], stack1: u8, stack2: u8) {
     }
 }
 
-#[inline(never)]
 fn swap_rows_in_band(band: &mut [u8], row1: u8, row2: u8) {
-    if row1 == row2 { return }
     debug_assert!(row1 < 3);
     debug_assert!(row2 < 3);
-    let start1 = (row1*9) as usize;
-    let start2 = (row2*9) as usize;
-    swap_cells(
-        band,
-        (start1..start1+9).zip(start2..start2+9)
-    )
+    swap_rows(band, row1, row2);
 }
 
 // takes iter of cell index pairs and swaps the corresponding cells
-#[inline(never)]
+#[inline]
 fn swap_cells(slice: &mut [u8], iter: impl Iterator<Item=(usize, usize)>) {
 	for (idx1, idx2) in iter {
 		debug_assert!(idx1 != idx2);
@@ -452,7 +440,7 @@ fn transformation_from_struct() {
 }
 
 #[test]
-fn most_canonical_grid_isomorphism_count() {
+fn most_canonical_grid_automorphism_count() {
     let sudoku = Sudoku::from_str_line("123456789456789123789123456231564897564897231897231564312645978645978312978312645").unwrap();
     let (_, _, count) = find_canonical_sudoku_and_transformation(sudoku);
     assert_eq!(count, 648);

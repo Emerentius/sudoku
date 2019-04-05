@@ -281,7 +281,7 @@ impl_setelement!(
     //Col => u16, 0o777,
     //Block => u16, 0o777,
     Line => u32, 0o777_777,      // both Rows and Cols
-    //House => u32, 0o777_777_777, // Rows, Cols, Blocks
+    House => u32, 0o777_777_777, // Rows, Cols, Blocks
 
     // 9 positions per house
     //Position<Row> => u16, 0o777,
@@ -320,6 +320,7 @@ impl_iter_for_setiter!(
     Cell => Cell::new,
     Digit => Digit::from_index,
     Line => Line::new,
+    House => House::new,
     //Position<Row> => Position::new,
     //Position<Col> => Position::new,
     Position<Line> => Position::new,

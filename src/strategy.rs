@@ -14,6 +14,7 @@
 mod solver;
 pub mod deduction;
 mod strategies;
+pub(crate) mod utils;
 
 pub use self::solver::{StrategySolver};
 pub use self::strategies::Strategy;

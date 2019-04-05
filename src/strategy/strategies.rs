@@ -6,6 +6,9 @@ pub(crate) mod locked_candidates;
 pub(crate) mod naked_subsets;
 pub(crate) mod hidden_subsets;
 pub(crate) mod basic_fish;
+pub(crate) mod mutant_fish;
+pub(crate) mod almost_locked_sets;
+pub(crate) mod avoidable_rectangles;
 pub(crate) mod xy_wing;
 pub(crate) mod xyz_wing;
 
@@ -33,6 +36,9 @@ pub enum Strategy {
     Jellyfish,
 	XyWing,
 	XyzWing,
+	MutantSwordfish,
+	MutantJellyfish,
+	AvoidableRectangles,
     //SinglesChain,
     #[doc(hidden)] __NonExhaustive
 }
@@ -80,6 +86,8 @@ impl Strategy {
 			Jellyfish => state.find_jellyfish(stop_after_first),
 			XyWing => state.find_xy_wing(stop_after_first),
 			XyzWing => state.find_xyz_wing(stop_after_first),
+			MutantSwordfish => state.find_mutant_fish(3, stop_after_first),
+			MutantJellyfish => state.find_mutant_fish(4, stop_after_first),
 			//SinglesChain => state.find_singles_chain(stop_after_first), // TODO: Implement non-eager SinglesChain
             _ => unimplemented!(),
         }

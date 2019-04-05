@@ -301,6 +301,10 @@ pub enum HouseType {
 }
 
 impl House {
+    pub(crate) const ALL_ROWS: Set<House> = Set(0o000_000_777);
+    pub(crate) const ALL_COLS: Set<House> = Set(0o000_777_000);
+    pub(crate) const ALL_BLOCKS: Set<House> = Set(0o777_000_000);
+
     /// Determine whether this house is a [`Row`], [`Col`] or [`Block`]
     pub fn categorize(self) -> HouseType {
         debug_assert!(self.0 < 27);
@@ -578,6 +582,22 @@ impl MiniLine {
 pub trait CellAt: Sized {
     /// Return the cell at the given position in this cell grouping
     fn cell_at(self, pos: Position<Self>) -> Cell;
+
+    /// Return the set of cells at the given positions in this cell grouping
+    fn cells_at(self, positions: Set<Position<Self>>) -> Set<Cell>
+    where
+        Position<Self>: crate::bitset::SetElement,
+        Set<Position<Self>>: IntoIterator<Item = Position<Self>>,
+        Self: Copy,
+    {
+        // could be sped up via look up tables
+        // for 9 bit positions
+        let mut cells = Set::NONE;
+        for pos in positions {
+            cells |= self.cell_at(pos);
+        }
+        cells
+    }
 }
 
 impl CellAt for Row {

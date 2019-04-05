@@ -95,6 +95,12 @@ pub enum Deduction<T> {
 		positions: Set<Position<Line>>,
 		conflicts: T,
 	},
+	Fish {
+		digit: Digit,
+		base: Set<House>,
+		cover: Set<House>,
+		conflicts: T,
+	},
 	/// Result of [`XyWing`](super::Strategy::XyWing), [`XyzWing`](super::Strategy::XyzWing)
 	Wing {
 		hinge: Cell,
@@ -105,6 +111,11 @@ pub enum Deduction<T> {
 		pincers: Set<Cell>,
 		conflicts: T,
 	},
+	AvoidableRectangle {
+		/// The 2 rows and 2 columns forming the avoidable rectangle. The cells where they overlap always occupy 2 blocks in one chute.
+		lines: Set<Line>,
+		conflicts: T,
+	},
     //SinglesChain(T),
     #[doc(hidden)] __NonExhaustive
 }
@@ -113,7 +124,7 @@ impl Deduction<&'_ [Candidate]> {
 	/// Returns the type of strategy that was used to make this deduction.
 	pub fn strategy(&self) -> Strategy {
 		use self::Deduction::*;
-		match self {
+		match *self {
 			NakedSingles { .. } => Strategy::NakedSingles,
 			HiddenSingles { .. } => Strategy::HiddenSingles,
 			LockedCandidates { .. } => Strategy::LockedCandidates,
@@ -134,7 +145,7 @@ impl Deduction<&'_ [Candidate]> {
 					Col(_) => conflict_cell.col_pos(),
 					Block(_) => conflict_cell.block_pos(),
 				};
-				let is_hidden_subset = conflict_pos.as_set().overlaps(*positions);
+				let is_hidden_subset = conflict_pos.as_set().overlaps(positions);
 				match (is_hidden_subset, positions.len()) {
 					(false, 2) => Strategy::NakedPairs,
 					(false, 3) => Strategy::NakedTriples,
@@ -153,6 +164,19 @@ impl Deduction<&'_ [Candidate]> {
 					_ => unreachable!(),
 				}
 			}*/
+
+			Fish { base, cover, .. } => {
+				use crate::strategy::strategies::mutant_fish::is_mutant;
+				let is_mutant = is_mutant(base) || is_mutant(cover);
+				match (is_mutant, base.len()) {
+					(false, 2) => Strategy::XWing,
+					(false, 3) => Strategy::Swordfish,
+					(false, 4) => Strategy::Jellyfish,
+					(true, 3) => Strategy::MutantSwordfish,
+					(true, 4) => Strategy::MutantJellyfish,
+					_ => unreachable!(),
+				}
+			}
 			Wing { hinge_digits, .. } => {
 				match hinge_digits.len() {
 					2 => Strategy::XyWing,
@@ -160,6 +184,7 @@ impl Deduction<&'_ [Candidate]> {
 					_ => unreachable!(),
 				}
 			},
+			AvoidableRectangle { .. } => unimplemented!(),
 			__NonExhaustive => unreachable!(),
 		}
 	}
@@ -191,12 +216,19 @@ impl _Deduction {
 			}
 			=> BasicFish { lines, positions, digit, conflicts: &eliminated[conflicts]},
 
+			Fish {
+				digit, base, cover,
+				conflicts,
+			}
+			=> Fish { digit, base, cover, conflicts: &eliminated[conflicts] },
+
 			Wing {
 				hinge, hinge_digits, pincers,
 				conflicts
 			}
 			=> Wing { hinge, hinge_digits, pincers, conflicts: &eliminated[conflicts] },
 
+			AvoidableRectangle { .. } => unimplemented!(),
 			//SinglesChain(x) => SinglesChain(&eliminated[x]),
 			__NonExhaustive => __NonExhaustive
 		}

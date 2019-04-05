@@ -44,6 +44,12 @@ pub struct StrategySolver {
 	// optimization hints for strategies
 	pub(crate) hidden_singles_last_house: u8,
 
+	// The initial state of a sudoku given as a puzzle.
+	// If the solution is unique, this can be used for the strategy of
+	// AvoidableRectangles
+	// We can't assume that this struct is created only from clues nor that the information about them
+	// will always be present for the caller
+	pub(crate) clues: Option<Sudoku>,
 	// current state of the sudoku
 	// for when it's faster to recompute from the end state
 	// than update through the new entries
@@ -65,6 +71,7 @@ impl StrategySolver {
 			eliminated_entries: vec![],
 			n_solved: 0,
 			hidden_singles_last_house: 0,
+			clues: None,
 			grid: State::from(Sudoku([0; 81])),
 			cell_poss_digits: State::from(CellArray([Set::ALL; 81])),
 			house_solved_digits: State::from(HouseArray([Set::NONE; 27])),
@@ -83,6 +90,15 @@ impl StrategySolver {
 		StrategySolver {
 			deduced_entries,
 			..StrategySolver::empty()
+		}
+	}
+
+	/// Construct a new StrategySolver with information about the initial clues.
+	/// This is only necessary if the [`AvoidableRectangles`](super::strategies::Strategy::AvoidableRectangles) is used.
+	pub fn from_sudoku_and_clues(sudoku: Sudoku, clues: Sudoku) -> StrategySolver {
+		StrategySolver {
+			clues: Some(clues),
+			..StrategySolver::from_sudoku(sudoku)
 		}
 	}
 
@@ -746,6 +762,34 @@ impl StrategySolver {
 			}
 		)
 	}
+
+	pub(crate) fn find_mutant_fish(&mut self, target_size: u8, stop_after_first: bool) -> Result<(), Unsolvable> {
+		self.update_house_poss_positions()?;
+		self.update_cell_poss_house_solved()?;
+
+		let cell_poss_digits = &self.cell_poss_digits.state;
+		let eliminated_entries = &mut self.eliminated_entries;
+		let deductions = &mut self.deductions;
+		let house_poss_positions = &self.house_poss_positions.state;
+
+		mutant_fish::find_mutant_fish(
+			house_poss_positions,
+			target_size,
+			stop_after_first,
+			|digit, candidate_cells, base, cover: Set<House>| {
+				let cover_cells = cover.into_iter()
+					.map(House::cells)
+					.fold(Set::NONE, std::ops::BitOr::bitor);
+
+				let impossible_cells: Set<Cell> = cover_cells ^ candidate_cells;
+
+				let conflicts = impossible_cells.into_iter()
+					.filter(|&cell| cell_poss_digits[cell].contains(digit))
+					.map(|cell| Candidate { cell, digit });
+
+				let on_conflict = |conflicts| Deduction::Fish { digit, base, cover, conflicts };
+
+				Self::enter_conflicts(eliminated_entries, deductions, conflicts, on_conflict)
 			}
 		)
 	}

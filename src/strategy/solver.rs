@@ -119,13 +119,13 @@ impl StrategySolver {
 		let mut _grid_state = [CellState::Candidates(Set::NONE); 81];
 		let entries = grid_state.lines()
 			.flat_map(|line| line.split_whitespace())
-			.filter(|entry| entry.parse::<u32>().is_ok());
+			.filter(|&entry| entry == "_" || entry.parse::<u32>().is_ok());
 
-		for (cell_state, entries) in _grid_state.iter_mut().zip(entries) {
-			let entries = entries.as_bytes();
-			let candidates = entries.iter()
-				.map(|byte| byte - b'0')
-				.map(Digit::new)
+		for (cell_state, entry) in _grid_state.iter_mut().zip(entries) {
+			let candidates = entry.as_bytes()
+				.iter()
+				.map(|byte| byte - b'0')        // only ascii bytes 1-9 will pass
+				.filter_map(Digit::new_checked) // Digit::new_checked
 				.fold(Set::NONE, std::ops::BitOr::bitor);
 			let state = match candidates.unique().unwrap_or(None) {
 				Some(digit) => CellState::Digit(digit),
@@ -406,6 +406,13 @@ impl StrategySolver {
 	}
 
 	fn batch_insert_entries(&mut self, find_naked_singles: bool) -> Result<(), Unsolvable> {
+		self._batch_insert_entries(find_naked_singles)?;
+		self._batch_remove_conflicts(find_naked_singles)
+	}
+
+    /// Insert all outstanding candidates without removing conflicting cells in neighboring cells.
+    /// Errors, if two different digits are candidates for the same cell.
+	fn _batch_insert_entries(&mut self, find_naked_singles: bool) -> Result<(), Unsolvable> {
 		let (ld_cp, _, cell_poss_digits) = self.cell_poss_digits.get_mut();
 		let (ld_zs, _, house_solved_digits) = self.house_solved_digits.get_mut();
 		while self.deduced_entries.len() > *ld_cp as usize {
@@ -429,7 +436,12 @@ impl StrategySolver {
 
 			Self::_insert_candidate_cp_zs(candidate, &mut self.n_solved, cell_poss_digits, house_solved_digits);
 		}
+		Ok(())
+	}
 
+	fn _batch_remove_conflicts(&mut self, find_naked_singles: bool) -> Result<(), Unsolvable> {
+		let (_, _, cell_poss_digits) = self.cell_poss_digits.get_mut();
+		let (_, _, house_solved_digits) = self.house_solved_digits.get_mut();
 		// update cell possibilities from house masks
 		for cell in Cell::all() {
 			if cell_poss_digits[cell].is_empty() { continue }
@@ -440,6 +452,36 @@ impl StrategySolver {
 			Self::remove_impossibilities(&mut self.grid.state, cell_poss_digits, cell, houses_mask, &mut self.deduced_entries, &mut self.deductions, find_naked_singles)?;
 		}
 		Ok(())
+	}
+
+	fn update_for_grid_state_str(&mut self) {
+		// naked singles and solved entries aren't distinguishable in the string representation
+		// so treat them as naked singles uniformly and remove all conflicting candidates
+		self.try_solve(&[Strategy::NakedSingles]);
+
+		// if the sudoku is impossible, the above will have stopped early.
+		// Remove conflicts with all entered candidates
+		//
+		// Note: This won't suffice if two different digits for the same cell are in self.deduced_entries.
+		// In that case, _batch_insert_entries() will still short circuit.
+		self._batch_remove_conflicts_no_check();
+	}
+
+    /// Update cell possibilities and find naked singles and empty cells.
+    /// To be used after _batch_insert_entries.
+	fn _batch_remove_conflicts_no_check(&mut self) {
+		let (_, _, cell_poss_digits) = self.cell_poss_digits.get_mut();
+		let (_, _, house_solved_digits) = self.house_solved_digits.get_mut();
+		// update cell possibilities from house masks
+		for cell in Cell::all() {
+			if cell_poss_digits[cell].is_empty() { continue }
+			let houses_mask = house_solved_digits[cell.row()]
+				| house_solved_digits[cell.col()]
+				| house_solved_digits[cell.block()];
+
+			let cell_mask = &mut cell_poss_digits[cell];
+			cell_mask.remove(houses_mask);
+		}
 	}
 
 	// remove impossible digits from masks for given cell
@@ -916,11 +958,9 @@ impl std::fmt::Display for StrategySolver {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
 		let mut solver = self.clone();
 
-		// naked singles and solved entries aren't distinguishable in the string representation
-		// so treat them as naked singles uniformly and remove all conflicting candidates
-		solver.try_solve(&[Strategy::NakedSingles]);
+		solver.update_for_grid_state_str();
 
-		print_gridstate(
+		print_grid_state(
 			f,
 			solver.grid_state(),
 			"┌",
@@ -1043,9 +1083,44 @@ mod test {
 		}
 
 	}
+
+	#[test]
+	fn grid_state_str_impossible_sudoku() {
+		let sudoku =
+		//"12345678.........9..4.376..6..4..5...3.....7...7..2..4..521.3............7...481.";
+		"12345678.........9...............................................................";
+		let sudoku = Sudoku::from_str_line(sudoku).unwrap();
+
+		let solver = StrategySolver::from_sudoku(sudoku);
+		let grid_state_string = solver.to_string();
+
+		let expected =
+"┌──────────────────────────────┬──────────────────────────────┬──────────────────────────────┐
+│ 1         2         3        │ 4         5         6        │ 7         8         _        │
+│ 45678     45678     45678    │ 12378     12378     12378    │ 123456    123456    9        │
+│ 456789    456789    456789   │ 123789    123789    123789   │ 123456    123456    123456   │
+├──────────────────────────────┼──────────────────────────────┼──────────────────────────────┤
+│ 23456789  13456789  12456789 │ 12356789  12346789  12345789 │ 12345689  12345679  12345678 │
+│ 23456789  13456789  12456789 │ 12356789  12346789  12345789 │ 12345689  12345679  12345678 │
+│ 23456789  13456789  12456789 │ 12356789  12346789  12345789 │ 12345689  12345679  12345678 │
+├──────────────────────────────┼──────────────────────────────┼──────────────────────────────┤
+│ 23456789  13456789  12456789 │ 12356789  12346789  12345789 │ 12345689  12345679  12345678 │
+│ 23456789  13456789  12456789 │ 12356789  12346789  12345789 │ 12345689  12345679  12345678 │
+│ 23456789  13456789  12456789 │ 12356789  12346789  12345789 │ 12345689  12345679  12345678 │
+└──────────────────────────────┴──────────────────────────────┴──────────────────────────────┘
+";
+
+		assert_eq!(expected, &solver.to_string());
+
+		//let solver2 = StrategySolver::from_grid_state_str(&grid_state_string);
+		//let grid_state_string2 = solver2.to_string();
+		//if grid_state_string != grid_state_string2 {
+		//	panic!("\n{}\n{}", grid_state_string, grid_state_string2);
+		//}
+	}
 }
 
-fn print_gridstate(
+fn print_grid_state(
 	f: &mut std::fmt::Formatter,
 	grid_state: [CellState; 81],
 	upper_left_corner: &str,
@@ -1070,7 +1145,7 @@ fn print_gridstate(
 		let max_width = (0..9).map(|row| row * 9 + col)
 			.map(|cell| match grid_state[cell] {
 				CellState::Digit(_) => 1,
-				CellState::Candidates(digits) => digits.len(),
+				CellState::Candidates(digits) => std::cmp::max(digits.len(), 1),
 			})
 			.max()
 			.unwrap();
@@ -1095,10 +1170,14 @@ fn print_gridstate(
 						CellState::Digit(digit) => write!(f, " {:<1$} ", digit.get(), column_widths[full_col] as usize)?,
 						CellState::Candidates(cands) => {
 							write!(f, " ")?;
-							for digit in cands {
-								write!(f, "{}", digit.get())?;
+							if cands.len() == 0 {
+								write!(f, "_")?;
+							} else {
+								for digit in cands {
+									write!(f, "{}", digit.get())?;
+								}
 							}
-							write!(f, "{:1$}", ' ', (1 + column_widths[full_col] - cands.len()) as usize)?;
+							write!(f, "{:1$}", ' ', (1 + column_widths[full_col] - std::cmp::max(cands.len(), 1)) as usize)?;
 						}
 					}
 				}

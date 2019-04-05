@@ -78,5 +78,8 @@ Version 0.7.0 (2018-08-19)
 Unreleased
 ==========
 * Raise minimum Rust version to 1.31
-* Add `Sudoku::canonicalized`. Maps all sudokus of an equivalence class to the same sudoku.
-  Limited to fully solved, valid sudokus (for now).
+* `Sudoku::canonicalized`. Maps all sudokus of an equivalence class to the same sudoku
+  and counts automorphisms.
+  Limited to uniquely solvable sudokus (for now).
+* Xy- and Xyz-Wing strategies
+* Print textual representation of sudoku board with remaining candidates for unsolved cells.

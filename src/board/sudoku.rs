@@ -612,7 +612,7 @@ impl Sudoku {
         transformation.apply(self);
     }
 
-    /// Returns the canonical representation of this sudoku.
+    /// Returns the canonical representation of this sudoku and its automorphism count.
     ///
 	/// All sudokus that can be translated into each other via validity preserving transformations belong to the same
 	/// equivalence class (see [`Sudoku::shuffle`] docs for a list of transformations). The sudoku returned from this
@@ -620,10 +620,14 @@ impl Sudoku {
     /// the canonical form after solving. This function allows therefore to check whether two sudokus are
     /// equivalent. It can be used for both for solved and unsolved puzzles.
     ///
+    /// Some sudokus have multiple transformations resulting in the exact same sudoku, so called automorphisms.
+    /// The number of these is a byproduct of canonicalization and returned as well.
+    /// Every sudoku has at least 1 automorphism, the identity transformation.
+    ///
     /// This function uses the lexicographically minimal permutation as the canonical form.
 	///
 	/// Limited to uniquely solvable sudokus. Returns `None` otherwise.
-	pub fn canonicalized(&self) -> Option<Sudoku> {
+	pub fn canonicalized(&self) -> Option<(Sudoku, usize)> {
         let solved_sudoku = if self.is_solved() {
             *self
         } else if let Some(solved) = self.solve_unique() {
@@ -633,9 +637,9 @@ impl Sudoku {
         };
 
         let mut sudoku = *self;
-        let (_, transformation, _) = super::canonicalization::find_canonical_sudoku_and_transformation(solved_sudoku);
+        let (_, transformation, n_automorphisms) = super::canonicalization::find_canonical_sudoku_and_transformation(solved_sudoku);
         transformation.apply(&mut sudoku);
-        Some(sudoku)
+        Some((sudoku, n_automorphisms))
 	}
 
     /// Returns an Iterator over sudoku, going from left to right, top to bottom

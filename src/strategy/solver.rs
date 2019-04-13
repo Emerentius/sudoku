@@ -131,11 +131,12 @@ impl StrategySolver {
     /// Construct a new StrategySolver from a printout of cell candidates.
     /// This allows communicating the impossibility of some candidates, that aren't already
     /// trivially conflicting with entries.
+    #[allow(unused)] // it is used, but only in conditionally compiled tests
     pub(crate) fn from_grid_state_str(grid_state: &str) -> StrategySolver {
         let mut _grid_state = [CellState::Candidates(Set::NONE); 81];
         let entries = grid_state
             .lines()
-            .flat_map(|line| line.split_whitespace())
+            .flat_map(str::split_whitespace)
             .filter(|&entry| entry == "_" || entry.parse::<u32>().is_ok());
 
         for (cell_state, entry) in _grid_state.iter_mut().zip(entries) {
@@ -465,13 +466,13 @@ impl StrategySolver {
     }
 
     fn batch_insert_entries(&mut self, find_naked_singles: bool) -> Result<(), Unsolvable> {
-        self._batch_insert_entries(find_naked_singles)?;
+        self._batch_insert_entries()?;
         self._batch_remove_conflicts(find_naked_singles)
     }
 
     /// Insert all outstanding candidates without removing conflicting cells in neighboring cells.
     /// Errors, if two different digits are candidates for the same cell.
-    fn _batch_insert_entries(&mut self, find_naked_singles: bool) -> Result<(), Unsolvable> {
+    fn _batch_insert_entries(&mut self) -> Result<(), Unsolvable> {
         let (ld_cp, _, cell_poss_digits) = self.cell_poss_digits.get_mut();
         let (ld_zs, _, house_solved_digits) = self.house_solved_digits.get_mut();
         while self.deduced_entries.len() > *ld_cp as usize {
@@ -632,6 +633,10 @@ impl StrategySolver {
         let len_before = eliminated.len();
         eliminated.extend(conflicts);
         let conflicts_rg = len_before..eliminated.len();
+
+        // there are 2 conflicting .is_empty() methods
+        // one is not stable (inherent on range), the other is not in scope (ExactSizeIterator)
+        #[allow(clippy::len_zero)]
         let has_conflicts = conflicts_rg.len() > 0;
 
         if has_conflicts {
@@ -1190,7 +1195,7 @@ mod test {
                 Err((part_solved, _deductions)) => unsolved.push((i, sudoku, part_solved, solved_sudoku)),
             }
         }
-        if unsolved.len() != 0 {
+        if !unsolved.is_empty() {
             println!("Could not solve {}/{} sudokus:\n", unsolved.len(), n_sudokus);
 
             for (i, sudoku, part_solution, _solution) in unsolved {
@@ -1304,7 +1309,7 @@ fn print_grid_state(
     //       leaving empty is possible, but more difficult to parse correctly
     //       '_' is another good alternative
     let mut column_widths = [0; 9];
-    for col in 0..9 {
+    for (col, col_width) in column_widths.iter_mut().enumerate() {
         let max_width = (0..9)
             .map(|row| row * 9 + col)
             .map(|cell| match grid_state[cell] {
@@ -1314,7 +1319,7 @@ fn print_grid_state(
             .max()
             .unwrap();
 
-        column_widths[col] = max_width;
+        *col_width = max_width;
     }
 
     let mut lengths = [0; 3];
@@ -1343,7 +1348,7 @@ fn print_grid_state(
                         }
                         CellState::Candidates(cands) => {
                             write!(f, " ")?;
-                            if cands.len() == 0 {
+                            if cands.is_empty() {
                                 write!(f, "_")?;
                             } else {
                                 for digit in cands {

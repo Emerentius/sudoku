@@ -13,7 +13,7 @@ fn read_sudokus(sudokus_str: &str) -> Vec<Sudoku> {
 /// Set of all available strategies, for test purposes
 #[allow(unused)]
 #[rustfmt::skip]
-const ALL_STRATEGIES: &'static [Strategy] = &[
+const ALL_STRATEGIES: &[Strategy] = &[
                                 // difficulty as assigned by
                                 // SudokuExplainer
     Strategy::NakedSingles,     // 23

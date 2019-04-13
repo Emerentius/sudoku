@@ -14,7 +14,7 @@ use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, N
 pub struct Set<T: SetElement>(pub(crate) T::Storage);
 
 /// Iterator over the elements contained in a [`Set`]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Iter<T: SetElement>(T::Storage);
 
 impl<T: SetElement> IntoIterator for Set<T>

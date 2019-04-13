@@ -1,6 +1,7 @@
 // WIP
 use super::prelude::*;
 
+#[allow(unused)]
 fn find_avoidable_rectangles(
     filled_cells: Sudoku,
     clues: Sudoku,

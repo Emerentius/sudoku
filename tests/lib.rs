@@ -285,7 +285,7 @@ fn test_shuffle_sudoku(sudoku: Sudoku) {
         }
     }
 
-    if duplicates.len() > 0 {
+    if !duplicates.is_empty() {
         for i in duplicates {
             println!("sudoku nr {} and next: {}", i, sudokus[i].to_str_line());
         }

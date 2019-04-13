@@ -38,6 +38,11 @@ impl Deductions {
         self.deductions.len()
     }
 
+    /// Returns true, if no deductions are contained
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     /// Return the `index`th Deduction, if it exists.
     pub fn get(&self, index: usize) -> Option<Deduction<&[Candidate]>> {
         self.deductions

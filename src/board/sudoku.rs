@@ -718,7 +718,8 @@ impl Sudoku {
     }
 }
 
-#[cfg_attr(rustfmt, rustfmt_skip)]
+#[rustfmt::skip]
+#[allow(clippy::trivially_copy_pass_by_ref)]
 fn num_to_opt(num: &u8) -> Option<u8> {
     if *num == 0 { None } else { Some(*num) }
 }
@@ -834,7 +835,8 @@ impl fmt::Display for SudokuBlock {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use crate::board::{Cell, Digit};
         for (digit, cell) in self.0.iter().cloned().map(Digit::new_checked).zip(Cell::all()) {
-            #[cfg_attr(rustfmt, rustfmt_skip)]
+            #[rustfmt::skip]
+            #[allow(clippy::write_with_newline)]
             match (cell.row().get(), cell.col().get()) {
                 (_, 3) | (_, 6) => write!(f, " ")?,    // seperate fields in columns
                 (3, 0) | (6, 0) => write!(f, "\n\n")?, // separate fields in rows

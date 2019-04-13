@@ -96,6 +96,7 @@ impl SudokuGenerator {
             // is entry still possible?
             // have to check house possibilities, because cell possibility
             // is temporarily out of date
+            #[allow(clippy::deprecated_cfg_attr)] // rustfmt::skip not allowed on blocks
             #[cfg_attr(rustfmt, rustfmt_skip)]
             {
                 if self.house_solved_digits[entry.row()].overlaps(entry_mask)

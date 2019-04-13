@@ -14,6 +14,10 @@ pub(crate) use crate::board::{
         MiniLine,
         Position,
         House,
-        CellAt
     },
 };
+
+// this is used, but rustc doesn't detect that
+// https://github.com/rust-lang/rust/issues/45268
+#[allow(unused_imports)]
+pub(crate) use crate::board::positions::CellAt;

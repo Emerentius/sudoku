@@ -438,7 +438,7 @@ impl SudokuSolver {
         // check every digit
         while subband < 27 {
             if self.poss_cells[subband] & unsolved_cell != NONE {
-                let mut solver = self.clone();
+                let mut solver = *self;
                 solver.insert_candidate_by_mask(subband, unsolved_cell);
                 if solver._solve(limit, solutions).is_ok() {
                     solver.guess(limit, solutions);
@@ -560,7 +560,7 @@ fn index_mut<T>(slice: &mut [T], idx: usize) -> &mut T {
 // jczsolve equivalent: TblSelfMask
 #[inline]
 fn nonconflicting_cells_same_band(cell: usize) -> u32 {
-    #[cfg_attr(rustfmt, rustfmt_skip)]
+    #[rustfmt::skip]
     static SELF_MASK: [u32; 81] = [
         0x37E3F001, 0x37E3F002, 0x37E3F004, 0x371F8E08, 0x371F8E10, 0x371F8E20, 0x30FC7E40, 0x30FC7E80, 0x30FC7F00,
         0x2FE003F8, 0x2FE005F8, 0x2FE009F8, 0x2F1C11C7, 0x2F1C21C7, 0x2F1C41C7, 0x28FC803F, 0x28FD003F, 0x28FE003F,
@@ -651,7 +651,7 @@ fn locked_minirows(shrink: u32) -> u32 {
 // jczsolve equivalent: reversed TblRowMask
 #[inline]
 fn row_mask(row_mask: u32) -> u32 {
-    #[cfg_attr(rustfmt, rustfmt_skip)]
+    #[rustfmt::skip]
     static ROW_MASK: [u32; 8] = [ // rows where single  found _000 to 111
         0o000000000, 0o000000777, 0o000777000, 0o000777777,
         0o777000000, 0o777000777, 0o777777000, 0o777777777,
@@ -664,7 +664,7 @@ fn row_mask(row_mask: u32) -> u32 {
 // jczsolve equivalent: TblAnother1 and TblAnother2
 #[inline]
 fn neighbor_subbands(subband: usize) -> (usize, usize) {
-    #[cfg_attr(rustfmt, rustfmt_skip)]
+    #[rustfmt::skip]
     static NEIGHBOR_SUBBANDS: [(usize, usize); 27] = [
         (1, 2), (2, 0), (0, 1),
         (4, 5), (5, 3), (3, 4),
@@ -685,7 +685,7 @@ fn bit_pos(mask: u32) -> usize {
     mask.trailing_zeros() as usize
 }
 
-#[cfg_attr(rustfmt, rustfmt_skip)]
+#[rustfmt::skip]
 static SHRINK_MASK: [u32; 512] = [
     0, 1, 1, 1, 1, 1, 1, 1, 2, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3,
     2, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3,
@@ -705,7 +705,7 @@ static SHRINK_MASK: [u32; 512] = [
     6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7,
 ];
 
-#[cfg_attr(rustfmt, rustfmt_skip)]
+#[rustfmt::skip]
 static LOCKED_CANDIDATES_MASK_SAME_BAND: [u32; 512] = [
     0o000000000, 0o000000000, 0o000000000, 0o000000000, 0o000000000, 0o000000000, 0o000000000, 0o000000000,
     0o000000000, 0o000000000, 0o000000000, 0o000000000, 0o000000000, 0o000000000, 0o000000000, 0o000000000,
@@ -773,7 +773,7 @@ static LOCKED_CANDIDATES_MASK_SAME_BAND: [u32; 512] = [
     0o000000000, 0o770770777, 0o707707777, 0o777777777, 0o077077777, 0o777777777, 0o777777777, 0o777777777,
 ];
 
-#[cfg_attr(rustfmt, rustfmt_skip)]
+#[rustfmt::skip]
 static LOCKED_CANDIDATES_MASK_NEIGHBOR_BAND: [u32; 512] = [
     0o777777777, 0o776776776, 0o775775775, 0o777777777, 0o773773773, 0o777777777, 0o777777777, 0o777777777,
     0o767767767, 0o766766766, 0o765765765, 0o767767767, 0o763763763, 0o767767767, 0o767767767, 0o767767767,
@@ -841,7 +841,7 @@ static LOCKED_CANDIDATES_MASK_NEIGHBOR_BAND: [u32; 512] = [
     0o777777777, 0o776776776, 0o775775775, 0o777777777, 0o773773773, 0o777777777, 0o777777777, 0o777777777,
 ];
 
-#[cfg_attr(rustfmt, rustfmt_skip)]
+#[rustfmt::skip]
 static LOCKED_MINIROWS: [u32; 512] = [
     0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000,
     0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000,
@@ -877,7 +877,7 @@ static LOCKED_MINIROWS: [u32; 512] = [
     0o000, 0o001, 0o142, 0o000, 0o124, 0o000, 0o100, 0o000, 0o000, 0o001, 0o002, 0o000, 0o004, 0o000, 0o000, 0o000,
 ];
 
-#[cfg_attr(rustfmt, rustfmt_skip)]
+#[rustfmt::skip]
 static COLUMN_SINGLE: [u32; 512] = [
     0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000,
     0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000,

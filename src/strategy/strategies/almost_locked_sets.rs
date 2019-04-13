@@ -25,10 +25,10 @@ pub(crate) fn find_almost_locked_sets(
             // iterate over all house combinations
             // except combinations of the same house kind
             // because they have no overlap
-            for house1 in 0..27 {
-                for &(cells1, digits1) in &sets1[house1] {
-                    for house2 in (0..27).filter(|&h2| h2 / 9 != house1 / 9) {
-                        for &(cells2, digits2) in &sets2[house2] {
+            for (house1, set1) in sets1.iter().enumerate() {
+                for &(cells1, digits1) in set1 {
+                    for (house2, set2) in sets2.iter().enumerate().filter(|&(h2, _)| h2 / 9 != house1 / 9) {
+                        for &(cells2, digits2) in set2 {
                             let common_digits = digits1 & digits2;
                             if common_digits.is_empty() {
                                 continue;

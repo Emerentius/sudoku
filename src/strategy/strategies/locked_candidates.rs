@@ -31,17 +31,17 @@ pub(crate) fn find_locked_candidates(
 
         {
             let poss_digits = |chute_line, chute_field| miniline_poss_digits[chute_line * 3 + chute_field];
-            for chute_line in 0..3 {
+            for (chute_line, line_uniques) in line_unique_digits.iter_mut().enumerate() {
                 let poss_digits_iter = (0..3).map(|chute_field| poss_digits(chute_line, chute_field));
 
                 let (_, _, unique) = find_unique(poss_digits_iter);
-                line_unique_digits[chute_line] = unique;
+                *line_uniques = unique;
             }
-            for chute_field in 0..3 {
+            for (chute_field, block_uniques) in block_unique_digits.iter_mut().enumerate() {
                 let poss_digits_iter = (0..3).map(|chute_line| poss_digits(chute_line, chute_field));;
 
                 let (_, _, unique) = find_unique(poss_digits_iter);
-                block_unique_digits[chute_field] = unique;
+                *block_uniques = unique;
             }
         }
 

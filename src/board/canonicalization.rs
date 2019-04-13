@@ -66,7 +66,7 @@ impl Transformation {
         let mut digits = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 
         // manual top-down Fisher-Yates shuffle. Needs only 1 ranged random num rather than 9
-        let mut permutation = rng.gen_range(0, 362880u32); // 9!
+        let mut permutation = rng.gen_range(0, 362_880u32); // 9!
         for n_choices in (2..10).rev() {
             let num = permutation % n_choices;
             permutation /= n_choices;
@@ -194,7 +194,7 @@ pub(crate) fn find_minlex_band_transformation(
             let mut band = band;
             permute(&mut band[..], rows_perm, 0, swap_rows_in_band);
 
-            'cols_perm: for cols_perm in (0..6).map(Permutation3::new) {
+            for cols_perm in (0..6).map(Permutation3::new) {
                 let mut band = band;
                 permute(&mut band[..], cols_perm, 0, swap_cols_in_band);
 

@@ -1,16 +1,12 @@
 #![warn(missing_docs)]
 #![allow(
-    clippy::complexity,
+    clippy::cognitive_complexity,
+    clippy::precedence,
     clippy::match_bool,
     clippy::unreadable_literal,
-    clippy::needless_pass_by_value,
     clippy::wrong_self_convention,
-    clippy::write_with_newline,
     clippy::inconsistent_digit_grouping,
-    clippy::len_zero,
-    clippy::len_without_is_empty,
-    clippy::needless_range_loop,
-    clippy::trivially_copy_pass_by_ref
+    clippy::too_many_arguments
 )]
 //! Utilities for classical 9x9 sudokus.
 //!

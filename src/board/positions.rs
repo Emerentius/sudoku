@@ -30,7 +30,7 @@ fn stack(cell: u8) -> u8 {
     col(cell) / 3
 }
 
-#[cfg_attr(rustfmt, rustfmt_skip)]
+#[rustfmt::skip]
 static BLOCK: [u8; N_CELLS] = [
     0, 0, 0, 1, 1, 1, 2, 2, 2,
     0, 0, 0, 1, 1, 1, 2, 2, 2,
@@ -43,7 +43,7 @@ static BLOCK: [u8; N_CELLS] = [
     6, 6, 6, 7, 7, 7, 8, 8, 8,
 ];
 
-#[cfg_attr(rustfmt, rustfmt_skip)]
+#[rustfmt::skip]
 static CELLS_BY_HOUSE: [[u8; 9]; 27] = [
     [0, 1, 2, 3, 4, 5, 6, 7, 8],
     [9, 10, 11, 12, 13, 14, 15, 16, 17],
@@ -78,7 +78,7 @@ static CELLS_BY_HOUSE: [[u8; 9]; 27] = [
 
 // list of cells that share a row, col or field for a given cell
 // sorted low to high
-#[cfg_attr(rustfmt, rustfmt_skip)]
+#[rustfmt::skip]
 static HOUSE_NEIGHBORS_OF_CELL: [[u8; 20]; 81] = [
     [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 18, 19, 20, 27, 36, 45, 54, 63, 72],
     [0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 18, 19, 20, 28, 37, 46, 55, 64, 73],

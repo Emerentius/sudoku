@@ -77,13 +77,13 @@ pub(crate) fn find_locked_candidates(
 
 #[inline]
 fn find_unique<I: Iterator<Item=Set<Digit>>>(possibilities: I) -> (Set<Digit>, Set<Digit>, Set<Digit>) {
-	let mut unsolved = Set::NONE;
-	let mut multiple_unsolved = Set::NONE;
+    let mut unsolved = Set::NONE;
+    let mut multiple_unsolved = Set::NONE;
 
-	for poss_digits in possibilities {
-		multiple_unsolved |= unsolved & poss_digits;
-		unsolved |= poss_digits;
-	}
-	// >= 1, >1, =1 occurences
-	(unsolved, multiple_unsolved, unsolved.without(multiple_unsolved) )
+    for poss_digits in possibilities {
+        multiple_unsolved |= unsolved & poss_digits;
+        unsolved |= poss_digits;
+    }
+    // >= 1, >1, =1 occurences
+    (unsolved, multiple_unsolved, unsolved.without(multiple_unsolved) )
 }

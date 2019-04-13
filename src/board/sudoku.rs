@@ -605,8 +605,8 @@ impl Sudoku {
     /// a sudoku can have is 648 and ~99.99% of all non-equivalent sudokus have only 1, the identity transformation.
 
     // TODO: Deduplicate the shuffle_*lines_or_chutes* functions
-    //		 for some reason the shuffle_bands and shuffle_stacks functions work faster in their current form
-    // 		 rather than with a generic function abstracting over both.
+    //       for some reason the shuffle_bands and shuffle_stacks functions work faster in their current form
+    //       rather than with a generic function abstracting over both.
     pub fn shuffle(&mut self) {
         let transformation = crate::board::canonicalization::Transformation::random();
         transformation.apply(self);
@@ -614,8 +614,8 @@ impl Sudoku {
 
     /// Returns the canonical representation of this sudoku and its automorphism count.
     ///
-	/// All sudokus that can be translated into each other via validity preserving transformations belong to the same
-	/// equivalence class (see [`Sudoku::shuffle`] docs for a list of transformations). The sudoku returned from this
+    /// All sudokus that can be translated into each other via validity preserving transformations belong to the same
+    /// equivalence class (see [`Sudoku::shuffle`] docs for a list of transformations). The sudoku returned from this
     /// function is the same for all sudokus in the equivalence class, if fully solved. Non-solved sudokus will be in
     /// the canonical form after solving. This function allows therefore to check whether two sudokus are
     /// equivalent. It can be used for both for solved and unsolved puzzles.
@@ -625,9 +625,9 @@ impl Sudoku {
     /// Every sudoku has at least 1 automorphism, the identity transformation.
     ///
     /// This function uses the lexicographically minimal permutation as the canonical form.
-	///
-	/// Limited to uniquely solvable sudokus. Returns `None` otherwise.
-	pub fn canonicalized(&self) -> Option<(Sudoku, usize)> {
+    ///
+    /// Limited to uniquely solvable sudokus. Returns `None` otherwise.
+    pub fn canonicalized(&self) -> Option<(Sudoku, usize)> {
         let solved_sudoku = if self.is_solved() {
             *self
         } else if let Some(solved) = self.solve_unique() {
@@ -640,7 +640,7 @@ impl Sudoku {
         let (_, transformation, n_automorphisms) = super::canonicalization::find_canonical_sudoku_and_transformation(solved_sudoku);
         transformation.apply(&mut sudoku);
         Some((sudoku, n_automorphisms))
-	}
+    }
 
     /// Returns an Iterator over sudoku, going from left to right, top to bottom
     pub fn iter(&self) -> Iter {
@@ -667,9 +667,9 @@ impl Sudoku {
     ///
     /// let line_str: &str = &line;
     /// assert_eq!(
-    ///		"...5.............................................................................",
+    ///     "...5.............................................................................",
     ///     line_str
-    ///	);
+    /// );
     /// ```
     pub fn to_str_line(&self) -> SudokuLine {
         let mut chars = [0; N_CELLS];
@@ -710,7 +710,7 @@ impl Sudoku {
     /// ___ ___ ___
     /// ___ ___ ___
     /// ___ ___ ___"
-    ///	);
+    /// );
     /// ```
     pub fn display_block(&self) -> SudokuBlock {
         SudokuBlock(self.0)

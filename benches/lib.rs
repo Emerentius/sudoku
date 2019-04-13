@@ -164,7 +164,7 @@ fn canonicalize(b: &mut test::Bencher) {
     let sudokus = (0..1000).map(|_| Sudoku::generate_filled()).collect::<Vec<_>>();
     let mut sudokus = sudokus.iter().cycle();
 
-	b.iter(|| {
-		sudokus.next().unwrap().canonicalized();
-	})
+    b.iter(|| {
+        sudokus.next().unwrap().canonicalized();
+    })
 }

@@ -408,14 +408,14 @@ fn swap_rows_in_band(band: &mut [u8], row1: u8, row2: u8) {
 // takes iter of cell index pairs and swaps the corresponding cells
 #[inline]
 fn swap_cells(slice: &mut [u8], iter: impl Iterator<Item=(usize, usize)>) {
-	for (idx1, idx2) in iter {
-		debug_assert!(idx1 != idx2);
+    for (idx1, idx2) in iter {
+        debug_assert!(idx1 != idx2);
 
-		let a = slice[idx1];
-		let b = slice[idx2];
-		slice[idx1] = b;
-		slice[idx2] = a;
-	}
+        let a = slice[idx1];
+        let b = slice[idx2];
+        slice[idx1] = b;
+        slice[idx2] = a;
+    }
 }
 
 // check that the canonical sudoku found in the search

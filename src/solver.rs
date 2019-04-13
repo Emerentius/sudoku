@@ -1,4 +1,4 @@
-//	This solver is based on JCZsolve,
+//  This solver is based on JCZsolve,
 //  which is currently (2018-06-26) and to the best of my (emerentius) knowledge the
 //  fastest sudoku solver algorithm.
 //
@@ -11,32 +11,32 @@
 //  The source code used as base for the port was the version by JasonLion from this post:
 //      http://forum.enjoysudoku.com/3-77us-solver-2-8g-cpu-testcase-17sodoku-t30470-210.html#p249309
 //
-//	The main insights and contributions lie in:
+//  The main insights and contributions lie in:
 //  (First three as stated in the original C source)
 //
-//	zhouyundong_2012:
-//		Original authorship
-//  	Key insights:
-//      	Storing bands by digit and the Update routine
-//			  (here named find_locked_candidates_and_update)
+//  zhouyundong_2012:
+//      Original authorship
+//      Key insights:
+//          Storing bands by digit and the Update routine
+//          (here named find_locked_candidates_and_update)
 //
 //  champagne:
-//		Update for 128 bit registers and speed optimization
-//		Key insights:
-//			Pairing of ApplySingleOrEmptyCells and GuessBiValueInCell
+//      Update for 128 bit registers and speed optimization
+//      Key insights:
+//          Pairing of ApplySingleOrEmptyCells and GuessBiValueInCell
 //
 //  JasonLion:
-//		Conversion back to 32 bit data with further speed optimizations
+//      Conversion back to 32 bit data with further speed optimizations
 //
 //  emerentius:
-//		Ported to Rust, simplified, commented and further optimized, ~10-30%
-//		Key insights:
-//			Checking up to three cells if no bivalue cell exists
-//			Avoid unpredictable branch before UPWCL
+//      Ported to Rust, simplified, commented and further optimized, ~10-30%
+//      Key insights:
+//          Checking up to three cells if no bivalue cell exists
+//          Avoid unpredictable branch before UPWCL
 //
-// 	zhouyundong, champagne and JasonLion have all given permission
+//  zhouyundong, champagne and JasonLion have all given permission
 //  for a port under the AGPLv3 license in the forum thread
-//		http://forum.enjoysudoku.com/3-77us-solver-2-8g-cpu-testcase-17sodoku-t30470-270.html#p262718
+//      http://forum.enjoysudoku.com/3-77us-solver-2-8g-cpu-testcase-17sodoku-t30470-270.html#p262718
 
 use crate::Sudoku;
 use crate::helper::Unsolvable;
@@ -314,7 +314,7 @@ impl SudokuSolver {
         // `solved_rows` is a 3-bit mask of the rows in the subband.
         // Mapping from solved minirows to solved rows happens
         // to need the same mask as shrinking for locked candidates
-        // jczsolve equivalent: s , but lower 3 bits inversed
+        // jczsolve equivalent: s, but lower 3 bits inversed
         //                      s_jczsolve = 7 ^ solved_rows
         //                      jczsolve used a 2nd, inverted lookup table
         let locked_candidates_intersection = locked_minirows(shrink) & column_single(poss_cols);
@@ -528,7 +528,7 @@ impl SudokuSolver {
 }
 
 // ----------------------------------------------------------------
-//  					solver indexing
+//                      solver indexing
 // ----------------------------------------------------------------
 // Functions for conditionally compiling bounds checks in arrays.
 // These functions are exclusively for use in the solver.
@@ -562,15 +562,15 @@ fn index_mut<T>(slice: &mut [T], idx: usize) -> &mut T {
 fn nonconflicting_cells_same_band(cell: usize) -> u32 {
     #[cfg_attr(rustfmt, rustfmt_skip)]
     static SELF_MASK: [u32; 81] = [
-        0x37E3F001,	0x37E3F002,	0x37E3F004,	0x371F8E08,	0x371F8E10,	0x371F8E20,	0x30FC7E40,	0x30FC7E80,	0x30FC7F00,
-        0x2FE003F8,	0x2FE005F8,	0x2FE009F8,	0x2F1C11C7,	0x2F1C21C7,	0x2F1C41C7,	0x28FC803F, 0x28FD003F,	0x28FE003F,
-        0x1807F1F8,	0x180BF1F8,	0x1813F1F8,	0x18238FC7,	0x18438FC7,	0x18838FC7, 0x19007E3F,	0x1A007E3F,	0x1C007E3F,
-        0x37E3F001,	0x37E3F002,	0x37E3F004,	0x371F8E08,	0x371F8E10, 0x371F8E20,	0x30FC7E40,	0x30FC7E80,	0x30FC7F00,
-        0x2FE003F8,	0x2FE005F8,	0x2FE009F8,	0x2F1C11C7,	0x2F1C21C7,	0x2F1C41C7,	0x28FC803F,	0x28FD003F,	0x28FE003F,
-        0x1807F1F8,	0x180BF1F8,	0x1813F1F8, 0x18238FC7,	0x18438FC7,	0x18838FC7,	0x19007E3F,	0x1A007E3F,	0x1C007E3F,
-        0x37E3F001,	0x37E3F002,	0x37E3F004,	0x371F8E08,	0x371F8E10,	0x371F8E20,	0x30FC7E40,	0x30FC7E80,	0x30FC7F00,
-        0x2FE003F8, 0x2FE005F8,	0x2FE009F8,	0x2F1C11C7,	0x2F1C21C7,	0x2F1C41C7,	0x28FC803F,	0x28FD003F,	0x28FE003F,
-        0x1807F1F8,	0x180BF1F8,	0x1813F1F8,	0x18238FC7,	0x18438FC7,	0x18838FC7,	0x19007E3F,	0x1A007E3F,	0x1C007E3F,
+        0x37E3F001, 0x37E3F002, 0x37E3F004, 0x371F8E08, 0x371F8E10, 0x371F8E20, 0x30FC7E40, 0x30FC7E80, 0x30FC7F00,
+        0x2FE003F8, 0x2FE005F8, 0x2FE009F8, 0x2F1C11C7, 0x2F1C21C7, 0x2F1C41C7, 0x28FC803F, 0x28FD003F, 0x28FE003F,
+        0x1807F1F8, 0x180BF1F8, 0x1813F1F8, 0x18238FC7, 0x18438FC7, 0x18838FC7, 0x19007E3F, 0x1A007E3F, 0x1C007E3F,
+        0x37E3F001, 0x37E3F002, 0x37E3F004, 0x371F8E08, 0x371F8E10, 0x371F8E20, 0x30FC7E40, 0x30FC7E80, 0x30FC7F00,
+        0x2FE003F8, 0x2FE005F8, 0x2FE009F8, 0x2F1C11C7, 0x2F1C21C7, 0x2F1C41C7, 0x28FC803F, 0x28FD003F, 0x28FE003F,
+        0x1807F1F8, 0x180BF1F8, 0x1813F1F8, 0x18238FC7, 0x18438FC7, 0x18838FC7, 0x19007E3F, 0x1A007E3F, 0x1C007E3F,
+        0x37E3F001, 0x37E3F002, 0x37E3F004, 0x371F8E08, 0x371F8E10, 0x371F8E20, 0x30FC7E40, 0x30FC7E80, 0x30FC7F00,
+        0x2FE003F8, 0x2FE005F8, 0x2FE009F8, 0x2F1C11C7, 0x2F1C21C7, 0x2F1C41C7, 0x28FC803F, 0x28FD003F, 0x28FE003F,
+        0x1807F1F8, 0x180BF1F8, 0x1813F1F8, 0x18238FC7, 0x18438FC7, 0x18838FC7, 0x19007E3F, 0x1A007E3F, 0x1C007E3F,
     ];
     *index(&SELF_MASK, cell)
 }
@@ -652,7 +652,7 @@ fn locked_minirows(shrink: u32) -> u32 {
 #[inline]
 fn row_mask(row_mask: u32) -> u32 {
     #[cfg_attr(rustfmt, rustfmt_skip)]
-    static ROW_MASK: [u32; 8] = [	// rows where single  found _000 to 111
+    static ROW_MASK: [u32; 8] = [ // rows where single  found _000 to 111
         0o000000000, 0o000000777, 0o000777000, 0o000777777,
         0o777000000, 0o777000777, 0o777777000, 0o777777777,
     ];

@@ -1,15 +1,14 @@
 //! Types for cells, digits and other things on a sudoku board
-mod sudoku;
+mod candidate;
+mod canonicalization;
+mod cell_state;
 mod digit;
 pub mod positions;
-mod candidate;
-mod cell_state;
-mod canonicalization;
+mod sudoku;
 
-pub(crate) use self::{
-    positions::*,
-};
+pub(crate) use self::positions::*;
 
+#[rustfmt::skip]
 pub use self::{
     sudoku::Sudoku,
     digit::Digit,

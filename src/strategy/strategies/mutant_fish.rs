@@ -14,7 +14,16 @@ pub(crate) fn find_mutant_fish(
     ) -> bool,
 ) -> Result<(), Unsolvable> {
     for digit in (1..10).map(Digit::new) {
-        if find_base(house_poss_positions, digit, target_size, Set::NONE, Set::ALL.into_iter(), Set::NONE, &mut on_fish, stop_after_first) {
+        if find_base(
+            house_poss_positions,
+            digit,
+            target_size,
+            Set::NONE,
+            Set::ALL.into_iter(),
+            Set::NONE,
+            &mut on_fish,
+            stop_after_first,
+        ) {
             return Ok(());
         };
     }
@@ -38,7 +47,9 @@ fn find_base(
 ) -> bool {
     if base_houses.len() == target_size {
         // nothing of interest found
-        if candidate_cells.len() != target_size { return false }
+        if candidate_cells.len() != target_size {
+            return false;
+        }
 
         // found base, now try to find cover
         if find_cover(
@@ -50,7 +61,7 @@ fn find_base(
             (Set::ALL ^ base_houses).into_iter(),
             Set::NONE,
             on_fish,
-            stop_after_first
+            stop_after_first,
         ) {
             return true;
         }
@@ -63,21 +74,30 @@ fn find_base(
         let house_candidate_cells = house.cells_at(possible_pos);
 
         // not looking for finned fish, neither endo nor exo
-        if house_candidate_cells.len() > target_size
-            || house_candidate_cells.overlaps(candidate_cells)
-        {
-            continue
+        if house_candidate_cells.len() > target_size || house_candidate_cells.overlaps(candidate_cells) {
+            continue;
         }
 
         let new_candidate_cells = candidate_cells | house_candidate_cells;
 
         // n_poss == 0 => solved row (or impossible)
         // n_poss == 1 => hidden single
-        if n_poss < 2 || new_candidate_cells.len() > target_size { continue }
+        if n_poss < 2 || new_candidate_cells.len() > target_size {
+            continue;
+        }
 
         let new_base_houses = base_houses | house;
-        if find_base(house_poss_positions, digit, target_size, new_base_houses, houses.clone(), new_candidate_cells, on_fish, stop_after_first) {
-            return true
+        if find_base(
+            house_poss_positions,
+            digit,
+            target_size,
+            new_base_houses,
+            houses.clone(),
+            new_candidate_cells,
+            on_fish,
+            stop_after_first,
+        ) {
+            return true;
         };
     }
     false
@@ -118,13 +138,24 @@ fn find_cover(
         }
         let new_covered_candidate_cells = covered_candidate_cells | house_covered_candidates;
 
-        if find_cover(digit, base_houses, base_is_mutant, candidate_cells, new_covered_candidate_cells, eligible_houses.clone(), chosen_houses | house, on_fish, stop_after_first) {
+        if find_cover(
+            digit,
+            base_houses,
+            base_is_mutant,
+            candidate_cells,
+            new_covered_candidate_cells,
+            eligible_houses.clone(),
+            chosen_houses | house,
+            on_fish,
+            stop_after_first,
+        ) {
             return true;
         };
     }
     false
 }
 
+#[rustfmt::skip]
 pub(crate) fn is_mutant(houses: Set<House>) -> bool {
     House::ALL_ROWS.contains(houses)
         || House::ALL_COLS.contains(houses)

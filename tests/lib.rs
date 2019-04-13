@@ -367,7 +367,11 @@ fn canonicalize_idempotency() {
         let (sudoku, _) = Sudoku::generate_filled().canonicalized().unwrap();
         let (recanonicalized, _) = sudoku.canonicalized().unwrap();
         if sudoku != recanonicalized {
-            panic!("canonicalize(canonicalize(sudoku)) != canonicalize(sudoku)\n1. {}\n2. {}", recanonicalized.to_str_line(), sudoku.to_str_line());
+            panic!(
+                "canonicalize(canonicalize(sudoku)) != canonicalize(sudoku)\n1. {}\n2. {}",
+                recanonicalized.to_str_line(),
+                sudoku.to_str_line()
+            );
         }
     }
 }

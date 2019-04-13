@@ -27,7 +27,7 @@ impl Digit {
     /// # Panic
     /// Panics, if the digit is not in the range of `0..=8`.
     pub(crate) fn from_index(idx: u8) -> Self {
-        Self::new_checked(idx+1).unwrap()
+        Self::new_checked(idx + 1).unwrap()
     }
 
     /// Returns an iterator over all digits.

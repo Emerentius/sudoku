@@ -7,7 +7,11 @@ pub(crate) fn find_hidden_singles(
     stop_after_first: bool,
     mut on_new_entry: impl FnMut(Candidate, House) -> Result<(), Unsolvable>,
 ) -> Result<(), Unsolvable> {
-    for house in House::all().chain(House::all()).skip(*last_house as usize).take(27) {
+    for house in House::all()
+        .chain(House::all())
+        .skip(*last_house as usize)
+        .take(27)
+    {
         *last_house = if *last_house < 27 { *last_house + 1 } else { 0 };
         let mut unsolved: Set<Digit> = Set::NONE;
         let mut multiple_unsolved = Set::NONE;
@@ -23,7 +27,9 @@ pub(crate) fn find_hidden_singles(
         }
 
         let mut singles = unsolved.without(multiple_unsolved);
-        if singles.is_empty() { continue }
+        if singles.is_empty() {
+            continue;
+        }
 
         for cell in cells {
             let mask = cell_poss_digits[cell];
@@ -42,7 +48,7 @@ pub(crate) fn find_hidden_singles(
                 match stop_after_first {
                     true => return Ok(()),
                     false if singles.is_empty() => break, // continue next house
-                    _ => (), // find rest of singles in house
+                    _ => (),                              // find rest of singles in house
                 }
             }
         }

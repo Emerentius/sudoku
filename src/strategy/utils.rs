@@ -34,14 +34,17 @@ fn find_direct_links(
 
             // cell links
             let insert_link = |other_digit, link_collection: &mut LinkMatrix| {
-                let candidate2 = Candidate { cell, digit: other_digit };
+                let candidate2 = Candidate {
+                    cell,
+                    digit: other_digit,
+                };
                 link_collection.entry(candidate1).or_default().push(candidate2);
             };
             // if unique() returns Err(Zero), then it's a naked single
             // not of interest here
             if let Some(other_digit) = other_digits.unique().unwrap_or(None) {
                 insert_link(other_digit, &mut strong_links);
-                continue
+                continue;
             }
 
             for digit2 in other_digits {
@@ -52,14 +55,17 @@ fn find_direct_links(
             for (house, other_positions) in conflicting_house_positions(candidate1, house_poss_positions) {
                 let insert_link = |other_pos, link_collection: &mut LinkMatrix| {
                     let other_cell = house.cell_at(other_pos);
-                    let candidate2 = Candidate { cell: other_cell, digit };
+                    let candidate2 = Candidate {
+                        cell: other_cell,
+                        digit,
+                    };
                     link_collection.entry(candidate1).or_default().push(candidate2);
                 };
                 // if unique() returns Err(Zero), then it's a hidden single
                 // not of interest here
                 if let Some(other_pos) = other_positions.unique().unwrap_or(None) {
                     insert_link(other_pos, &mut strong_links);
-                    continue
+                    continue;
                 }
 
                 for other_pos in other_positions {
@@ -69,7 +75,10 @@ fn find_direct_links(
         }
     }
 
-    Links { strong: strong_links, weak: weak_links }
+    Links {
+        strong: strong_links,
+        weak: weak_links,
+    }
 }
 
 fn conflicting_house_positions(
@@ -80,10 +89,8 @@ fn conflicting_house_positions(
     //       or use some closure capture trickery
     let positions = vec![cell.row_pos(), cell.col_pos(), cell.block_pos()];
     let houses = cell.houses().to_vec();
-    houses.into_iter()
-        .zip(
-            positions.into_iter()
-        )
-        .map(move |(house, pos)| (house, house_poss_positions[house][digit] ^ pos ))
+    houses
+        .into_iter()
+        .zip(positions.into_iter())
+        .map(move |(house, pos)| (house, house_poss_positions[house][digit] ^ pos))
 }
-

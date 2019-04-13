@@ -45,12 +45,12 @@
 //! ```
 
 pub mod bitset;
+pub mod board;
 mod consts;
 mod generator;
-mod solver;
 mod helper;
-pub mod strategy;
-pub mod board;
 pub mod parse_errors;
+mod solver;
+pub mod strategy;
 
 pub use crate::board::Sudoku;

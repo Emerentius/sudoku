@@ -2,7 +2,7 @@
 #![allow(unused)]
 use super::prelude::*;
 
-pub(crate) fn find_almost_locked_sets (
+pub(crate) fn find_almost_locked_sets(
     cells_poss_digits: &CellArray<Set<Digit>>,
     //house_solved_digits: &HouseArray<Set<Digit>>,
     //subset_size: u8,
@@ -11,6 +11,7 @@ pub(crate) fn find_almost_locked_sets (
         //House,
         //Set<Position<House>>,
         //Set<Digit>,
+        (), // rustfmt bug: deletes comments unless something is here
     ) -> bool,
 ) -> Result<(), Unsolvable> {
     let als = _find_almost_locked_sets(cells_poss_digits);
@@ -30,7 +31,7 @@ pub(crate) fn find_almost_locked_sets (
                         for &(cells2, digits2) in &sets2[house2] {
                             let common_digits = digits1 & digits2;
                             if common_digits.is_empty() {
-                                continue
+                                continue;
                             }
 
                             //let mut restricted_common_digits = Set::NONE;
@@ -54,10 +55,9 @@ pub(crate) fn find_almost_locked_sets (
                                 // also, the restricted common digit must not be in an
                                 // overlapping cell
                                 if cells_of_digit1.overlaps(cells_of_digit2) {
-                                    continue
+                                    continue;
                                 }
                             }
-
                         }
                     }
                 }
@@ -73,13 +73,19 @@ type AlmostLockedSets = [[Vec<(Set<Cell>, Set<Digit>)>; 27]; 8];
 // 1-8 cells
 // 2-9 candidates
 // [[Vec<(Set<Cell>, Set<Digit>)>; 9]; 27]
-pub(crate) fn _find_almost_locked_sets(
-    cells_poss_digits: &CellArray<Set<Digit>>
-) -> AlmostLockedSets {
-    let mut sets = AlmostLockedSets::default();//[[vec![]; 9]; 27];
+pub(crate) fn _find_almost_locked_sets(cells_poss_digits: &CellArray<Set<Digit>>) -> AlmostLockedSets {
+    let mut sets = AlmostLockedSets::default(); //[[vec![]; 9]; 27];
     for house in House::all() {
         let cells = house.cells();
-        _walk_combinations(cells_poss_digits, cells.into_iter(), Set::NONE, Set::NONE, &mut sets, house.as_index(), 0);
+        _walk_combinations(
+            cells_poss_digits,
+            cells.into_iter(),
+            Set::NONE,
+            Set::NONE,
+            &mut sets,
+            house.as_index(),
+            0,
+        );
     }
     sets
 }
@@ -107,6 +113,14 @@ pub(crate) fn _walk_combinations(
             almost_locked_sets[new_cell_set.len() as usize - 1][house].push((new_cell_set, new_digits));
         }
 
-        _walk_combinations(cells_poss_digits, cells.clone(), new_cell_set, new_digits, almost_locked_sets, house, depth + 1);
+        _walk_combinations(
+            cells_poss_digits,
+            cells.clone(),
+            new_cell_set,
+            new_digits,
+            almost_locked_sets,
+            house,
+            depth + 1,
+        );
     }
 }

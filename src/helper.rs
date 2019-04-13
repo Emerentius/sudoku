@@ -1,10 +1,10 @@
 // A collection of internal helper types
 // like arrays that can only be indexed by the right position structs
 
+use crate::board::{Cell, Digit, House};
 use crate::consts::N_CELLS;
-use crate::board::{Cell, House, Digit};
-use std::ops::{Deref, DerefMut, Index, IndexMut};
 use std::fmt;
+use std::ops::{Deref, DerefMut, Index, IndexMut};
 
 #[derive(Debug)]
 pub(crate) struct Unsolvable;

@@ -1,5 +1,5 @@
 //! Errors that may be encountered when reading a sudoku from a string
-use crate::board::{row, col, block};
+use crate::board::{block, col, row};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 /// An invalid sudoku entry encountered during parsing.
@@ -76,7 +76,9 @@ impl fmt::Display for LineParseError {
             Error::InvalidEntry(InvalidEntry { cell, ch }) => {
                 write!(f, "cell {} contains invalid character '{}'", cell, ch)
             }
-            Error::NotEnoughCells(cells) => write!(f, "sudoku contains {} cells instead of required 81", cells),
+            Error::NotEnoughCells(cells) => {
+                write!(f, "sudoku contains {} cells instead of required 81", cells)
+            }
             Error::TooManyCells => write!(
                 f,
                 "sudoku contains more than 81 cells or is missing comment delimiter"

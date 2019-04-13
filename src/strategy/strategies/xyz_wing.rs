@@ -6,14 +6,14 @@ pub(crate) fn find_xyz_wing(
     cells_poss_digits: &CellArray<Set<Digit>>,
     stop_after_first: bool,
     mut on_xyz_wing: impl FnMut(
-        (Cell, Set<Digit>), // hinge
+        (Cell, Set<Digit>),      // hinge
         [(Cell, Set<Digit>); 2], // pincers
     ) -> bool,
 ) -> Result<(), Unsolvable> {
     for cell in Cell::all() {
         let poss_digits = cells_poss_digits[cell];
         if poss_digits.len() != 3 {
-            continue
+            continue;
         }
 
         let row_cells = cell.row().cells();
@@ -28,7 +28,8 @@ pub(crate) fn find_xyz_wing(
 
         for &(cells1, cells2) in &[(block_row_dj, row_dj), (block_col_dj, col_dj)] {
             let overlapping_bivalue_cells = |cells: Set<Cell>| {
-                cells.into_iter()
+                cells
+                    .into_iter()
                     .map(|cell| (cell, cells_poss_digits[cell]))
                     .filter(|&(_, other_poss_digs)| {
                         other_poss_digs.len() == 2 && (poss_digits & other_poss_digs).len() == 2
@@ -37,16 +38,13 @@ pub(crate) fn find_xyz_wing(
             for (cell1, poss_digs1) in overlapping_bivalue_cells(cells1) {
                 for (cell2, poss_digs2) in overlapping_bivalue_cells(cells2) {
                     let common_digits = poss_digs1 & poss_digs2;
-                    if common_digits.len() != 1
-                        || (poss_digs1 | poss_digs2 | poss_digits).len() != 3 {
-                        continue
+                    if common_digits.len() != 1 || (poss_digs1 | poss_digs2 | poss_digits).len() != 3 {
+                        continue;
                     }
 
                     // found xy-wing
-                    let found_conflicts = on_xyz_wing(
-                        (cell, poss_digits),
-                        [(cell1, poss_digs1), (cell2, poss_digs2)],
-                    );
+                    let found_conflicts =
+                        on_xyz_wing((cell, poss_digits), [(cell1, poss_digs1), (cell2, poss_digs2)]);
                     if found_conflicts && stop_after_first {
                         return Ok(());
                     }
@@ -78,7 +76,7 @@ mod test {
             │ 146  145   8    │ 1456  9     567   │ 1356  2   1367 │
             │ 7    1245  146  │ 1456  1245  3     │ 156   8   9    │
             │ 9    125   3    │ 8     1257  2567  │ 156   4   167  │
-            └─────────────────┴───────────────────┴────────────────┘"
+            └─────────────────┴───────────────────┴────────────────┘",
         );
 
         let (_, deductions) = solver.solve(&[crate::strategy::Strategy::XyzWing]).unwrap_err();
@@ -86,15 +84,13 @@ mod test {
         assert_eq!(
             deductions.get(0).unwrap(),
             crate::strategy::Deduction::Wing {
-                hinge: Cell::new(5*9 + 8),
+                hinge: Cell::new(5 * 9 + 8),
                 hinge_digits: Digit::new(1).as_set() | Digit::new(2) | Digit::new(4),
-                pincers: Cell::new(3*9 + 8).as_set() | Cell::new(5*9 + 0),
-                conflicts: &[
-                    Candidate {
-                        cell: Cell::new(5*9 + 6),
-                        digit: Digit::new(1),
-                    }
-                ][..],
+                pincers: Cell::new(3 * 9 + 8).as_set() | Cell::new(5 * 9 + 0),
+                conflicts: &[Candidate {
+                    cell: Cell::new(5 * 9 + 6),
+                    digit: Digit::new(1),
+                }][..],
             }
         );
     }

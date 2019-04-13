@@ -3,11 +3,11 @@
 //! A sudoku consists of 81 cells, arranged into 9 rows, 9 columns and 9 blocks.
 #![allow(unused, missing_docs)]
 
-use std::num::NonZeroU8;
 use crate::bitset::{Set, SetElement};
-use crate::helper::Unsolvable;
 use crate::board::Digit;
 use crate::consts::*;
+use crate::helper::Unsolvable;
+use std::num::NonZeroU8;
 
 #[inline(always)]
 pub(crate) fn row(cell: u8) -> u8 {
@@ -306,6 +306,7 @@ impl House {
     pub(crate) const ALL_BLOCKS: Set<House> = Set(0o777_000_000);
 
     /// Determine whether this house is a [`Row`], [`Col`] or [`Block`]
+    #[rustfmt::skip]
     pub fn categorize(self) -> HouseType {
         debug_assert!(self.0 < 27);
         match self.0 {
@@ -519,7 +520,7 @@ impl Cell {
 impl Cell {
     /// Returns an array of the row, column and block this cell belongs to, in that order.
     pub(crate) fn houses(self) -> [House; 3] {
-            [self.row().house(), self.col().house(), self.block().house() ]
+        [self.row().house(), self.col().house(), self.block().house()]
     }
 
     /// Returns an iterator over the 20 cells that share a house with this one. The iteration
@@ -534,6 +535,7 @@ impl Cell {
 
     /// Returns a set of the 20 cells that share a house with this one.
     #[inline(always)]
+    #[rustfmt::skip]
     pub(crate) fn neighbors_set(self) -> Set<Cell> {
         (self.row().cells() | self.col().cells() | self.block().cells())
             ^ self
@@ -547,7 +549,7 @@ impl Chute {
     pub(crate) fn minilines(self) -> [MiniLine; 9] {
         let mut slices = [MiniLine(0); 9];
         for (i, slice) in (0..9).zip(slices.iter_mut()) {
-                *slice = MiniLine(self.0 * 9 + i);
+            *slice = MiniLine(self.0 * 9 + i);
         }
         slices
     }
@@ -565,8 +567,8 @@ impl MiniLine {
         // line neighbor, block neighbor
         let (ln, bn) = MINILINE_NEIGHBORS[self.as_index()];
         (
-            [ MiniLine(ln[0]), MiniLine(ln[1]) ],
-            [ MiniLine(bn[0]), MiniLine(bn[1]) ],
+            [MiniLine(ln[0]), MiniLine(ln[1])],
+            [MiniLine(bn[0]), MiniLine(bn[1])],
         )
     }
 
@@ -672,6 +674,7 @@ macro_rules! impl_from_raw {
     };
 }
 
+#[rustfmt::skip]
 impl_from!(
     Row, Line, |r| { r },
     Col, Line, |c| { c + COL_OFFSET },
@@ -685,6 +688,7 @@ impl_from!(
 
 // non-equivalent conversions
 // the first type is the container of the second
+#[rustfmt::skip]
 impl_from!(
     Cell, Row, |c| { row(c) },
     Cell, Col, |c| { col(c) },
@@ -738,6 +742,7 @@ pub(crate) trait IntoHouse: Into<House> {
 
 impl<T: Into<House>> IntoHouse for T {}
 
+#[rustfmt::skip]
 static MINILINE_NEIGHBORS: [([u8; 2], [u8; 2]); 54] = [
         ([1, 2], [3, 6]),
         ([2, 0], [4, 7]),
@@ -835,8 +840,8 @@ mod test {
             let first_cell = raw_row * 9;
 
             let iter1 = row.cells().into_iter();
-            let iter2 = (first_cell..first_cell+9).map(Cell::new);
-            assert!( iter1.eq(iter2) );
+            let iter2 = (first_cell..first_cell + 9).map(Cell::new);
+            assert!(iter1.eq(iter2));
         }
     }
 
@@ -845,7 +850,7 @@ mod test {
         for (raw_col, col) in (0..9).map(|c| (c, Col::new(c))) {
             let iter1 = col.cells().into_iter();
             let iter2 = (raw_col..81).step_by(9).map(Cell::new);
-            assert!( iter1.eq(iter2) );
+            assert!(iter1.eq(iter2));
         }
     }
 
@@ -868,8 +873,8 @@ mod test {
             let first_cell = raw_band * 27;
 
             let iter1 = band.cells().into_iter();
-            let iter2 = (first_cell..first_cell+27).map(Cell::new);
-            assert!( iter1.eq(iter2) );
+            let iter2 = (first_cell..first_cell + 27).map(Cell::new);
+            assert!(iter1.eq(iter2));
         }
     }
 
@@ -880,13 +885,14 @@ mod test {
 
             let iter1 = stack.cells().into_iter();
 
-            let iter2 = (0..9).flat_map(|row| {
+            let iter2 = (0..9)
+                .flat_map(|row| {
                     let cell = row * 9 + first_col;
-                    cell..cell+3
+                    cell..cell + 3
                 })
                 .map(Cell::new);
 
-            assert!( iter1.eq(iter2) );
+            assert!(iter1.eq(iter2));
         }
     }
 }

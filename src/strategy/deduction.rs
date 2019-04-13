@@ -1,9 +1,9 @@
 //! Results of strategy applications
 
-use crate::board::{Candidate};
 use super::Strategy;
-use crate::board::*;
 use crate::bitset::Set;
+use crate::board::Candidate;
+use crate::board::*;
 
 type DeductionRange = std::ops::Range<usize>;
 type _Deduction = Deduction<DeductionRange>;
@@ -19,14 +19,15 @@ pub struct Deductions {
 /// Borrowing iterator over [`Deductions`]
 pub struct Iter<'a> {
     deductions: std::slice::Iter<'a, _Deduction>,
-    eliminated_entries: &'a [Candidate]
+    eliminated_entries: &'a [Candidate],
 }
 
 impl<'a> Iterator for Iter<'a> {
     type Item = Deduction<&'a [Candidate]>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.deductions.next()
+        self.deductions
+            .next()
             .map(|deduction| deduction.clone().with_slices(self.eliminated_entries))
     }
 }
@@ -39,7 +40,8 @@ impl Deductions {
 
     /// Return the `index`th Deduction, if it exists.
     pub fn get(&self, index: usize) -> Option<Deduction<&[Candidate]>> {
-        self.deductions.get(index)
+        self.deductions
+            .get(index)
             .map(|deduction| deduction.clone().with_slices(&self.eliminated_entries))
     }
 
@@ -117,7 +119,8 @@ pub enum Deduction<T> {
         conflicts: T,
     },
     //SinglesChain(T),
-    #[doc(hidden)] __NonExhaustive
+    #[doc(hidden)]
+    __NonExhaustive,
 }
 
 impl Deduction<&'_ [Candidate]> {
@@ -128,16 +131,19 @@ impl Deduction<&'_ [Candidate]> {
             NakedSingles { .. } => Strategy::NakedSingles,
             HiddenSingles { .. } => Strategy::HiddenSingles,
             LockedCandidates { .. } => Strategy::LockedCandidates,
-            BasicFish { positions, .. } => {
-                match positions.len() {
-                    2 => Strategy::XWing,
-                    3 => Strategy::Swordfish,
-                    4 => Strategy::Jellyfish,
-                    _ => unreachable!(),
-                }
-            }
+            BasicFish { positions, .. } => match positions.len() {
+                2 => Strategy::XWing,
+                3 => Strategy::Swordfish,
+                4 => Strategy::Jellyfish,
+                _ => unreachable!(),
+            },
             //SinglesChain { .. } => Strategy::SinglesChain,
-            Subsets { house, positions, conflicts, .. } => {
+            Subsets {
+                house,
+                positions,
+                conflicts,
+                ..
+            } => {
                 use crate::board::positions::HouseType::*;
                 let conflict_cell = conflicts[0].cell;
                 let conflict_pos = match house.categorize() {
@@ -164,7 +170,6 @@ impl Deduction<&'_ [Candidate]> {
                     _ => unreachable!(),
                 }
             }*/
-
             Fish { base, cover, .. } => {
                 use crate::strategy::strategies::mutant_fish::is_mutant;
                 let is_mutant = is_mutant(base) || is_mutant(cover);
@@ -177,12 +182,10 @@ impl Deduction<&'_ [Candidate]> {
                     _ => unreachable!(),
                 }
             }
-            Wing { hinge_digits, .. } => {
-                match hinge_digits.len() {
-                    2 => Strategy::XyWing,
-                    3 => Strategy::XyzWing,
-                    _ => unreachable!(),
-                }
+            Wing { hinge_digits, .. } => match hinge_digits.len() {
+                2 => Strategy::XyWing,
+                3 => Strategy::XyzWing,
+                _ => unreachable!(),
             },
             AvoidableRectangle { .. } => unimplemented!(),
             __NonExhaustive => unreachable!(),
@@ -190,6 +193,7 @@ impl Deduction<&'_ [Candidate]> {
     }
 }
 
+#[rustfmt::skip]
 impl _Deduction {
     /// Replace the index ranges from the internal representation with slices
     /// for the external API

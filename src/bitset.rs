@@ -5,9 +5,9 @@
 //! to confuse bitmasks for different things. This module contains type-safe, space-efficient
 //! fixed-length bitsets for digits and various sudoku positions.
 
-use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Not, BitXor, BitXorAssign};
+use crate::board::{Cell, Col, Digit, House, Line, Position, Row};
 use crate::helper::Unsolvable;
-use crate::board::{Digit, Cell, Row, Col, Line, House, Position};
+use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, BitXor, BitXorAssign, Not};
 
 /// Generic, fixed-size bitset
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -93,7 +93,7 @@ impl_bitops_assign!(
 
 impl<T: SetElement> Not for Set<T>
 where
-    Self: PartialEq + Copy
+    Self: PartialEq + Copy,
 {
     type Output = Self;
     fn not(self) -> Self {
@@ -115,7 +115,7 @@ impl<T: SetElement> Set<T>
 where
     // TODO: properly implement the traits for Set and Iter
     //       bounded on T::Storage, not on T (which derive does)
-    Self: PartialEq + Copy
+    Self: PartialEq + Copy,
 {
     /// Set containing all possible elements
     pub const ALL: Set<T> = Set(<T as SetElement>::ALL);
@@ -213,10 +213,12 @@ pub trait SetElement: Sized + set_element::Sealed {
     const ALL: Self::Storage;
     const NONE: Self::Storage;
 
-    type Storage:
-        BitAnd<Output = Self::Storage> + BitAndAssign
-        + BitOr<Output = Self::Storage> + BitOrAssign
-        + BitXor<Output = Self::Storage> + BitXorAssign
+    type Storage: BitAnd<Output = Self::Storage>
+        + BitAndAssign
+        + BitOr<Output = Self::Storage>
+        + BitOrAssign
+        + BitXor<Output = Self::Storage>
+        + BitXorAssign
         + Not<Output = Self::Storage>
         + PartialOrd
         + std::fmt::Binary
@@ -237,7 +239,7 @@ mod set_element {
         };
     }
 
-    impl_sealed!{
+    impl_sealed! {
         Cell, Digit, Row, Col, House, Line, Position<Line>, Position<House>
     }
 }

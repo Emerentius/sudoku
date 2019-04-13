@@ -11,11 +11,11 @@
 //! made to optimize it, expect the solver to be at least an order of magnitude
 //! slower than the fast solver.
 
-mod solver;
 pub mod deduction;
+mod solver;
 mod strategies;
 pub(crate) mod utils;
 
-pub use self::solver::{StrategySolver};
-pub use self::strategies::Strategy;
 pub use self::deduction::Deduction;
+pub use self::solver::StrategySolver;
+pub use self::strategies::Strategy;

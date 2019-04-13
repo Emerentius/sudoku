@@ -1,5 +1,5 @@
 use crate::bitset::Set;
-use crate::board::{Digit, Cell, Row, Col, Block};
+use crate::board::{Block, Cell, Col, Digit, Row};
 
 /// Represents a digit in a specific cell
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -20,7 +20,10 @@ impl Candidate {
         assert!(cell < 81);
         assert!(0 < digit && digit < 10);
 
-        Candidate { cell: Cell::new(cell), digit: Digit::new(digit) }
+        Candidate {
+            cell: Cell::new(cell),
+            digit: Digit::new(digit),
+        }
     }
 
     /// Returns the row of this candidate's cell

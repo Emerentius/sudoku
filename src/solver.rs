@@ -38,8 +38,8 @@
 //  for a port under the AGPLv3 license in the forum thread
 //      http://forum.enjoysudoku.com/3-77us-solver-2-8g-cpu-testcase-17sodoku-t30470-270.html#p262718
 
-use crate::Sudoku;
 use crate::helper::Unsolvable;
+use crate::Sudoku;
 use crunchy::unroll;
 
 // masks of 27 bits
@@ -252,7 +252,7 @@ impl SudokuSolver {
             // Over 80% of time is spent in this function.
             let mut found_nothing = true;
 
-            unroll!{
+            unroll! {
                 for subband in 0..27 {
                     // The first condition is always true,
                     // but the optimizer doesn't understand that.

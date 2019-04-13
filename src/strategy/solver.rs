@@ -1,12 +1,12 @@
-use crate::Sudoku;
 use crate::bitset::Set;
 use crate::board::Candidate;
-use crate::helper::{HouseArray, CellArray, DigitArray, Unsolvable};
 use crate::board::*;
+use crate::helper::{CellArray, DigitArray, HouseArray, Unsolvable};
 use crate::strategy::{
     deduction::{Deduction, Deductions},
     strategies::*,
 };
+use crate::Sudoku;
 
 type EliminationsRange = std::ops::Range<usize>;
 type _Deduction = Deduction<EliminationsRange>;
@@ -81,11 +81,11 @@ impl StrategySolver {
 
     /// Construct a new StrategySolver
     pub fn from_sudoku(sudoku: Sudoku) -> StrategySolver {
-        let deduced_entries = sudoku.iter()
+        let deduced_entries = sudoku
+            .iter()
             .enumerate()
-            .filter_map(|(cell, opt_num)| {
-                opt_num.map(|digit| Candidate::new(cell as u8, digit))
-            }).collect();
+            .filter_map(|(cell, opt_num)| opt_num.map(|digit| Candidate::new(cell as u8, digit)))
+            .collect();
 
         StrategySolver {
             deduced_entries,
@@ -133,19 +133,22 @@ impl StrategySolver {
     /// trivially conflicting with entries.
     pub(crate) fn from_grid_state_str(grid_state: &str) -> StrategySolver {
         let mut _grid_state = [CellState::Candidates(Set::NONE); 81];
-        let entries = grid_state.lines()
+        let entries = grid_state
+            .lines()
             .flat_map(|line| line.split_whitespace())
             .filter(|&entry| entry == "_" || entry.parse::<u32>().is_ok());
 
         for (cell_state, entry) in _grid_state.iter_mut().zip(entries) {
-            let candidates = entry.as_bytes()
+            let candidates = entry
+                .as_bytes()
                 .iter()
-                .map(|byte| byte - b'0')        // only ascii bytes 1-9 will pass
-                .filter_map(Digit::new_checked) // Digit::new_checked
+                .map(|byte| byte - b'0')
+                // only ascii bytes 1-9 will pass Digit::new_checked
+                .filter_map(Digit::new_checked)
                 .fold(Set::NONE, std::ops::BitOr::bitor);
             let state = match candidates.unique().unwrap_or(None) {
                 Some(digit) => CellState::Digit(digit),
-                None        => CellState::Candidates(candidates),
+                None => CellState::Candidates(candidates),
             };
             *cell_state = state;
         }
@@ -173,7 +176,14 @@ impl StrategySolver {
         for (cell, &digits) in solver.cell_poss_digits.state.iter().enumerate() {
             grid[cell] = CellState::Candidates(digits);
         }
-        for (cell, &digit) in solver.grid.state.0.iter().enumerate().filter(|(_, &digit)| digit != 0) {
+        for (cell, &digit) in solver
+            .grid
+            .state
+            .0
+            .iter()
+            .enumerate()
+            .filter(|(_, &digit)| digit != 0)
+        {
             grid[cell] = CellState::Digit(Digit::new(digit));
         }
         grid
@@ -201,7 +211,7 @@ impl StrategySolver {
             &mut self.deduced_entries,
             candidate,
             &mut self.deductions,
-            Deduction::NakedSingles(candidate)
+            Deduction::NakedSingles(candidate),
         )
         .map_err(|Unsolvable| ())?;
         // TODO: remove the initial strategy insertion
@@ -210,6 +220,7 @@ impl StrategySolver {
         Ok(())
     }
 
+    #[rustfmt::skip]
     fn into_deductions(self) -> Deductions {
         let Self { deductions, deduced_entries, eliminated_entries, .. } = self;
         Deductions { deductions, deduced_entries, eliminated_entries }
@@ -244,14 +255,16 @@ impl StrategySolver {
         let lens = (self.deduced_entries.len(), self.eliminated_entries.len());
         'outer: loop {
             if self.is_solved() {
-                break
+                break;
             }
 
             let n_deductions = self.deduced_entries.len();
             let n_eliminated = self.eliminated_entries.len();
-            if first.deduce_all(self, true).is_err() { break };
+            if first.deduce_all(self, true).is_err() {
+                break;
+            };
             if self.deduced_entries.len() > n_deductions {
-                continue 'outer
+                continue 'outer;
             }
 
             for strategy in rest {
@@ -259,10 +272,10 @@ impl StrategySolver {
                     break;
                 };
                 if self.deduced_entries.len() > n_deductions || self.eliminated_entries.len() > n_eliminated {
-                    continue 'outer
+                    continue 'outer;
                 }
             }
-            break
+            break;
         }
         lens < (self.deduced_entries.len(), self.eliminated_entries.len())
     }
@@ -276,7 +289,10 @@ impl StrategySolver {
         self._update_cell_poss_house_solved(false)
     }
 
-    pub(crate) fn _update_cell_poss_house_solved(&mut self, find_naked_singles: bool) -> Result<(), Unsolvable> {
+    pub(crate) fn _update_cell_poss_house_solved(
+        &mut self,
+        find_naked_singles: bool,
+    ) -> Result<(), Unsolvable> {
         let new_eliminations;
         {
             let (_, le_cp, cell_poss) = self.cell_poss_digits.get_mut();
@@ -287,7 +303,15 @@ impl StrategySolver {
 
                 // deductions made here may conflict with entries already in the queue
                 // in the queue. In that case the sudoku is impossible.
-                Self::remove_impossibilities(&mut self.grid.state, cell_poss, candidate.cell, impossibles, &mut self.deduced_entries, &mut self.deductions, find_naked_singles)?;
+                Self::remove_impossibilities(
+                    &mut self.grid.state,
+                    cell_poss,
+                    candidate.cell,
+                    impossibles,
+                    &mut self.deduced_entries,
+                    &mut self.deductions,
+                    find_naked_singles,
+                )?;
             }
             *le_cp = self.eliminated_entries.len() as _;
         }
@@ -301,7 +325,7 @@ impl StrategySolver {
 
         let (ld, le, house_poss_positions) = self.house_poss_positions.get_mut();
         // remove now impossible positions from list
-        for candidate in &self.eliminated_entries[*le as usize ..] {
+        for candidate in &self.eliminated_entries[*le as usize..] {
             let cell = candidate.cell;
             let row_pos = cell.row_pos();
             let col_pos = cell.col_pos();
@@ -315,7 +339,7 @@ impl StrategySolver {
         }
         *le = self.eliminated_entries.len() as _;
 
-        for candidate in &self.deduced_entries[*ld as usize ..] {
+        for candidate in &self.deduced_entries[*ld as usize..] {
             let cell = candidate.cell;
             let digit = candidate.digit;
 
@@ -381,28 +405,47 @@ impl StrategySolver {
         let (ld_zs, _, house_solved_digits) = self.house_solved_digits.get_mut();
 
         loop {
-            if self.deduced_entries.len() <= *ld_cp as usize { break }
+            if self.deduced_entries.len() <= *ld_cp as usize {
+                break;
+            }
             let candidate = self.deduced_entries[*ld_cp as usize];
             *ld_cp += 1;
             *ld_zs += 1;
             let candidate_mask = candidate.digit_set();
             // cell already solved from previous candidate in stack, skip
-            if cell_poss_digits[candidate.cell].is_empty() { continue }
+            if cell_poss_digits[candidate.cell].is_empty() {
+                continue;
+            }
 
             // is candidate still possible?
             if (cell_poss_digits[candidate.cell] & candidate_mask).is_empty() {
                 return Err(Unsolvable);
             }
 
-            Self::_insert_candidate_cp_zs(candidate, &mut self.n_solved, cell_poss_digits, house_solved_digits);
+            Self::_insert_candidate_cp_zs(
+                candidate,
+                &mut self.n_solved,
+                cell_poss_digits,
+                house_solved_digits,
+            );
             for cell in candidate.cell.neighbors() {
                 if candidate_mask.overlaps(cell_poss_digits[cell]) {
-                    Self::remove_impossibilities(&mut self.grid.state, cell_poss_digits, cell, candidate_mask, &mut self.deduced_entries, &mut self.deductions, find_naked_singles)?;
+                    Self::remove_impossibilities(
+                        &mut self.grid.state,
+                        cell_poss_digits,
+                        cell,
+                        candidate_mask,
+                        &mut self.deduced_entries,
+                        &mut self.deductions,
+                        find_naked_singles,
+                    )?;
                 };
             }
 
             // found a lot of naked singles, switch to batch insertion
-            if self.deduced_entries.len() - *ld_cp as usize > 4 { return Ok(()) }
+            if self.deduced_entries.len() - *ld_cp as usize > 4 {
+                return Ok(());
+            }
         }
         Ok(())
     }
@@ -412,7 +455,7 @@ impl StrategySolver {
         candidate: Candidate,
         n_solved: &mut u8,
         cell_poss_digits: &mut CellArray<Set<Digit>>,
-        house_solved_digits: &mut HouseArray<Set<Digit>>
+        house_solved_digits: &mut HouseArray<Set<Digit>>,
     ) {
         *n_solved += 1;
         cell_poss_digits[candidate.cell] = Set::NONE;
@@ -436,7 +479,9 @@ impl StrategySolver {
             *ld_cp += 1;
             *ld_zs += 1;
             // cell already solved from previous candidate in stack, skip
-            if cell_poss_digits[candidate.cell].is_empty() { continue }
+            if cell_poss_digits[candidate.cell].is_empty() {
+                continue;
+            }
 
             let candidate_mask = candidate.digit_set();
 
@@ -444,13 +489,18 @@ impl StrategySolver {
             // have to check house possibilities, because cell possibility
             // is temporarily out of date
             if house_solved_digits[candidate.row()].overlaps(candidate_mask)
-            || house_solved_digits[candidate.col()].overlaps(candidate_mask)
-            || house_solved_digits[candidate.block()].overlaps(candidate_mask)
+                || house_solved_digits[candidate.col()].overlaps(candidate_mask)
+                || house_solved_digits[candidate.block()].overlaps(candidate_mask)
             {
                 return Err(Unsolvable);
             }
 
-            Self::_insert_candidate_cp_zs(candidate, &mut self.n_solved, cell_poss_digits, house_solved_digits);
+            Self::_insert_candidate_cp_zs(
+                candidate,
+                &mut self.n_solved,
+                cell_poss_digits,
+                house_solved_digits,
+            );
         }
         Ok(())
     }
@@ -460,12 +510,22 @@ impl StrategySolver {
         let (_, _, house_solved_digits) = self.house_solved_digits.get_mut();
         // update cell possibilities from house masks
         for cell in Cell::all() {
-            if cell_poss_digits[cell].is_empty() { continue }
+            if cell_poss_digits[cell].is_empty() {
+                continue;
+            }
             let houses_mask = house_solved_digits[cell.row()]
                 | house_solved_digits[cell.col()]
                 | house_solved_digits[cell.block()];
 
-            Self::remove_impossibilities(&mut self.grid.state, cell_poss_digits, cell, houses_mask, &mut self.deduced_entries, &mut self.deductions, find_naked_singles)?;
+            Self::remove_impossibilities(
+                &mut self.grid.state,
+                cell_poss_digits,
+                cell,
+                houses_mask,
+                &mut self.deduced_entries,
+                &mut self.deductions,
+                find_naked_singles,
+            )?;
         }
         Ok(())
     }
@@ -490,7 +550,9 @@ impl StrategySolver {
         let (_, _, house_solved_digits) = self.house_solved_digits.get_mut();
         // update cell possibilities from house masks
         for cell in Cell::all() {
-            if cell_poss_digits[cell].is_empty() { continue }
+            if cell_poss_digits[cell].is_empty() {
+                continue;
+            }
             let houses_mask = house_solved_digits[cell.row()]
                 | house_solved_digits[cell.col()]
                 | house_solved_digits[cell.block()];
@@ -517,7 +579,13 @@ impl StrategySolver {
         if find_naked_singles {
             if let Some(digit) = cell_mask.unique()? {
                 let candidate = Candidate { cell, digit };
-                Self::push_new_candidate(sudoku, deduced_entries, candidate, deductions, Deduction::NakedSingles(candidate))?;
+                Self::push_new_candidate(
+                    sudoku,
+                    deduced_entries,
+                    candidate,
+                    deductions,
+                    Deduction::NakedSingles(candidate),
+                )?;
             }
         } else if cell_mask.is_empty() {
             return Err(Unsolvable);
@@ -530,23 +598,22 @@ impl StrategySolver {
         deduced_entries: &mut Vec<Candidate>,
         candidate: Candidate,
         deductions: &mut Vec<_Deduction>,
-        strategy: _Deduction // either a user-given or naked or hidden singles
+        strategy: _Deduction, // either a user-given or naked or hidden singles
     ) -> Result<(), Unsolvable> {
-
         #[cfg(debug_assertions)]
         {
             use self::Deduction::*;
             match strategy {
                 NakedSingles(..) | HiddenSingles(..) => (),
-                _ => panic!("Internal error: Called push_new_candidate with wrong strategy type")
+                _ => panic!("Internal error: Called push_new_candidate with wrong strategy type"),
             };
         }
 
         let old_num = &mut sudoku.0[candidate.cell.as_index()];
         match *old_num {
-            n if n == candidate.digit.get() => return Ok(()),  // previously solved
-            0 => (),                              // not solved
-            _ => return Err(Unsolvable),          // conflict
+            n if n == candidate.digit.get() => return Ok(()), // previously solved
+            0 => (),                                          // not solved
+            _ => return Err(Unsolvable),                      // conflict
         }
         *old_num = candidate.digit.get();
         deduced_entries.push(candidate);
@@ -586,14 +653,16 @@ impl StrategySolver {
             let deduced_entries = &mut self.deduced_entries;
             let deductions = &mut self.deductions;
 
-            naked_singles::find_naked_singles(
-                cell_poss_digits,
-                stop_after_first,
-                |candidate| {
-                    deduced_entries.push(candidate);
-                    Self::push_new_candidate(grid, deduced_entries, candidate, deductions, Deduction::NakedSingles(candidate))
-                },
-            )?;
+            naked_singles::find_naked_singles(cell_poss_digits, stop_after_first, |candidate| {
+                deduced_entries.push(candidate);
+                Self::push_new_candidate(
+                    grid,
+                    deduced_entries,
+                    candidate,
+                    deductions,
+                    Deduction::NakedSingles(candidate),
+                )
+            })?;
         }
 
         // call update again so newly found entries are inserted
@@ -618,7 +687,7 @@ impl StrategySolver {
                 |candidate, house| {
                     let deduction = Deduction::HiddenSingles(candidate, house.categorize());
                     Self::push_new_candidate(grid, deduced_entries, candidate, deductions, deduction)
-                }
+                },
             )?;
         }
 
@@ -638,24 +707,32 @@ impl StrategySolver {
             &cell_poss_digits,
             stop_after_first,
             |miniline, digit, _miniline_cands, neighbors, is_pointing| {
-                let conflicts = neighbors.iter()
+                let conflicts = neighbors
+                    .iter()
                     // helps on some, hurts on others
                     //.filter(|neighb| _miniline_cands[neighb.as_index() % 9].contains(digit))
                     .flat_map(|neighb| neighb.cells())
                     .flat_map(|cell| {
                         let conflicts = cell_poss_digits[cell] & digit;
-                        conflicts.into_iter()
-                            .map(move |digit| Candidate { cell, digit })
+                        conflicts.into_iter().map(move |digit| Candidate { cell, digit })
                     });
 
-                let on_locked = |conflicts| Deduction::LockedCandidates { miniline, digit, is_pointing, conflicts };
+                let on_locked = |conflicts| Deduction::LockedCandidates {
+                    miniline,
+                    digit,
+                    is_pointing,
+                    conflicts,
+                };
                 Self::enter_conflicts(eliminated_entries, deductions, conflicts, on_locked)
             },
         )
     }
 
-
-    pub(crate) fn find_naked_subsets(&mut self, subset_size: u8, stop_after_first: bool) -> Result<(), Unsolvable>     {
+    pub(crate) fn find_naked_subsets(
+        &mut self,
+        subset_size: u8,
+        stop_after_first: bool,
+    ) -> Result<(), Unsolvable> {
         self.update_cell_poss_house_solved()?;
         let (_, _, cell_poss_digits) = self.cell_poss_digits.get_mut();
         let house_solved_digits = &mut self.house_solved_digits.state;
@@ -668,22 +745,31 @@ impl StrategySolver {
             subset_size,
             stop_after_first,
             |house, positions, digits| {
-                let conflicts = (!positions).into_iter()
+                let conflicts = (!positions)
+                    .into_iter()
                     .map(|pos| house.cell_at(pos))
                     .flat_map(|cell| {
                         let conflicts = cell_poss_digits[cell] & digits;
-                        conflicts.into_iter()
-                            .map(move |digit| Candidate { cell, digit })
+                        conflicts.into_iter().map(move |digit| Candidate { cell, digit })
                     });
 
-                let on_conflict = |conflicts| Deduction::Subsets { house, positions, digits, conflicts };
+                let on_conflict = |conflicts| Deduction::Subsets {
+                    house,
+                    positions,
+                    digits,
+                    conflicts,
+                };
 
                 Self::enter_conflicts(eliminated_entries, deductions, conflicts, on_conflict)
             },
         )
     }
 
-    pub(crate) fn find_hidden_subsets(&mut self, subset_size: u8, stop_after_first: bool) -> Result<(), Unsolvable> {
+    pub(crate) fn find_hidden_subsets(
+        &mut self,
+        subset_size: u8,
+        stop_after_first: bool,
+    ) -> Result<(), Unsolvable> {
         self.update_cell_poss_house_solved()?;
         self.update_house_poss_positions()?;
         let house_poss_positions = &self.house_poss_positions.state;
@@ -699,15 +785,20 @@ impl StrategySolver {
             |house, digits, positions| {
                 let house_poss_positions = house_poss_positions[house];
 
-                let conflicts = (!digits).into_iter()
-                    .flat_map(|digit| {
-                        let conflicts = house_poss_positions[digit] & positions;
-                        conflicts.into_iter()
-                            .map(|pos| house.cell_at(pos))
-                            .map(move |cell| Candidate { cell, digit })
-                    });
+                let conflicts = (!digits).into_iter().flat_map(|digit| {
+                    let conflicts = house_poss_positions[digit] & positions;
+                    conflicts
+                        .into_iter()
+                        .map(|pos| house.cell_at(pos))
+                        .map(move |cell| Candidate { cell, digit })
+                });
 
-                let on_conflict = |conflicts| Deduction::Subsets { house, digits, positions, conflicts };
+                let on_conflict = |conflicts| Deduction::Subsets {
+                    house,
+                    digits,
+                    positions,
+                    conflicts,
+                };
 
                 Self::enter_conflicts(eliminated_entries, deductions, conflicts, on_conflict)
             },
@@ -718,11 +809,9 @@ impl StrategySolver {
         self.find_fish(2, stop_after_first)
     }
 
-
     pub(crate) fn find_swordfish(&mut self, stop_after_first: bool) -> Result<(), Unsolvable> {
         self.find_fish(3, stop_after_first)
     }
-
 
     pub(crate) fn find_jellyfish(&mut self, stop_after_first: bool) -> Result<(), Unsolvable> {
         self.find_fish(4, stop_after_first)
@@ -742,12 +831,10 @@ impl StrategySolver {
             target_size,
             stop_after_first,
             |all_lines, digit, lines, positions_in_line| {
-                let conflicts = all_lines.without(lines)
+                let conflicts = all_lines
+                    .without(lines)
                     .into_iter()
-                    .flat_map(|line| {
-                        positions_in_line.into_iter()
-                            .map(move |pos| line.cell_at(pos))
-                    })
+                    .flat_map(|line| positions_in_line.into_iter().map(move |pos| line.cell_at(pos)))
                     .filter(|&cell| cell_poss_digits[cell].contains(digit))
                     .map(|cell| Candidate { cell, digit });
 
@@ -759,11 +846,15 @@ impl StrategySolver {
                 };
 
                 Self::enter_conflicts(eliminated_entries, deductions, conflicts, on_conflict)
-            }
+            },
         )
     }
 
-    pub(crate) fn find_mutant_fish(&mut self, target_size: u8, stop_after_first: bool) -> Result<(), Unsolvable> {
+    pub(crate) fn find_mutant_fish(
+        &mut self,
+        target_size: u8,
+        stop_after_first: bool,
+    ) -> Result<(), Unsolvable> {
         self.update_house_poss_positions()?;
         self.update_cell_poss_house_solved()?;
 
@@ -777,20 +868,27 @@ impl StrategySolver {
             target_size,
             stop_after_first,
             |digit, candidate_cells, base, cover: Set<House>| {
-                let cover_cells = cover.into_iter()
+                let cover_cells = cover
+                    .into_iter()
                     .map(House::cells)
                     .fold(Set::NONE, std::ops::BitOr::bitor);
 
                 let impossible_cells: Set<Cell> = cover_cells ^ candidate_cells;
 
-                let conflicts = impossible_cells.into_iter()
+                let conflicts = impossible_cells
+                    .into_iter()
                     .filter(|&cell| cell_poss_digits[cell].contains(digit))
                     .map(|cell| Candidate { cell, digit });
 
-                let on_conflict = |conflicts| Deduction::Fish { digit, base, cover, conflicts };
+                let on_conflict = |conflicts| Deduction::Fish {
+                    digit,
+                    base,
+                    cover,
+                    conflicts,
+                };
 
                 Self::enter_conflicts(eliminated_entries, deductions, conflicts, on_conflict)
-            }
+            },
         )
     }
 
@@ -808,10 +906,12 @@ impl StrategySolver {
                 let common_digit = (poss_digs1 & poss_digs2).unique().unwrap().unwrap();
                 let common_neighbors = cell_pincer1.neighbors_set() & cell_pincer2.neighbors_set();
 
-                let conflicts = common_neighbors.into_iter()
-                    .filter(|&cell| cell_poss_digits[cell].contains(common_digit) )
+                let conflicts = common_neighbors
+                    .into_iter()
+                    .filter(|&cell| cell_poss_digits[cell].contains(common_digit))
                     .map(|cell| Candidate {
-                        cell, digit: common_digit
+                        cell,
+                        digit: common_digit,
                     });
 
                 let on_conflict = |conflicts| Deduction::Wing {
@@ -822,7 +922,7 @@ impl StrategySolver {
                 };
 
                 Self::enter_conflicts(eliminated_entries, deductions, conflicts, on_conflict)
-            }
+            },
         )
     }
 
@@ -838,14 +938,17 @@ impl StrategySolver {
             |(cell_hinge, poss_digits_hinge), [(cell_pincer1, poss_digs1), (cell_pincer2, poss_digs2)]| {
                 // TODO: pass common digit as argument to closure
                 let common_digit = (poss_digs1 & poss_digs2).unique().unwrap().unwrap();
-                let common_neighbors = cell_hinge.neighbors_set() & cell_pincer1.neighbors_set() & cell_pincer2.neighbors_set();
+                let common_neighbors =
+                    cell_hinge.neighbors_set() & cell_pincer1.neighbors_set() & cell_pincer2.neighbors_set();
 
                 assert_eq!(common_neighbors.len(), 2);
 
-                let conflicts = common_neighbors.into_iter()
-                    .filter(|&cell| cell_poss_digits[cell].contains(common_digit) )
+                let conflicts = common_neighbors
+                    .into_iter()
+                    .filter(|&cell| cell_poss_digits[cell].contains(common_digit))
                     .map(|cell| Candidate {
-                        cell, digit: common_digit
+                        cell,
+                        digit: common_digit,
                     });
 
                 let on_conflict = |conflicts| Deduction::Wing {
@@ -856,7 +959,7 @@ impl StrategySolver {
                 };
 
                 Self::enter_conflicts(eliminated_entries, deductions, conflicts, on_conflict)
-            }
+            },
         )
     }
 
@@ -1054,7 +1157,11 @@ impl<T> State<T> {
 
 impl<T> State<T> {
     fn get_mut(&mut self) -> (&mut u16, &mut u16, &mut T) {
-        let State { next_deduced: ld, last_eliminated: le, state } = self;
+        let State {
+            next_deduced: ld,
+            last_eliminated: le,
+            state,
+        } = self;
         (ld, le, state)
     }
 }
@@ -1063,13 +1170,15 @@ impl<T> State<T> {
 mod test {
     use super::*;
     fn read_sudokus(sudokus_str: &str) -> Vec<Sudoku> {
-    sudokus_str.lines()
+        sudokus_str
+            .lines()
             .map(|line| Sudoku::from_str_line(line).unwrap_or_else(|err| panic!("{:?}", err)))
             .collect()
     }
 
     fn strategy_solver_correct_solution<F>(sudokus: Vec<Sudoku>, solved_sudokus: Vec<Sudoku>, solver: F)
-        where F: Fn(StrategySolver, &[Strategy]) -> Result<(Sudoku, Deductions), (Sudoku, Deductions)>,
+    where
+        F: Fn(StrategySolver, &[Strategy]) -> Result<(Sudoku, Deductions), (Sudoku, Deductions)>,
     {
         let n_sudokus = sudokus.len();
         let strategies = Strategy::ALL;
@@ -1084,9 +1193,14 @@ mod test {
         if unsolved.len() != 0 {
             println!("Could not solve {}/{} sudokus:\n", unsolved.len(), n_sudokus);
 
-
             for (i, sudoku, part_solution, _solution) in unsolved {
-                println!("\nsudoku nr {}:\n{}\n{}\n{}", i+1, sudoku.to_str_line(), part_solution.to_str_line(), _solution.to_str_line());
+                println!(
+                    "\nsudoku nr {}:\n{}\n{}\n{}",
+                    i + 1,
+                    sudoku.to_str_line(),
+                    part_solution.to_str_line(),
+                    _solution.to_str_line()
+                );
             }
             panic!();
         }
@@ -1094,27 +1208,33 @@ mod test {
 
     #[test]
     fn strategy_solver_correct_solution_easy_sudokus() {
-        let sudokus = read_sudokus( include_str!("../../sudokus/Lines/easy_sudokus.txt") );
-        let solved_sudokus = read_sudokus( include_str!("../../sudokus/Lines/solved_easy_sudokus.txt") );
+        let sudokus = read_sudokus(include_str!("../../sudokus/Lines/easy_sudokus.txt"));
+        let solved_sudokus = read_sudokus(include_str!("../../sudokus/Lines/solved_easy_sudokus.txt"));
         strategy_solver_correct_solution(sudokus, solved_sudokus, StrategySolver::solve);
     }
 
     #[test]
     fn strategy_solver_correct_solution_medium_sudokus() {
         // the 9th sudoku requires more advanced strategies
-        let filter_9 = |vec: Vec<_>| vec.into_iter()
-            .enumerate()
-            .filter(|&(i, _)| i != 8)
-            .map(|(_, sudoku)| sudoku)
-            .collect::<Vec<_>>();
-        let sudokus = filter_9(read_sudokus( include_str!("../../sudokus/Lines/medium_sudokus.txt") ));
-        let solved_sudokus = filter_9(read_sudokus( include_str!("../../sudokus/Lines/solved_medium_sudokus.txt") ));
+        let filter_9 = |vec: Vec<_>| {
+            vec.into_iter()
+                .enumerate()
+                .filter(|&(i, _)| i != 8)
+                .map(|(_, sudoku)| sudoku)
+                .collect::<Vec<_>>()
+        };
+        let sudokus = filter_9(read_sudokus(include_str!(
+            "../../sudokus/Lines/medium_sudokus.txt"
+        )));
+        let solved_sudokus = filter_9(read_sudokus(include_str!(
+            "../../sudokus/Lines/solved_medium_sudokus.txt"
+        )));
         strategy_solver_correct_solution(sudokus, solved_sudokus, StrategySolver::solve);
     }
 
     #[test]
     fn roundtrip_grid_state_str() {
-        let sudokus = read_sudokus( include_str!("../../sudokus/Lines/easy_sudokus.txt") );
+        let sudokus = read_sudokus(include_str!("../../sudokus/Lines/easy_sudokus.txt"));
 
         for sudoku in sudokus {
             let solver = StrategySolver::from_sudoku(sudoku);
@@ -1125,7 +1245,6 @@ mod test {
                 panic!("\n{} \n{}", grid_state_string, grid_state_string2);
             }
         }
-
     }
 
     #[test]
@@ -1136,8 +1255,8 @@ mod test {
         let sudoku = Sudoku::from_str_line(sudoku).unwrap();
 
         let solver = StrategySolver::from_sudoku(sudoku);
-        let grid_state_string = solver.to_string();
 
+        #[rustfmt::skip]
         let expected =
 "┌──────────────────────────────┬──────────────────────────────┬──────────────────────────────┐
 │ 1         2         3        │ 4         5         6        │ 7         8         _        │
@@ -1186,7 +1305,8 @@ fn print_grid_state(
     //       '_' is another good alternative
     let mut column_widths = [0; 9];
     for col in 0..9 {
-        let max_width = (0..9).map(|row| row * 9 + col)
+        let max_width = (0..9)
+            .map(|row| row * 9 + col)
             .map(|cell| match grid_state[cell] {
                 CellState::Digit(_) => 1,
                 CellState::Candidates(digits) => std::cmp::max(digits.len(), 1),
@@ -1199,9 +1319,16 @@ fn print_grid_state(
 
     let mut lengths = [0; 3];
     for stack in 0..3 {
-        lengths[stack] = column_widths[stack*3..][..3].iter().sum::<u8>() as usize;
+        lengths[stack] = column_widths[stack * 3..][..3].iter().sum::<u8>() as usize;
     }
-    _print_separator(f, upper_left_corner, upper_junction, upper_right_corner, horizontal_bar, lengths)?;
+    _print_separator(
+        f,
+        upper_left_corner,
+        upper_junction,
+        upper_right_corner,
+        horizontal_bar,
+        lengths,
+    )?;
     for band in 0..3 {
         for row in 0..3 {
             write!(f, "{}", vertical_bar)?;
@@ -1211,7 +1338,9 @@ fn print_grid_state(
                     let full_col = stack * 3 + col;
                     let cell_state = grid_state[full_row * 9 + full_col];
                     match cell_state {
-                        CellState::Digit(digit) => write!(f, " {:<1$} ", digit.get(), column_widths[full_col] as usize)?,
+                        CellState::Digit(digit) => {
+                            write!(f, " {:<1$} ", digit.get(), column_widths[full_col] as usize)?
+                        }
                         CellState::Candidates(cands) => {
                             write!(f, " ")?;
                             if cands.len() == 0 {
@@ -1221,7 +1350,12 @@ fn print_grid_state(
                                     write!(f, "{}", digit.get())?;
                                 }
                             }
-                            write!(f, "{:1$}", ' ', (1 + column_widths[full_col] - std::cmp::max(cands.len(), 1)) as usize)?;
+                            write!(
+                                f,
+                                "{:1$}",
+                                ' ',
+                                (1 + column_widths[full_col] - std::cmp::max(cands.len(), 1)) as usize
+                            )?;
                         }
                     }
                 }
@@ -1230,14 +1364,37 @@ fn print_grid_state(
             writeln!(f)?;
         }
         if band != 2 {
-            _print_separator(f, left_junction, middle_junction, right_junction, horizontal_bar, lengths)?;
+            _print_separator(
+                f,
+                left_junction,
+                middle_junction,
+                right_junction,
+                horizontal_bar,
+                lengths,
+            )?;
         }
     }
-    _print_separator(f, lower_left_corner, lower_junction, lower_right_corner, horizontal_bar, lengths)
+    _print_separator(
+        f,
+        lower_left_corner,
+        lower_junction,
+        lower_right_corner,
+        horizontal_bar,
+        lengths,
+    )
 }
 
-fn _print_separator(f: &mut std::fmt::Formatter, left_junction: &str, middle_junction: &str, right_junction: &str, horizontal_bar: &str, lengths: [usize; 3]) -> Result<(), std::fmt::Error> {
-    writeln!(f, "{left}{line0}{middle}{line1}{middle}{line2}{right}",
+fn _print_separator(
+    f: &mut std::fmt::Formatter,
+    left_junction: &str,
+    middle_junction: &str,
+    right_junction: &str,
+    horizontal_bar: &str,
+    lengths: [usize; 3],
+) -> Result<(), std::fmt::Error> {
+    writeln!(
+        f,
+        "{left}{line0}{middle}{line1}{middle}{line2}{right}",
         line0 = horizontal_bar.repeat(lengths[0] + 6),
         line1 = horizontal_bar.repeat(lengths[1] + 6),
         line2 = horizontal_bar.repeat(lengths[2] + 6),

@@ -1,7 +1,7 @@
 #![feature(test)]
 extern crate test;
-use sudoku::Sudoku;
 use sudoku::strategy::{Strategy, StrategySolver};
+use sudoku::Sudoku;
 
 fn read_sudokus(sudokus_str: &str) -> Vec<Sudoku> {
     sudokus_str
@@ -12,6 +12,7 @@ fn read_sudokus(sudokus_str: &str) -> Vec<Sudoku> {
 
 /// Set of all available strategies, for test purposes
 #[allow(unused)]
+#[rustfmt::skip]
 const ALL_STRATEGIES: &'static [Strategy] = &[
                                 // difficulty as assigned by
                                 // SudokuExplainer
@@ -136,7 +137,7 @@ fn is_solved_on_solved(b: &mut test::Bencher) {
 
 #[bench]
 fn strategy_solver_1_easy_sudokus(b: &mut test::Bencher) {
-    let sudokus = read_sudokus( include_str!("../sudokus/Lines/easy_sudokus.txt") );
+    let sudokus = read_sudokus(include_str!("../sudokus/Lines/easy_sudokus.txt"));
     let sudokus_100 = sudokus.iter().cycle().cloned().take(100).collect::<Vec<_>>();
     let strategies = ALL_STRATEGIES;
     b.iter(|| {
@@ -148,7 +149,7 @@ fn strategy_solver_1_easy_sudokus(b: &mut test::Bencher) {
 
 #[bench]
 fn strategy_solver_2_medium_sudokus(b: &mut test::Bencher) {
-    let sudokus = read_sudokus( include_str!("../sudokus/Lines/medium_sudokus.txt") );
+    let sudokus = read_sudokus(include_str!("../sudokus/Lines/medium_sudokus.txt"));
     let sudokus_100 = sudokus.iter().cycle().cloned().take(100).collect::<Vec<_>>();
     let strategies = ALL_STRATEGIES;
     b.iter(|| {

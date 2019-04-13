@@ -1,14 +1,14 @@
 pub(crate) mod prelude;
 
-pub(crate) mod naked_singles;
-pub(crate) mod hidden_singles;
-pub(crate) mod locked_candidates;
-pub(crate) mod naked_subsets;
-pub(crate) mod hidden_subsets;
-pub(crate) mod basic_fish;
-pub(crate) mod mutant_fish;
 pub(crate) mod almost_locked_sets;
 pub(crate) mod avoidable_rectangles;
+pub(crate) mod basic_fish;
+pub(crate) mod hidden_singles;
+pub(crate) mod hidden_subsets;
+pub(crate) mod locked_candidates;
+pub(crate) mod mutant_fish;
+pub(crate) mod naked_singles;
+pub(crate) mod naked_subsets;
 pub(crate) mod xy_wing;
 pub(crate) mod xyz_wing;
 
@@ -40,12 +40,14 @@ pub enum Strategy {
     MutantJellyfish,
     AvoidableRectangles,
     //SinglesChain,
-    #[doc(hidden)] __NonExhaustive
+    #[doc(hidden)]
+    __NonExhaustive,
 }
 
 impl Strategy {
     /// Set of all available strategies, for test purposes
     #[allow(unused)]
+    #[rustfmt::skip]
     pub(crate) const ALL: &'static [Strategy] = &[
                                     // difficulty as assigned by
                                     // SudokuExplainer
@@ -68,10 +70,17 @@ impl Strategy {
 
     // is_first_strategy is an optimization hint
     // it doesn't need to be used
-    pub(crate) fn deduce(&self, state: &mut StrategySolver, stop_after_first: bool, is_first_strategy: bool) -> Result<(), Unsolvable> {
+    pub(crate) fn deduce(
+        &self,
+        state: &mut StrategySolver,
+        stop_after_first: bool,
+        is_first_strategy: bool,
+    ) -> Result<(), Unsolvable> {
         use self::Strategy::*;
         match *self {
-            NakedSingles if !stop_after_first && is_first_strategy => state._update_cell_poss_house_solved(true),
+            NakedSingles if !stop_after_first && is_first_strategy => {
+                state._update_cell_poss_house_solved(true)
+            }
             NakedSingles => state.find_naked_singles(stop_after_first),
             HiddenSingles => state.find_hidden_singles(stop_after_first),
             LockedCandidates => state.find_locked_candidates(stop_after_first),
@@ -97,7 +106,11 @@ impl Strategy {
         self.deduce(state, true, false)
     }
 
-    pub(crate) fn deduce_all(&self, state: &mut StrategySolver, is_first_strategy: bool) -> Result<(), Unsolvable> {
+    pub(crate) fn deduce_all(
+        &self,
+        state: &mut StrategySolver,
+        is_first_strategy: bool,
+    ) -> Result<(), Unsolvable> {
         self.deduce(state, false, is_first_strategy)
     }
 }

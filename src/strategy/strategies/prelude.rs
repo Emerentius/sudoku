@@ -1,6 +1,7 @@
+pub(crate) use crate::bitset::{Iter as SetIter, Set};
+pub(crate) use crate::helper::{CellArray, DigitArray, HouseArray, Unsolvable};
 pub(crate) use crate::Sudoku;
-pub(crate) use crate::helper::{Unsolvable, CellArray, HouseArray, DigitArray};
-pub(crate) use crate::bitset::{Set, Iter as SetIter};
+#[rustfmt::skip]
 pub(crate) use crate::board::{
     Digit,
     Candidate,

@@ -2,8 +2,8 @@ use rand::Rng;
 
 use crate::consts::*;
 use crate::generator::SudokuGenerator;
+use crate::parse_errors::{BlockParseError, InvalidEntry, LineParseError, NotEnoughRows};
 use crate::solver::SudokuSolver;
-use crate::parse_errors::{BlockParseError, LineParseError, NotEnoughRows, InvalidEntry};
 
 #[cfg(feature = "serde")]
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
@@ -637,7 +637,8 @@ impl Sudoku {
         };
 
         let mut sudoku = *self;
-        let (_, transformation, n_automorphisms) = super::canonicalization::find_canonical_sudoku_and_transformation(solved_sudoku);
+        let (_, transformation, n_automorphisms) =
+            super::canonicalization::find_canonical_sudoku_and_transformation(solved_sudoku);
         transformation.apply(&mut sudoku);
         Some((sudoku, n_automorphisms))
     }
@@ -831,7 +832,7 @@ impl fmt::Debug for SudokuBlock {
 
 impl fmt::Display for SudokuBlock {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use crate::board::{Digit, Cell};
+        use crate::board::{Cell, Digit};
         for (digit, cell) in self.0.iter().cloned().map(Digit::new_checked).zip(Cell::all()) {
             #[cfg_attr(rustfmt, rustfmt_skip)]
             match (cell.row().get(), cell.col().get()) {

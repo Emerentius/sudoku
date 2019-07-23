@@ -245,7 +245,7 @@ impl Sudoku {
     /// Creates a sudoku from a byte array.
     /// All numbers must be below 10. Empty cells are denoted by 0, clues by the numbers 1-9.
     pub fn from_bytes(bytes: [u8; N_CELLS]) -> Result<Sudoku, ()> {
-        match bytes.iter().all(|&byte| byte <= 9) {
+        match bytes.iter().fold(true, |valid, &byte| valid & (byte <= 9)) {
             true => Ok(Sudoku(bytes)),
             false => Err(()),
         }

@@ -91,6 +91,19 @@ fn shuffle(b: &mut test::Bencher) {
 }
 
 #[bench]
+fn from_bytes(b: &mut test::Bencher) {
+    let sudokus = (0..1000)
+        .map(|_| Sudoku::generate_unique().to_bytes())
+        .collect::<Vec<_>>();
+
+    b.iter(||
+        for &sudoku in &sudokus {
+            let _ = Sudoku::from_bytes(sudoku).unwrap();
+        }
+    )
+}
+
+#[bench]
 fn parse_line(b: &mut test::Bencher) {
     let sudokus = (0..1000)
         .map(|_| Sudoku::generate_unique().to_str_line())

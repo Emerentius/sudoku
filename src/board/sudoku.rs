@@ -245,7 +245,7 @@ impl Sudoku {
     /// Creates a sudoku from a byte array.
     /// All numbers must be below 10. Empty cells are denoted by 0, clues by the numbers 1-9.
     pub fn from_bytes(bytes: [u8; N_CELLS]) -> Result<Sudoku, ()> {
-        match bytes.iter().all(|&byte| byte <= 9) {
+        match bytes.iter().fold(true, |valid, &byte| valid & (byte <= 9)) {
             true => Ok(Sudoku(bytes)),
             false => Err(()),
         }
@@ -270,12 +270,16 @@ impl Sudoku {
     /// Stops parsing after the first sudoku
     pub fn from_str_line(s: &str) -> Result<Sudoku, LineParseError> {
         let chars = s.as_bytes();
+        if let Ok(sudoku) = Sudoku::_from_str_line_fast_path(chars) {
+            return Ok(sudoku);
+        }
+
         let mut grid = [0; N_CELLS];
         let mut i = 0;
         for (cell, &ch) in grid.iter_mut().zip(chars) {
             match ch {
                 b'_' | b'.' => *cell = 0,
-                b'0'...b'9' => *cell = ch - b'0',
+                b'0'..=b'9' => *cell = ch - b'0',
                 // space ends sudoku before grid is filled
                 b' ' | b'\t' => return Err(LineParseError::NotEnoughCells(i)),
                 _ => {
@@ -298,7 +302,7 @@ impl Sudoku {
                 // delimiters, end of sudoku
                 b'\t' | b' ' | b'\r' | b'\n' | b';' | b',' => (),
                 // valid cell entry => too long
-                b'_' | b'.' | b'0'...b'9' => return Err(LineParseError::TooManyCells),
+                b'_' | b'.' | b'0'..=b'9' => return Err(LineParseError::TooManyCells),
                 // any other char can not be part of sudoku
                 // without having both length and character wrong
                 // treat like comment, but with missing delimiter
@@ -307,6 +311,37 @@ impl Sudoku {
         }
 
         Ok(Sudoku(grid))
+    }
+
+    /// Parses sudokus under the assumption that everything is valid.
+    /// Checks only once the end if the assumption was valid.
+    //
+    // FIXME: there is some duplication among this and the full parser.
+    fn _from_str_line_fast_path(chars: &[u8]) -> Result<Sudoku, ()> {
+        // map valid ascii bytes into the range 0..=9
+        // for from_bytes()
+        let mut grid = [0; N_CELLS];
+        grid.copy_from_slice(&chars[..81]);
+        for cell in &mut grid[..] {
+            *cell = cell.wrapping_sub(b'0');
+            if *cell == b'_' - b'0' {
+                *cell = 0;
+            }
+            if *cell == b'.'.wrapping_sub(b'0') {
+                *cell = 0;
+            }
+        }
+
+        let valid_ending = chars.get(81)
+            .map_or(true, |ch| match ch {
+                b'\t' | b' ' | b'\r' | b'\n' | b';' | b',' => true,
+                _ => false,
+            });
+
+        match valid_ending {
+            true => Sudoku::from_bytes(grid),
+            false => Err(()),
+        }
     }
 
     /// Reads a sudoku in the block format with or without field delimiters
@@ -399,7 +434,7 @@ impl Sudoku {
                         // comment separator
                         ' ' | '\t' => break,
                         // valid entry, line too long
-                        '1'...'9' | '_' | '.' | '0' => {
+                        '1'..='9' | '_' | '.' | '0' => {
                             return Err(BlockParseError::InvalidLineLength(n_line_sud))
                         }
                         // invalid entry, interpret as comment but enforce separation
@@ -429,7 +464,7 @@ impl Sudoku {
                 let cell = n_line_sud * 9 + n_col_sud;
                 match ch {
                     '_' | '.' => grid[cell as usize] = 0,
-                    '0'...'9' => grid[cell as usize] = ch as u8 - b'0',
+                    '0'..='9' => grid[cell as usize] = ch as u8 - b'0',
                     _ => {
                         return Err(BlockParseError::InvalidEntry(InvalidEntry {
                             cell: cell as u8,

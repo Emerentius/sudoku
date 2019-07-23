@@ -22,6 +22,8 @@ crunchy = "0.2.1"
 # This feature deactivates bounds checks in the solver.
 unchecked_indexing = []
 
+default = ["unchecked_indexing"]
+
 [lib]
 name = "sudoku"
 crate-type = ["dylib"]

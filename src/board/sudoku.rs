@@ -275,7 +275,7 @@ impl Sudoku {
         for (cell, &ch) in grid.iter_mut().zip(chars) {
             match ch {
                 b'_' | b'.' => *cell = 0,
-                b'0'...b'9' => *cell = ch - b'0',
+                b'0'..=b'9' => *cell = ch - b'0',
                 // space ends sudoku before grid is filled
                 b' ' | b'\t' => return Err(LineParseError::NotEnoughCells(i)),
                 _ => {
@@ -298,7 +298,7 @@ impl Sudoku {
                 // delimiters, end of sudoku
                 b'\t' | b' ' | b'\r' | b'\n' | b';' | b',' => (),
                 // valid cell entry => too long
-                b'_' | b'.' | b'0'...b'9' => return Err(LineParseError::TooManyCells),
+                b'_' | b'.' | b'0'..=b'9' => return Err(LineParseError::TooManyCells),
                 // any other char can not be part of sudoku
                 // without having both length and character wrong
                 // treat like comment, but with missing delimiter
@@ -399,7 +399,7 @@ impl Sudoku {
                         // comment separator
                         ' ' | '\t' => break,
                         // valid entry, line too long
-                        '1'...'9' | '_' | '.' | '0' => {
+                        '1'..='9' | '_' | '.' | '0' => {
                             return Err(BlockParseError::InvalidLineLength(n_line_sud))
                         }
                         // invalid entry, interpret as comment but enforce separation
@@ -429,7 +429,7 @@ impl Sudoku {
                 let cell = n_line_sud * 9 + n_col_sud;
                 match ch {
                     '_' | '.' => grid[cell as usize] = 0,
-                    '0'...'9' => grid[cell as usize] = ch as u8 - b'0',
+                    '0'..='9' => grid[cell as usize] = ch as u8 - b'0',
                     _ => {
                         return Err(BlockParseError::InvalidEntry(InvalidEntry {
                             cell: cell as u8,

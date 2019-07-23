@@ -391,7 +391,7 @@ impl StrategySolver {
         loop {
             match self.deduced_entries.len() - self.cell_poss_digits.next_deduced as usize {
                 0 => break Ok(()),
-                1...4 => self.insert_entries_singly(find_naked_singles)?,
+                1..=4 => self.insert_entries_singly(find_naked_singles)?,
                 _ => self.batch_insert_entries(find_naked_singles)?,
             }
         }

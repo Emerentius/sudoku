@@ -46,7 +46,7 @@ impl SudokuGenerator {
         loop {
             match stack.len() {
                 0 => break Ok(()),
-                1...4 => self.insert_entries_singly(stack)?,
+                1..=4 => self.insert_entries_singly(stack)?,
                 _ => self.batch_insert_entries(stack)?,
             }
         }

@@ -270,6 +270,10 @@ impl Sudoku {
     /// Stops parsing after the first sudoku
     pub fn from_str_line(s: &str) -> Result<Sudoku, LineParseError> {
         let chars = s.as_bytes();
+        if let Ok(sudoku) = Sudoku::_from_str_line_fast_path(chars) {
+            return Ok(sudoku);
+        }
+
         let mut grid = [0; N_CELLS];
         let mut i = 0;
         for (cell, &ch) in grid.iter_mut().zip(chars) {
@@ -307,6 +311,37 @@ impl Sudoku {
         }
 
         Ok(Sudoku(grid))
+    }
+
+    /// Parses sudokus under the assumption that everything is valid.
+    /// Checks only once the end if the assumption was valid.
+    //
+    // FIXME: there is some duplication among this and the full parser.
+    fn _from_str_line_fast_path(chars: &[u8]) -> Result<Sudoku, ()> {
+        // map valid ascii bytes into the range 0..=9
+        // for from_bytes()
+        let mut grid = [0; N_CELLS];
+        grid.copy_from_slice(&chars[..81]);
+        for cell in &mut grid[..] {
+            *cell = cell.wrapping_sub(b'0');
+            if *cell == b'_' - b'0' {
+                *cell = 0;
+            }
+            if *cell == b'.'.wrapping_sub(b'0') {
+                *cell = 0;
+            }
+        }
+
+        let valid_ending = chars.get(81)
+            .map_or(true, |ch| match ch {
+                b'\t' | b' ' | b'\r' | b'\n' | b';' | b',' => true,
+                _ => false,
+            });
+
+        match valid_ending {
+            true => Sudoku::from_bytes(grid),
+            false => Err(()),
+        }
     }
 
     /// Reads a sudoku in the block format with or without field delimiters

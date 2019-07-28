@@ -318,6 +318,9 @@ impl Sudoku {
     //
     // FIXME: there is some duplication among this and the full parser.
     fn _from_str_line_fast_path(chars: &[u8]) -> Result<Sudoku, ()> {
+        if chars.len() < 81 {
+            return Err(());
+        }
         // map valid ascii bytes into the range 0..=9
         // for from_bytes()
         let mut grid = [0; N_CELLS];

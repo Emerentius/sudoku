@@ -75,6 +75,30 @@ _26|3__|5__
 }
 
 #[test]
+fn from_str_line_too_short() {
+    let not_sudoku = "123456789000000000000000";
+    assert!(Sudoku::from_str_line(not_sudoku).is_err());
+}
+
+#[test]
+fn from_str_line_with_comment() {
+    let sudoku = "...2...633....54.1..1..398........9....538....3........263..5..5.37....847...1...";
+    let same_sudoku_with_comments = [
+        "...2...633....54.1..1..398........9....538....3........263..5..5.37....847...1... foobar",
+        "...2...633....54.1..1..398........9....538....3........263..5..5.37....847...1...;genlu",
+        "...2...633....54.1..1..398........9....538....3........263..5..5.37....847...1...,gfulenue",
+        "...2...633....54.1..1..398........9....538....3........263..5..5.37....847...1...\tnegfulge",
+        "...2...633....54.1..1..398........9....538....3........263..5..5.37....847...1...\r\n0123",
+        "...2...633....54.1..1..398........9....538....3........263..5..5.37....847...1...\n01234"
+    ];
+    let sudoku = Sudoku::from_str_line(sudoku).unwrap();
+    for &commented_sudoku in &same_sudoku_with_comments[..] {
+        let commented_sudoku = Sudoku::from_str_line(commented_sudoku).unwrap();
+        assert_eq!(sudoku, commented_sudoku);
+    }
+}
+
+#[test]
 #[should_panic]
 fn wrong_format_1() {
     let sudoku_str = "___2___63

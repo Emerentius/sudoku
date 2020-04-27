@@ -335,11 +335,10 @@ impl Sudoku {
             }
         }
 
-        let valid_ending = chars.get(81)
-            .map_or(true, |ch| match ch {
-                b'\t' | b' ' | b'\r' | b'\n' | b';' | b',' => true,
-                _ => false,
-            });
+        let valid_ending = chars.get(81).map_or(true, |ch| match ch {
+            b'\t' | b' ' | b'\r' | b'\n' | b';' | b',' => true,
+            _ => false,
+        });
 
         match valid_ending {
             true => Sudoku::from_bytes(grid),

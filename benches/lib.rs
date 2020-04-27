@@ -96,11 +96,11 @@ fn from_bytes(b: &mut test::Bencher) {
         .map(|_| Sudoku::generate_unique().to_bytes())
         .collect::<Vec<_>>();
 
-    b.iter(||
+    b.iter(|| {
         for &sudoku in &sudokus {
             let _ = Sudoku::from_bytes(sudoku).unwrap();
         }
-    )
+    })
 }
 
 #[bench]

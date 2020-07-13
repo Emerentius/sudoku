@@ -686,7 +686,7 @@ fn bit_pos(mask: u32) -> usize {
 }
 
 #[rustfmt::skip]
-static SHRINK_MASK: [u32; 512] = [
+static OLD_SHRINK_MASK: [u32; 512] = [
     0, 1, 1, 1, 1, 1, 1, 1, 2, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3,
     2, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3,
     4, 5, 5, 5, 5, 5, 5, 5, 6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7,
@@ -704,6 +704,28 @@ static SHRINK_MASK: [u32; 512] = [
     4, 5, 5, 5, 5, 5, 5, 5, 6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7,
     6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7,
 ];
+
+#[test]
+fn mask_identical_shrink() {
+    assert_eq!(&OLD_SHRINK_MASK[..], &SHRINK_MASK[..]);
+}
+
+static SHRINK_MASK: [u32; 512] = {
+    let mut shrunk_mask = [0; 512];
+
+    let mut cell_mask = 0;
+    while cell_mask < shrunk_mask.len() {
+        let mut mini_row = 0;
+        while mini_row < 3 {
+            if (cell_mask & 0b111 << 3*mini_row as u32) != 0 {
+                shrunk_mask[cell_mask] |= 1 << mini_row;
+            }
+            mini_row += 1;
+        }
+        cell_mask += 1;
+    }
+    shrunk_mask
+};
 
 #[rustfmt::skip]
 static LOCKED_CANDIDATES_MASK_SAME_BAND: [u32; 512] = [

@@ -728,7 +728,7 @@ static SHRINK_MASK: [u32; 512] = {
 };
 
 #[rustfmt::skip]
-static LOCKED_CANDIDATES_MASK_SAME_BAND: [u32; 512] = [
+static OLD_LOCKED_CANDIDATES_MASK_SAME_BAND: [u32; 512] = [
     0o000000000, 0o000000000, 0o000000000, 0o000000000, 0o000000000, 0o000000000, 0o000000000, 0o000000000,
     0o000000000, 0o000000000, 0o000000000, 0o000000000, 0o000000000, 0o000000000, 0o000000000, 0o000000000,
     0o000000000, 0o000000000, 0o000000000, 0o000000000, 0o000000000, 0o000000000, 0o000000000, 0o000000000,
@@ -794,6 +794,95 @@ static LOCKED_CANDIDATES_MASK_SAME_BAND: [u32; 512] = [
     0o000000000, 0o770770777, 0o007707777, 0o777777777, 0o007077777, 0o777777777, 0o007777777, 0o777777777,
     0o000000000, 0o770770777, 0o707707777, 0o777777777, 0o077077777, 0o777777777, 0o777777777, 0o777777777,
 ];
+
+#[test]
+fn mask_identical_locked_candidates_same_band() {
+    // the old and new table are not identical,
+    // but when the places where they differ have no overlap
+    // with the possible cells, then it doesn't matter
+    for (minirow_mask, (old_mask, new_mask)) in OLD_LOCKED_CANDIDATES_MASK_SAME_BAND
+        .iter()
+        .zip(LOCKED_CANDIDATES_MASK_SAME_BAND.iter())
+        .enumerate()
+    {
+        let possible_cells = unshrink(minirow_mask as _);
+        let diff = old_mask ^ new_mask;
+        assert!(possible_cells & diff == 0);
+    }
+}
+
+const fn unshrink(minirow_mask: u32) -> u32 {
+    let mut cell_mask = 0;
+    let mut bit_pos = 0;
+    while bit_pos < 9 {
+        if minirow_mask & 1 << bit_pos != 0 {
+            cell_mask |= 0b111 << bit_pos * 3;
+        }
+
+        bit_pos += 1;
+    }
+    cell_mask
+}
+
+static LOCKED_CANDIDATES_MASK_SAME_BAND: [u32; 512] = {
+    let mut nonconflicting_cells = [0o777_777_777; 512];
+
+    const fn simplify_mask_with_locked_candidates(minirow_mask: u32) -> u32 {
+        let mut new_minirow_mask = minirow_mask;
+
+        let mut row = 0;
+        while row < 3 {
+        //for row in 0..3 {
+            let possible_minirows_in_row = minirow_mask & 0b111 << row * 3;
+            let n_possible = possible_minirows_in_row.count_ones();
+            if n_possible == 1 {
+                let stack = possible_minirows_in_row.trailing_zeros() % 3;
+
+                let cells_in_stack = 0b001_001_001 << stack;
+                let unaffected_cells = 0o777 & !cells_in_stack;
+                let nonconflicting_cells_in_stack = 1 << stack + row * 3;
+
+                new_minirow_mask &= unaffected_cells | nonconflicting_cells_in_stack;
+            } else if n_possible == 0 {
+                new_minirow_mask = 0;
+            }
+            row += 1;
+        }
+
+        //for stack in 0..3 {
+        let mut stack = 0;
+        while stack < 3 {
+            let possible_minirows_in_stack = minirow_mask & 0b001_001_001 << stack;
+            let n_possible = possible_minirows_in_stack.count_ones();
+            if n_possible == 1 {
+                let row = possible_minirows_in_stack.trailing_zeros() / 3;
+
+                let cells_in_row = 0b111 << row * 3;
+                let unaffected_cells = 0o777 & !cells_in_row;
+                let nonconflicting_cells_in_row = 0b1 << stack + row * 3;
+
+                new_minirow_mask &= unaffected_cells | nonconflicting_cells_in_row;
+            } else if n_possible == 0 {
+                new_minirow_mask = 0;
+            }
+
+            stack += 1;
+        }
+        new_minirow_mask
+    }
+
+    let mut minirow_mask: usize = 0;
+    while minirow_mask < 512 {
+    //for minirow_mask in 0..512 {
+        let simplified_minirow_mask = simplify_mask_with_locked_candidates(minirow_mask as _);
+
+        // map 9 bit mask to 27 bit mask by broadcasting each bit to 3 bits
+        nonconflicting_cells[minirow_mask] = unshrink(simplified_minirow_mask);
+
+        minirow_mask += 1;
+    }
+    nonconflicting_cells
+};
 
 #[rustfmt::skip]
 static LOCKED_CANDIDATES_MASK_NEIGHBOR_BAND: [u32; 512] = [

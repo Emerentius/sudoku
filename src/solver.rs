@@ -1060,19 +1060,23 @@ fn assert_masks_equal(masks: &[u32], other_masks: &[u32], n_rows: u32, n_cols: u
     if !diffs.is_empty() {
         let first_n = &diffs[..std::cmp::min(diffs.len(), n_max_shown)];
 
-        let row_mask = (1 << n_cols) - 1;
         for &(idx, mask, other_mask) in first_n {
-            for row in 0..n_rows {
-                // the printout is flipped from the actual order, but it shouldn't matter
-                // for all the masks due to the symmetries in sudoku
-                let shift = row * n_cols;
-                let row_part = |mask| (mask & (row_mask << shift)) >> shift;
-                println!("{:0n_cols$b} {:0n_cols$b} {:0n_cols$b}", row_part(idx as u32), row_part(mask), row_part(other_mask), n_cols = n_cols as usize);
-            }
-            println!();
+            print_masks(idx, mask, other_mask, n_rows, n_cols)
         }
+        panic!("n_different: {}", diffs.len());
     }
-    panic!("n_different: {}", diffs.len());
+}
+
+fn print_masks(idx: usize, mask: u32, other_mask: u32, n_rows: u32, n_cols: u32) {
+    let row_mask = (1 << n_cols) - 1;
+    for row in 0..n_rows {
+        // the printout is flipped from the actual order, but it shouldn't matter
+        // for all the masks due to the symmetries in sudoku
+        let shift = row * n_cols;
+        let row_part = |mask| (mask & (row_mask << shift)) >> shift;
+        println!("{:0n_cols$b} {:0n_cols$b} {:0n_cols$b}", row_part(idx as u32), row_part(mask), row_part(other_mask), n_cols = n_cols as usize);
+    }
+    println!();
 }
 
 fn mask_diffs(masks: &[u32], other_masks: &[u32]) -> Vec<(usize, u32, u32)> {

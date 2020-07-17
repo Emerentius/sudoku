@@ -1031,6 +1031,58 @@ static LOCKED_MINIROWS: [u32; 512] = [
     0o000, 0o001, 0o142, 0o000, 0o124, 0o000, 0o100, 0o000, 0o000, 0o001, 0o002, 0o000, 0o004, 0o000, 0o000, 0o000,
 ];
 
+
+static NEW_LOCKED_MINIROWS: [u32; 512] = {
+    let mut locked_minirows = [0; 512];
+
+    let mut minirow_mask = 0;
+    while minirow_mask < 512 {
+        locked_minirows[minirow_mask as usize] = match _locked_candidates(minirow_mask) {
+            Ok(mask) => mask,
+            Err(Unsolvable) => 0,
+        };
+        minirow_mask += 1;
+    }
+    locked_minirows
+};
+
+#[test]
+fn mask_identical_locked_minirows() {
+    assert_masks_equal(&NEW_LOCKED_MINIROWS, &LOCKED_MINIROWS, 3, 3, 90);
+}
+
+// panics when `masks` and `other_masks` aren't identical
+// and prints the binary representation over several rows for easier debugging
+fn assert_masks_equal(masks: &[u32], other_masks: &[u32], n_rows: u32, n_cols: u32, n_max_shown: usize) {
+    let diffs = mask_diffs(masks, other_masks);
+
+    // limit number of diffs so as not to spam the terminal
+    if !diffs.is_empty() {
+        let first_n = &diffs[..std::cmp::min(diffs.len(), n_max_shown)];
+
+        let row_mask = (1 << n_cols) - 1;
+        for &(idx, mask, other_mask) in first_n {
+            for row in 0..n_rows {
+                // the printout is flipped from the actual order, but it shouldn't matter
+                // for all the masks due to the symmetries in sudoku
+                let shift = row * n_cols;
+                let row_part = |mask| (mask & (row_mask << shift)) >> shift;
+                println!("{:0n_cols$b} {:0n_cols$b} {:0n_cols$b}", row_part(idx as u32), row_part(mask), row_part(other_mask), n_cols = n_cols as usize);
+            }
+            println!();
+        }
+    }
+    panic!("n_different: {}", diffs.len());
+}
+
+fn mask_diffs(masks: &[u32], other_masks: &[u32]) -> Vec<(usize, u32, u32)> {
+    masks.iter().zip(other_masks.iter())
+        .enumerate()
+        .map(|(idx, (&mask, &other_mask))| (idx, mask, other_mask))
+        .filter(|(_, mask, other_mask)| mask != other_mask)
+        .collect()
+}
+
 #[rustfmt::skip]
 #[allow(unused)]
 static OLD_COLUMN_SINGLE: [u32; 512] = [

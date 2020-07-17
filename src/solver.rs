@@ -826,18 +826,39 @@ const fn unshrink(minirow_mask: u32) -> u32 {
     cell_mask
 }
 
-static LOCKED_CANDIDATES_MASK_SAME_BAND: [u32; 512] = {
-    let mut nonconflicting_cells = [0o777_777_777; 512];
 
-    const fn simplify_mask_with_locked_candidates(minirow_mask: u32) -> u32 {
-        let mut new_minirow_mask = minirow_mask;
+const fn transpose_mask(mask: u32, n_rows: u8, n_cols: u8) -> u32 {
+    let mut new_mask = 0;
+    let mut row = 0;
+    while row < n_rows {
+        let mut col = 0;
+        while col < n_cols {
+            if mask & (1 << row * n_cols + col) != 0 {
+                new_mask |= 1 << col * n_rows + row;
+            }
+            col += 1;
+        }
+        row += 1;
+    }
+    new_mask
+}
 
-        let mut row = 0;
-        while row < 3 {
-        //for row in 0..3 {
-            let possible_minirows_in_row = minirow_mask & 0b111 << row * 3;
-            let n_possible = possible_minirows_in_row.count_ones();
-            if n_possible == 1 {
+// takes a 9-bit mask of the minirows which contain candidates
+// and returns a 9-bit mask with those minirows removed that conflict
+// with locked candidates.
+const fn _locked_candidates(minirow_mask: u32) -> u32 {
+    minirow_mask & _claiming_locked_candidates(minirow_mask) & _pointing_locked_candidates(minirow_mask)
+}
+
+const fn _claiming_locked_candidates(minirow_mask: u32) -> u32 {
+    let mut new_minirow_mask = minirow_mask;
+    let mut row = 0;
+    while row < 3 {
+    //for row in 0..3 {
+        let possible_minirows_in_row = minirow_mask & 0b111 << row * 3;
+        match possible_minirows_in_row.count_ones() {
+            0 => new_minirow_mask = 0,
+            1 => {
                 let stack = possible_minirows_in_row.trailing_zeros() % 3;
 
                 let cells_in_stack = 0b001_001_001 << stack;
@@ -845,38 +866,28 @@ static LOCKED_CANDIDATES_MASK_SAME_BAND: [u32; 512] = {
                 let nonconflicting_cells_in_stack = 1 << stack + row * 3;
 
                 new_minirow_mask &= unaffected_cells | nonconflicting_cells_in_stack;
-            } else if n_possible == 0 {
-                new_minirow_mask = 0;
             }
-            row += 1;
+            _ => (),
         }
 
-        //for stack in 0..3 {
-        let mut stack = 0;
-        while stack < 3 {
-            let possible_minirows_in_stack = minirow_mask & 0b001_001_001 << stack;
-            let n_possible = possible_minirows_in_stack.count_ones();
-            if n_possible == 1 {
-                let row = possible_minirows_in_stack.trailing_zeros() / 3;
-
-                let cells_in_row = 0b111 << row * 3;
-                let unaffected_cells = 0o777 & !cells_in_row;
-                let nonconflicting_cells_in_row = 0b1 << stack + row * 3;
-
-                new_minirow_mask &= unaffected_cells | nonconflicting_cells_in_row;
-            } else if n_possible == 0 {
-                new_minirow_mask = 0;
-            }
-
-            stack += 1;
-        }
-        new_minirow_mask
+        row += 1;
     }
+    new_minirow_mask
+}
+
+const fn _pointing_locked_candidates(minirow_mask: u32) -> u32 {
+    let transposed_mask = transpose_mask(minirow_mask, 3,3 );
+    let new_minirow_mask = _claiming_locked_candidates(transposed_mask);
+    transpose_mask(new_minirow_mask, 3, 3)
+}
+
+static LOCKED_CANDIDATES_MASK_SAME_BAND: [u32; 512] = {
+    let mut nonconflicting_cells = [0; 512];
 
     let mut minirow_mask: usize = 0;
     while minirow_mask < 512 {
     //for minirow_mask in 0..512 {
-        let simplified_minirow_mask = simplify_mask_with_locked_candidates(minirow_mask as _);
+        let simplified_minirow_mask = _locked_candidates(minirow_mask as _);
 
         // map 9 bit mask to 27 bit mask by broadcasting each bit to 3 bits
         nonconflicting_cells[minirow_mask] = unshrink(simplified_minirow_mask);

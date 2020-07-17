@@ -686,6 +686,7 @@ fn bit_pos(mask: u32) -> usize {
 }
 
 #[rustfmt::skip]
+#[allow(unused)]
 static OLD_SHRINK_MASK: [u32; 512] = [
     0, 1, 1, 1, 1, 1, 1, 1, 2, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3,
     2, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3,
@@ -728,6 +729,7 @@ static SHRINK_MASK: [u32; 512] = {
 };
 
 #[rustfmt::skip]
+#[allow(unused)]
 static OLD_LOCKED_CANDIDATES_MASK_SAME_BAND: [u32; 512] = [
     0o000000000, 0o000000000, 0o000000000, 0o000000000, 0o000000000, 0o000000000, 0o000000000, 0o000000000,
     0o000000000, 0o000000000, 0o000000000, 0o000000000, 0o000000000, 0o000000000, 0o000000000, 0o000000000,
@@ -989,7 +991,8 @@ static LOCKED_MINIROWS: [u32; 512] = [
 ];
 
 #[rustfmt::skip]
-static COLUMN_SINGLE: [u32; 512] = [
+#[allow(unused)]
+static OLD_COLUMN_SINGLE: [u32; 512] = [
     0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000,
     0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000,
     0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000,
@@ -1023,6 +1026,39 @@ static COLUMN_SINGLE: [u32; 512] = [
     0o000, 0o333, 0o333, 0o222, 0o333, 0o222, 0o222, 0o222, 0o000, 0o111, 0o111, 0o000, 0o111, 0o000, 0o000, 0o000,
     0o000, 0o111, 0o111, 0o000, 0o111, 0o000, 0o000, 0o000, 0o000, 0o111, 0o111, 0o000, 0o111, 0o000, 0o000, 0o000,
 ];
+
+static COLUMN_SINGLE: [u32; 512] = {
+    let mut column_single = [0; 512];
+
+    let mut col_mask: usize = 0;
+    while col_mask < 512 {
+        let mut stack = 0;
+
+        let mut minirows_with_single_column = 0;
+        while stack < 3 {
+            match (col_mask & 0b111 << stack * 3).count_ones() {
+                0 => {
+                    minirows_with_single_column = 0;
+                    break
+                }
+                1 => minirows_with_single_column |= 0b001_001_001 << stack,
+                _ => (),
+
+            }
+
+            stack += 1;
+        }
+
+        column_single[col_mask] = minirows_with_single_column;
+        col_mask += 1;
+    }
+    column_single
+};
+
+#[test]
+fn mask_identical_column_single() {
+    assert_eq!(&COLUMN_SINGLE[..], &OLD_COLUMN_SINGLE[..]);
+}
 
 #[derive(Clone, Copy)]
 struct UncheckedIndexArray3([u32; 3]);

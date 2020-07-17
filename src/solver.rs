@@ -853,6 +853,11 @@ const fn possible_cells_via_locked_candidates(minirow_mask: u32) -> u32 {
     }
 }
 
+const fn locked_candidates(minirow_mask: u32) -> Result<u32, Unsolvable> {
+    let poss_minirows = possible_cells_via_locked_candidates(minirow_mask);
+    _locked_candidates(poss_minirows)
+}
+
 const fn _locked_candidates(minirow_mask: u32) -> Result<u32, Unsolvable> {
     match (_claiming_locked_candidates(minirow_mask), _pointing_locked_candidates(minirow_mask)) {
         (Ok(mask1), Ok(mask2)) => Ok(mask1 | mask2),
@@ -996,7 +1001,8 @@ const fn _nonconflicting_cells_locked_candidates(locked_candidates: u32) -> u32 
 
 
 #[rustfmt::skip]
-static LOCKED_MINIROWS: [u32; 512] = [
+#[allow(unused)]
+static OLD_LOCKED_MINIROWS: [u32; 512] = [
     0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000,
     0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000,
     0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000,
@@ -1032,12 +1038,12 @@ static LOCKED_MINIROWS: [u32; 512] = [
 ];
 
 
-static NEW_LOCKED_MINIROWS: [u32; 512] = {
+static LOCKED_MINIROWS: [u32; 512] = {
     let mut locked_minirows = [0; 512];
 
     let mut minirow_mask = 0;
     while minirow_mask < 512 {
-        locked_minirows[minirow_mask as usize] = match _locked_candidates(minirow_mask) {
+        locked_minirows[minirow_mask as usize] = match locked_candidates(minirow_mask) {
             Ok(mask) => mask,
             Err(Unsolvable) => 0,
         };
@@ -1048,7 +1054,7 @@ static NEW_LOCKED_MINIROWS: [u32; 512] = {
 
 #[test]
 fn mask_identical_locked_minirows() {
-    assert_masks_equal(&NEW_LOCKED_MINIROWS, &LOCKED_MINIROWS, 3, 3, 90);
+    assert_masks_equal(&LOCKED_MINIROWS, &OLD_LOCKED_MINIROWS, 3, 3, 90);
 }
 
 // panics when `masks` and `other_masks` aren't identical

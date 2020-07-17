@@ -846,39 +846,46 @@ const fn transpose_mask(mask: u32, n_rows: u8, n_cols: u8) -> u32 {
 // takes a 9-bit mask of the minirows which contain candidates
 // and returns a 9-bit mask with those minirows removed that conflict
 // with locked candidates.
-const fn _locked_candidates(minirow_mask: u32) -> u32 {
-    minirow_mask & _claiming_locked_candidates(minirow_mask) & _pointing_locked_candidates(minirow_mask)
+const fn possible_cells_via_locked_candidates(minirow_mask: u32) -> u32 {
+    match _locked_candidates(minirow_mask) {
+        Ok(locked_cands) => _nonconflicting_cells_locked_candidates(locked_cands),
+        Err(Unsolvable) => 0,
+    }
 }
 
-const fn _claiming_locked_candidates(minirow_mask: u32) -> u32 {
-    let mut new_minirow_mask = minirow_mask;
+const fn _locked_candidates(minirow_mask: u32) -> Result<u32, Unsolvable> {
+    match (_claiming_locked_candidates(minirow_mask), _pointing_locked_candidates(minirow_mask)) {
+        (Ok(mask1), Ok(mask2)) => Ok(mask1 | mask2),
+        _ => Err(Unsolvable),
+    }
+}
+
+const fn _claiming_locked_candidates(minirow_mask: u32) -> Result<u32, Unsolvable> {
+    let mut locked_minirows = 0;
     let mut row = 0;
     while row < 3 {
     //for row in 0..3 {
         let possible_minirows_in_row = minirow_mask & 0b111 << row * 3;
         match possible_minirows_in_row.count_ones() {
-            0 => new_minirow_mask = 0,
+            0 => return Err(Unsolvable),
             1 => {
                 let stack = possible_minirows_in_row.trailing_zeros() % 3;
-
-                let cells_in_stack = 0b001_001_001 << stack;
-                let unaffected_cells = 0o777 & !cells_in_stack;
-                let nonconflicting_cells_in_stack = 1 << stack + row * 3;
-
-                new_minirow_mask &= unaffected_cells | nonconflicting_cells_in_stack;
+                locked_minirows |= 1 << row * 3 + stack;
             }
             _ => (),
         }
 
         row += 1;
     }
-    new_minirow_mask
+    Ok(locked_minirows)
 }
 
-const fn _pointing_locked_candidates(minirow_mask: u32) -> u32 {
+const fn _pointing_locked_candidates(minirow_mask: u32) -> Result<u32, Unsolvable> {
     let transposed_mask = transpose_mask(minirow_mask, 3,3 );
-    let new_minirow_mask = _claiming_locked_candidates(transposed_mask);
-    transpose_mask(new_minirow_mask, 3, 3)
+    match _claiming_locked_candidates(transposed_mask) {
+        Ok(transposed_output_mask) => Ok(transpose_mask(transposed_output_mask, 3, 3)),
+        Err(Unsolvable) => Err(Unsolvable),
+    }
 }
 
 static LOCKED_CANDIDATES_MASK_SAME_BAND: [u32; 512] = {
@@ -887,7 +894,7 @@ static LOCKED_CANDIDATES_MASK_SAME_BAND: [u32; 512] = {
     let mut minirow_mask: usize = 0;
     while minirow_mask < 512 {
     //for minirow_mask in 0..512 {
-        let simplified_minirow_mask = _locked_candidates(minirow_mask as _);
+        let simplified_minirow_mask = possible_cells_via_locked_candidates(minirow_mask as _);
 
         // map 9 bit mask to 27 bit mask by broadcasting each bit to 3 bits
         nonconflicting_cells[minirow_mask] = unshrink(simplified_minirow_mask);
@@ -964,6 +971,29 @@ static LOCKED_CANDIDATES_MASK_NEIGHBOR_BAND: [u32; 512] = [
     0o777777777, 0o776776776, 0o775775775, 0o777777777, 0o773773773, 0o777777777, 0o777777777, 0o777777777,
     0o777777777, 0o776776776, 0o775775775, 0o777777777, 0o773773773, 0o777777777, 0o777777777, 0o777777777,
 ];
+
+
+const fn _nonconflicting_cells_locked_candidates(locked_candidates: u32) -> u32 {
+    let mut nonconflicting_cells = 0o777;
+
+    let mut row = 0;
+    while row < 3 {
+        let mut stack = 0;
+        while stack < 3 {
+            if locked_candidates & 1 << row * 3 + stack != 0 {
+                let cells_in_stack = 0b001_001_001 << stack;
+                let cells_in_row = 0b111 << row * 3;
+                let conflicting_cells = cells_in_row ^ cells_in_stack;
+                nonconflicting_cells &= !conflicting_cells;
+            }
+
+            stack += 1;
+        }
+        row += 1;
+    }
+    nonconflicting_cells
+}
+
 
 #[rustfmt::skip]
 static LOCKED_MINIROWS: [u32; 512] = [

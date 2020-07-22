@@ -79,7 +79,7 @@ impl Strategy {
         use self::Strategy::*;
         match *self {
             NakedSingles if !stop_after_first && is_first_strategy => {
-                state._update_cell_poss_house_solved(true)
+                state._update_cell_poss_house_solved(true, true)
             }
             NakedSingles => state.find_naked_singles(stop_after_first),
             HiddenSingles => state.find_hidden_singles(stop_after_first),

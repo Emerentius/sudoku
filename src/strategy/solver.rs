@@ -171,8 +171,7 @@ impl StrategySolver {
         let mut grid = [CellState::Candidates(Set::NONE); 81];
 
         solver.update_grid();
-        // TODO: continue despite error
-        let _ = solver._update_cell_poss_house_solved(false);
+        let _ = solver._update_cell_poss_house_solved(false, false);
 
         for (cell, &digits) in solver.cell_poss_digits.state.iter().enumerate() {
             grid[cell] = CellState::Candidates(digits);
@@ -193,7 +192,7 @@ impl StrategySolver {
     /// Returns the current state of the given `cell`
     pub fn cell_state(&mut self, cell: Cell) -> CellState {
         self.update_grid();
-        let _ = self._update_cell_poss_house_solved(false);
+        let _ = self._update_cell_poss_house_solved(false, false);
 
         let digit = self.grid.state.0[cell.as_index()];
         if digit != 0 {
@@ -287,12 +286,13 @@ impl StrategySolver {
     }
 
     fn update_cell_poss_house_solved(&mut self) -> Result<(), Unsolvable> {
-        self._update_cell_poss_house_solved(false)
+        self._update_cell_poss_house_solved(false, true)
     }
 
     pub(crate) fn _update_cell_poss_house_solved(
         &mut self,
         find_naked_singles: bool,
+        early_return_on_error: bool,
     ) -> Result<(), Unsolvable> {
         let new_eliminations;
         {
@@ -304,7 +304,7 @@ impl StrategySolver {
 
                 // deductions made here may conflict with entries already in the queue
                 // in the queue. In that case the sudoku is impossible.
-                Self::remove_impossibilities(
+                let res = Self::remove_impossibilities(
                     &mut self.grid.state,
                     cell_poss,
                     candidate.cell,
@@ -312,7 +312,10 @@ impl StrategySolver {
                     &mut self.deduced_entries,
                     &mut self.deductions,
                     find_naked_singles,
-                )?;
+                );
+                if early_return_on_error {
+                    res?;
+                }
             }
             *le_cp = self.eliminated_entries.len() as _;
         }

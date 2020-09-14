@@ -83,3 +83,4 @@ Unreleased
   Limited to uniquely solvable sudokus (for now).
 * Xy- and Xyz-Wing strategies
 * Print textual representation of sudoku board with remaining candidates for unsolved cells.
+* Generation of symmetrical sudokus. The desired symmetry can be chosen via the `Symmetry` enum.

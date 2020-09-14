@@ -1,8 +1,8 @@
 //! Tools for solving sudokus with strategies that humans use.
 //!
-//! This module contains the [`StrategySolver`](::strategy::StrategySolver) that mimics human
+//! This module contains the [`StrategySolver`] that mimics human
 //! approaches to sudoku solving for hinting at possible moves and grading difficulty.
-//! The `StrategySolver` together with the [`Strategy`](::strategy::Strategy) enum form the
+//! The `StrategySolver` together with the [`Strategy`] enum form the
 //! core of this module. All deductions are recorded and can be obtained through
 //! the appropriate methods.
 //!

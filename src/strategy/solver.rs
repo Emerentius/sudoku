@@ -102,10 +102,10 @@ impl StrategySolver {
         }
     }
 
-    /// Construct a new StrategySolver from an array of [`CellState`s](::board::CellState).
+    /// Construct a new StrategySolver from an array of [`CellState`s](crate::board::CellState).
     /// This allows communicating the impossibility of some candidates, that aren't already
     /// trivially conflicting with entries. The cell order in the array is the same as for
-    /// [`::Sudoku`s], i.e. left-to-right, top-to-bottom.
+    /// [`crate::Sudoku`]s, i.e. left-to-right, top-to-bottom.
     pub fn from_grid_state(grid_state: [CellState; 81]) -> StrategySolver {
         let mut entries = vec![];
         let mut eliminated_candidates = vec![];

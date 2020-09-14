@@ -1,6 +1,6 @@
 //! Generic, fixed-size bitsets
 //!
-//! Sudoku strategies deal with sets of various things such as [`Digit`s](::board::Digit) and [`House`s](::board::House) a lot.
+//! Sudoku strategies deal with sets of various things such as [`Digit`s](crate::board::Digit) and [`House`s](crate::board::House) a lot.
 //! Efficient storage is important for maximal performance, but it should not be possible
 //! to confuse bitmasks for different things. This module contains type-safe, space-efficient
 //! fixed-length bitsets for digits and various sudoku positions.

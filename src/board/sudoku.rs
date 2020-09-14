@@ -242,10 +242,20 @@ impl Sudoku {
             .for_each(|(cell, place)| *place = cell);
         rand::thread_rng().shuffle(&mut cell_order);
 
+        // With symmetries, many cells are equivalent.
+        // If we've already visited one cell in a symmetry class, we can skip ahead
+        // when encountering one of the other ones.
+        let mut cell_visited = [false; 81];
+
         // remove cell content if possible without destroying uniqueness of solution
         for &cell in &cell_order[..] {
+            let cells = symmetry.corresponding_cells(cell);
+            if cell_visited[cells[0]] {
+                continue;
+            }
             let mut sudoku_tmp = sudoku;
-            for cell in symmetry.corresponding_cells(cell) {
+            for cell in cells {
+                cell_visited[cell] = true;
                 sudoku_tmp.0[cell] = 0;
             }
             if sudoku_tmp.is_uniquely_solvable() {

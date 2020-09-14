@@ -21,3 +21,7 @@ crunchy = "0.2.1"
 # being pwned because of a bug in it so checks are activated by default
 # This feature deactivates bounds checks in the solver.
 unchecked_indexing = []
+
+[dev-dependencies]
+strum = "0.19.2"
+strum_macros = "0.19.2"

@@ -129,6 +129,7 @@ pub type Iter<'a> = iter::Map<slice::Iter<'a, u8>, fn(&u8) -> Option<u8>>; // It
 
 #[non_exhaustive]
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
+#[cfg_attr(test, derive(strum_macros::EnumIter))]
 pub enum Symmetry {
     VerticalMirror,
     HorizontalMirror,
@@ -928,5 +929,74 @@ impl fmt::Display for SudokuBlock {
             };
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use strum::IntoEnumIterator;
+
+    // each cell in a symmetry class must map to the same set of cells
+    #[test]
+    fn test_symmetry_all_cells_equivalent() {
+        for symmetry in Symmetry::iter() {
+            let cells_in_class = |cell| {
+                let mut cells = symmetry.corresponding_cells(cell);
+                cells.sort();
+                cells
+            };
+
+            for cell in 0..81 {
+                let equivalent_cells = cells_in_class(cell);
+                for &cell in &equivalent_cells {
+                    assert_eq!(equivalent_cells, cells_in_class(cell));
+                }
+            }
+        }
+    }
+
+    // More complicated symmetries can be expressed as a combination of simple symmetries.
+    #[test]
+    fn test_symmetry_composite_symmetries() {
+        use std::collections::HashSet;
+        fn multi_symmmetry_corresponding_cells(symmetries: &[Symmetry], cell: usize) -> HashSet<usize> {
+            let mut cells = HashSet::new();
+            cells.insert(cell);
+            for &symmetry in symmetries {
+                let mut new_cells = vec![];
+                for &cell in &cells {
+                    new_cells.extend(symmetry.corresponding_cells(cell));
+                }
+                cells.extend(new_cells);
+            }
+            cells
+        }
+
+        use Symmetry::*;
+        for &(symmetry, equivalent_symmetries) in &[
+            (
+                Dihedral,
+                &[
+                    // AntidiagonalMirror and both rotations could be included
+                    // but these are enough to produce full dihedral symmetry.
+                    VerticalMirror,
+                    HorizontalMirror,
+                    DiagonalMirror,
+                ][..],
+            ),
+            (VerticalAndHorizontalMirror, &[VerticalMirror, HorizontalMirror]),
+            (BidiagonalMirror, &[DiagonalMirror, AntidiagonalMirror]),
+        ] {
+            for cell in 0..81 {
+                let symmetry_cells = symmetry
+                    .corresponding_cells(cell)
+                    .into_iter()
+                    .collect::<HashSet<_>>();
+                let equivalent_symmetry_cells =
+                    multi_symmmetry_corresponding_cells(equivalent_symmetries, cell);
+                assert_eq!(symmetry_cells, equivalent_symmetry_cells);
+            }
+        }
     }
 }

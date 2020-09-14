@@ -689,12 +689,12 @@ impl Sudoku {
     ///
     /// Transformations that are applied:
     /// - Relabel numbers, e.g. swap all 1s and all 3s (9! permutations)
-    /// - Permute rows within their band and columns within their stack (3!<super>3 * 2</super> permutations)
-    /// - Permute stacks and bands (3!<super>2</super> permutations)
+    /// - Permute rows within their band and columns within their stack (3!<sup>3 * 2</sup> permutations)
+    /// - Permute stacks and bands (3!<sup>2</sup> permutations)
     /// - Transpose the board, i.e. mirror it along the diagonal (2 permutations)
     ///   The remaining rotations as well as mirrorings can be produced by a combination with the other transformations
     ///
-    /// This results in a total of up to 2 * 9! * 3!<super>8</super> = 1,218,998,108,160 permutations
+    /// This results in a total of up to 2 * 9! * 3!<sup>8</sup> = 1,218,998,108,160 permutations
     /// Less permutations exists if the sudoku is symmetrical in respect to some combinations of the transformations
     /// The vast majority of sudokus do not have any such symmetries (automorphisms). The highest number of automorphisms
     /// a sudoku can have is 648 and ~99.99% of all non-equivalent sudokus have only 1, the identity transformation.

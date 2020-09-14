@@ -50,3 +50,4 @@ mod solver;
 pub mod strategy;
 
 pub use crate::board::Sudoku;
+pub use crate::board::Symmetry;

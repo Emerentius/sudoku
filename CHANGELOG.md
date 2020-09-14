@@ -81,6 +81,10 @@ Unreleased
 * `Sudoku::canonicalized`. Maps all sudokus of an equivalence class to the same sudoku
   and counts automorphisms.
   Limited to uniquely solvable sudokus (for now).
-* Xy- and Xyz-Wing strategies
+* New strategies:
+  - XyWing
+  - XyzWing
+  - Mutant Swordfish
+  - Mutant Jellyfish
 * Print textual representation of sudoku board with remaining candidates for unsolved cells.
 * Generation of symmetrical sudokus. The desired symmetry can be chosen via the `Symmetry` enum.

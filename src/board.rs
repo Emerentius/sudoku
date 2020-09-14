@@ -12,6 +12,7 @@ pub(crate) use self::positions::*;
 #[rustfmt::skip]
 pub use self::{
     sudoku::Sudoku,
+    sudoku::Symmetry,
     digit::Digit,
     positions::Cell,
     candidate::Candidate,

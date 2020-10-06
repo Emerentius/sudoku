@@ -62,6 +62,7 @@ impl Deductions {
 /// Result of a single, successful strategy application
 ///
 /// This enum contains the data necessary to explain why the step could be taken.
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[allow(missing_docs)]
 pub enum Deduction<T> {
@@ -124,8 +125,6 @@ pub enum Deduction<T> {
         conflicts: T,
     },
     //SinglesChain(T),
-    #[doc(hidden)]
-    __NonExhaustive,
 }
 
 impl Deduction<&'_ [Candidate]> {
@@ -193,7 +192,6 @@ impl Deduction<&'_ [Candidate]> {
                 _ => unreachable!(),
             },
             AvoidableRectangle { .. } => unimplemented!(),
-            __NonExhaustive => unreachable!(),
         }
     }
 }
@@ -239,7 +237,6 @@ impl _Deduction {
 
             AvoidableRectangle { .. } => unimplemented!(),
             //SinglesChain(x) => SinglesChain(&eliminated[x]),
-            __NonExhaustive => __NonExhaustive
         }
     }
 }

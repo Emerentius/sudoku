@@ -19,6 +19,7 @@ use crate::helper::Unsolvable;
 ///
 /// This can be used with [`StrategySolver::solve`].
 /// May be expanded in the future.
+#[non_exhaustive]
 #[derive(Debug, Clone)]
 #[allow(missing_docs)]
 pub enum Strategy {
@@ -40,8 +41,6 @@ pub enum Strategy {
     MutantJellyfish,
     AvoidableRectangles,
     //SinglesChain,
-    #[doc(hidden)]
-    __NonExhaustive,
 }
 
 impl Strategy {

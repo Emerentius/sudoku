@@ -99,3 +99,4 @@ Unreleased
   - `generate_unique_with_symmetry` -> `generate_with_symmetry`
   - `generate_unique_from` -> `generate_from`
   - `generate_unique_with_symmetry_from` -> `generate_with_symmetry_from`
+* Add `Sudoku::shuffled`.

@@ -708,6 +708,12 @@ impl Sudoku {
         transformation.apply(self);
     }
 
+    /// Returns a [`shuffled`](Sudoku::shuffle) copy of the sudoku.
+    pub fn shuffled(mut self) -> Self {
+        self.shuffle();
+        self
+    }
+
     /// Returns the canonical representation of this sudoku and its automorphism count.
     ///
     /// All sudokus that can be translated into each other via validity preserving transformations belong to the same

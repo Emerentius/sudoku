@@ -286,9 +286,11 @@ fn shuffle_solved() {
 // test if any two sudokus are equal
 // also asserts that the number of clues don't change
 fn test_shuffle_sudoku(sudoku: Sudoku) {
-    let mut sudokus = vec![sudoku; 1000];
+    let mut sudokus = std::iter::repeat(sudoku)
+        .map(Sudoku::shuffled)
+        .take(1000)
+        .collect::<Vec<_>>();
     let n_clues = sudoku.n_clues();
-    sudokus.iter_mut().for_each(Sudoku::shuffle);
     sudokus.sort();
 
     let mut duplicates = vec![];
@@ -367,12 +369,11 @@ fn parse_permissive() {
 
 #[test]
 fn canonicalize() {
-    let mut sudoku = Sudoku::generate_solved();
+    let sudoku = Sudoku::generate_solved();
     let (canonical, _) = sudoku.canonicalized().unwrap();
 
     for i in 0..1_000 {
-        sudoku.shuffle();
-        let (recanonicalized, _) = sudoku.canonicalized().unwrap();
+        let (recanonicalized, _) = sudoku.shuffled().canonicalized().unwrap();
         if recanonicalized != canonical {
             panic!("canonicalize(shuffle(canonical_grid)) != canonical_grid on attempt nr {}\nbefore {}\nafter  {}", i, canonical.to_str_line(), recanonicalized.to_str_line());
         }

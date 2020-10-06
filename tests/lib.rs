@@ -145,7 +145,7 @@ fn correct_solution_easy_sudokus() {
     let sudokus = read_sudokus(include_str!("../sudokus/Lines/easy_sudokus.txt"));
     let solved_sudokus = read_sudokus(include_str!("../sudokus/Lines/solved_easy_sudokus.txt"));
     for (i, (sudoku, solved_sudoku)) in sudokus.into_iter().zip(solved_sudokus).enumerate() {
-        let solutions = sudoku.solutions_at_most(2);
+        let solutions = sudoku.solutions_up_to(2);
         match solutions.len() {
             1 => assert_eq!(solved_sudoku, solutions[0]),
             0 => panic!("Found no solution for {}. sudoku:\n{}", i, sudoku.to_str_line()),
@@ -163,7 +163,7 @@ fn correct_solution_medium_sudokus() {
     let sudokus = read_sudokus(include_str!("../sudokus/Lines/medium_sudokus.txt"));
     let solved_sudokus = read_sudokus(include_str!("../sudokus/Lines/solved_medium_sudokus.txt"));
     for (i, (sudoku, solved_sudoku)) in sudokus.into_iter().zip(solved_sudokus).enumerate() {
-        let solutions = sudoku.solutions_at_most(2);
+        let solutions = sudoku.solutions_up_to(2);
         match solutions.len() {
             1 => assert_eq!(solved_sudoku, solutions[0]),
             0 => panic!("Found no solution for {}. sudoku:\n{}", i, sudoku.to_str_line()),
@@ -182,7 +182,7 @@ fn correct_solution_hard_sudokus() {
     let solved_sudokus = read_sudokus(include_str!("../sudokus/Lines/solved_hard_sudokus.txt"));
     let mut no_solution_sudokus = vec![];
     for (i, (sudoku, solved_sudoku)) in sudokus.into_iter().zip(solved_sudokus).enumerate() {
-        let solutions = sudoku.solutions_at_most(2);
+        let solutions = sudoku.solutions_up_to(2);
         match solutions.len() {
             1 => assert_eq!(solved_sudoku, solutions[0]),
             0 => no_solution_sudokus.push((i, sudoku)), //panic!("Found no solution for {}. sudoku:\n{}", i, sudoku.to_str_line()),
@@ -212,7 +212,7 @@ fn unsolved_hard() {
         if !select.contains(&i) {
             continue
         }
-        let solutions = sudoku.solutions_at_most(2);
+        let solutions = sudoku.solutions_up_to(2);
         match solutions.len() {
             1 => assert_eq!( solved_sudoku, solutions[0]),
             0 => no_solution_sudokus.push((i, sudoku)), //panic!("Found no solution for {}. sudoku:\n{}", i, sudoku.to_str_line()),

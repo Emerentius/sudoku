@@ -591,7 +591,7 @@ impl Sudoku {
     /// Return `None` if no solution exists.
     pub fn possibly_nonunique_solution(self) -> Option<Sudoku> {
         let mut buf = [[0; N_CELLS]];
-        match self.solutions_at_most_buffer(&mut buf, 1) == 1 {
+        match self.solutions_up_to_buffer(&mut buf, 1) == 1 {
             true => Some(Sudoku(buf[0])),
             false => None,
         }
@@ -613,7 +613,7 @@ impl Sudoku {
         };
 
         let mut solution = [[0; N_CELLS]];
-        let n_solutions = self.solutions_at_most_buffer(&mut solution, 2);
+        let n_solutions = self.solutions_up_to_buffer(&mut solution, 2);
         match n_solutions == 1 {
             true => Some(Sudoku(solution[0])),
             false => None,
@@ -622,34 +622,34 @@ impl Sudoku {
 
     /// Counts number of solutions to sudoku up to `limit`
     /// This solves the sudoku but does not return the solutions which allows for slightly faster execution.
-    pub fn solutions_count_at_most(self, limit: usize) -> usize {
+    pub fn solutions_count_up_to(self, limit: usize) -> usize {
         SudokuSolver::from_sudoku(self)
             .ok()
-            .map_or(0, |solver| solver.solutions_count_at_most(limit))
+            .map_or(0, |solver| solver.solutions_count_up_to(limit))
     }
 
     /// Checks whether sudoku has one and only one solution.
     /// This solves the sudoku but does not return the solution which allows for slightly faster execution.
     pub fn is_uniquely_solvable(self) -> bool {
-        self.solutions_count_at_most(2) == 1
+        self.solutions_count_up_to(2) == 1
     }
 
     /// Solve sudoku and return the first `limit` solutions it finds. If less solutions exist, return only those. Return `None` if no solution exists.
     /// No specific ordering of solutions is promised. It can change across versions.
-    pub fn solutions_at_most(self, limit: usize) -> Vec<Sudoku> {
+    pub fn solutions_up_to(self, limit: usize) -> Vec<Sudoku> {
         SudokuSolver::from_sudoku(self)
             .ok()
-            .map_or(vec![], |solver| solver.solutions_at_most(limit))
+            .map_or(vec![], |solver| solver.solutions_up_to(limit))
     }
 
     /// Counts number of solutions to sudoku up to `limit` and writes any solution found into `target`
     /// up to its capacity. Additional solutions will be counted but not saved.
     /// No specific ordering of solutions is promised. It can change across versions.
     /// This is primarily meant for C FFI.
-    pub fn solutions_at_most_buffer(self, target: &mut [[u8; N_CELLS]], limit: usize) -> usize {
+    pub fn solutions_up_to_buffer(self, target: &mut [[u8; N_CELLS]], limit: usize) -> usize {
         SudokuSolver::from_sudoku(self)
             .ok()
-            .map_or(0, |solver| solver.solutions_at_most_buffer(target, limit))
+            .map_or(0, |solver| solver.solutions_up_to_buffer(target, limit))
     }
 
     /// Check whether the sudoku is solved.

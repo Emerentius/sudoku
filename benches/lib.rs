@@ -64,9 +64,9 @@ make_benches!(
 
     // the sudokus are proper so this will exhaust the entire search tree
     // trying to find a 2nd solution
-    sudoku_solve_all_1_easy,   |s: Sudoku| s.solutions_at_most(2), "easy_sudokus.txt";
-    sudoku_solve_all_2_medium, |s: Sudoku| s.solutions_at_most(2), "medium_sudokus.txt";
-    sudoku_solve_all_3_hard,   |s: Sudoku| s.solutions_at_most(2), "hard_sudokus.txt"
+    sudoku_solve_all_1_easy,   |s: Sudoku| s.solutions_up_to(2), "easy_sudokus.txt";
+    sudoku_solve_all_2_medium, |s: Sudoku| s.solutions_up_to(2), "medium_sudokus.txt";
+    sudoku_solve_all_3_hard,   |s: Sudoku| s.solutions_up_to(2), "hard_sudokus.txt"
 );
 
 #[bench]

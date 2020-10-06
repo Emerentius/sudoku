@@ -131,28 +131,28 @@ impl SudokuSolver {
     }
 
     /// Find and return up to `limit` solutions
-    pub fn solutions_at_most(self, limit: usize) -> Vec<Sudoku> {
+    pub fn solutions_up_to(self, limit: usize) -> Vec<Sudoku> {
         let mut solutions = vec![];
-        self._solutions_at_most(limit, &mut Solutions::Vector(&mut solutions));
+        self._solutions_up_to(limit, &mut Solutions::Vector(&mut solutions));
         solutions
     }
 
     /// Count up to `limit` solutions and save up to buffer.len() of them
     /// in `buffer`. Returns number of solutions.
-    pub fn solutions_at_most_buffer(self, buffer: &mut [[u8; 81]], limit: usize) -> usize {
+    pub fn solutions_up_to_buffer(self, buffer: &mut [[u8; 81]], limit: usize) -> usize {
         let mut solutions = Solutions::Buffer(buffer, 0);
-        self._solutions_at_most(limit, &mut solutions);
+        self._solutions_up_to(limit, &mut solutions);
         solutions.len()
     }
 
     /// Find up to `limit` solutions and return count
-    pub fn solutions_count_at_most(self, limit: usize) -> usize {
+    pub fn solutions_count_up_to(self, limit: usize) -> usize {
         let mut solutions = Solutions::Count(0);
-        self._solutions_at_most(limit, &mut solutions);
+        self._solutions_up_to(limit, &mut solutions);
         solutions.len()
     }
 
-    fn _solutions_at_most(mut self, limit: usize, solutions: &mut Solutions) {
+    fn _solutions_up_to(mut self, limit: usize, solutions: &mut Solutions) {
         if self.find_naked_singles().is_err() {
             return;
         }

@@ -30,7 +30,7 @@ let sudoku_line = "...2...633....54.1..1..398........9....538....3........263..5
 let sudoku = Sudoku::from_str_line(sudoku_line).unwrap();
 
 // Solve, print or convert the sudoku to another format
-if let Some(solution) = sudoku.solve_unique() {
+if let Some(solution) = sudoku.solution() {
     // print the solution in line format
     println!("{}", solution);
 

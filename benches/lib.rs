@@ -54,9 +54,9 @@ macro_rules! make_benches {
 
 make_benches!(
     "../sudokus/Lines/";
-    sudoku_solve_one_1_easy,     Sudoku::solve_one, "easy_sudokus.txt";
-    sudoku_solve_one_2_medium,   Sudoku::solve_one, "medium_sudokus.txt";
-    sudoku_solve_one_3_hard,     Sudoku::solve_one, "hard_sudokus.txt";
+    sudoku_solve_one_1_easy,     Sudoku::possibly_nonunique_solution, "easy_sudokus.txt";
+    sudoku_solve_one_2_medium,   Sudoku::possibly_nonunique_solution, "medium_sudokus.txt";
+    sudoku_solve_one_3_hard,     Sudoku::possibly_nonunique_solution, "hard_sudokus.txt";
 
     sudoku_is_solvable_1_easy,   Sudoku::is_uniquely_solvable, "easy_sudokus.txt";
     sudoku_is_solvable_2_medium, Sudoku::is_uniquely_solvable, "medium_sudokus.txt";
@@ -64,26 +64,26 @@ make_benches!(
 
     // the sudokus are proper so this will exhaust the entire search tree
     // trying to find a 2nd solution
-    sudoku_solve_all_1_easy,   |s: Sudoku| s.solve_at_most(2), "easy_sudokus.txt";
-    sudoku_solve_all_2_medium, |s: Sudoku| s.solve_at_most(2), "medium_sudokus.txt";
-    sudoku_solve_all_3_hard,   |s: Sudoku| s.solve_at_most(2), "hard_sudokus.txt"
+    sudoku_solve_all_1_easy,   |s: Sudoku| s.solutions_at_most(2), "easy_sudokus.txt";
+    sudoku_solve_all_2_medium, |s: Sudoku| s.solutions_at_most(2), "medium_sudokus.txt";
+    sudoku_solve_all_3_hard,   |s: Sudoku| s.solutions_at_most(2), "hard_sudokus.txt"
 );
 
 #[bench]
-fn generate_filled_sudoku(b: &mut test::Bencher) {
-    b.iter(Sudoku::generate_filled)
+fn generate_solved_sudoku(b: &mut test::Bencher) {
+    b.iter(Sudoku::generate_solved)
 }
 
 #[bench]
-fn generate_unique_sudoku(b: &mut test::Bencher) {
-    b.iter(Sudoku::generate_unique)
+fn generate_sudoku(b: &mut test::Bencher) {
+    b.iter(Sudoku::generate)
 }
 
 // this test is probabilistic in nature
 // if an error occurs, note down the sudoku that it generated
 #[bench]
 fn shuffle(b: &mut test::Bencher) {
-    let mut sudoku = Sudoku::generate_filled();
+    let mut sudoku = Sudoku::generate_solved();
     b.iter(|| {
         sudoku.shuffle();
         test::black_box(sudoku);
@@ -93,7 +93,7 @@ fn shuffle(b: &mut test::Bencher) {
 #[bench]
 fn from_bytes(b: &mut test::Bencher) {
     let sudokus = (0..1000)
-        .map(|_| Sudoku::generate_unique().to_bytes())
+        .map(|_| Sudoku::generate().to_bytes())
         .collect::<Vec<_>>();
 
     b.iter(|| {
@@ -106,7 +106,7 @@ fn from_bytes(b: &mut test::Bencher) {
 #[bench]
 fn parse_line(b: &mut test::Bencher) {
     let sudokus = (0..1000)
-        .map(|_| Sudoku::generate_unique().to_str_line())
+        .map(|_| Sudoku::generate().to_str_line())
         .collect::<Vec<_>>();
     let mut sudokus = sudokus.iter().cycle();
 
@@ -116,7 +116,7 @@ fn parse_line(b: &mut test::Bencher) {
 #[bench]
 fn parse_lines(b: &mut test::Bencher) {
     let sudokus = (0..1000)
-        .map(|_| Sudoku::generate_unique().to_str_line())
+        .map(|_| Sudoku::generate().to_str_line())
         .collect::<Vec<_>>();
     let sudokus = sudokus.iter().map(|line| &**line).collect::<Vec<_>>();
     let sudokus = sudokus.join("\n");
@@ -175,7 +175,7 @@ fn strategy_solver_2_medium_sudokus(b: &mut test::Bencher) {
 
 #[bench]
 fn canonicalize(b: &mut test::Bencher) {
-    let sudokus = (0..1000).map(|_| Sudoku::generate_filled()).collect::<Vec<_>>();
+    let sudokus = (0..1000).map(|_| Sudoku::generate_solved()).collect::<Vec<_>>();
     let mut sudokus = sudokus.iter().cycle();
 
     b.iter(|| {

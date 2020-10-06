@@ -20,7 +20,7 @@ _263__5__
 47___1___";
 
     let sudoku = Sudoku::from_str_block(sudoku_str).unwrap();
-    let sudoku = sudoku.solve_unique().unwrap();
+    let sudoku = sudoku.solution().unwrap();
     println!("{}", sudoku);
 }
 
@@ -40,7 +40,7 @@ _63|2_4|_17
 8__|__9|__3";
 
     let sudoku = Sudoku::from_str_block(sudoku_str).unwrap();
-    let sudoku = sudoku.solve_unique().unwrap();
+    let sudoku = sudoku.solution().unwrap();
     println!("{}", sudoku);
 }
 
@@ -61,14 +61,8 @@ _26|3__|5__
 
     let sudoku_str2 = "...2...633....54.1..1..398........9....538....3........263..5..5.37....847...1...";
 
-    let sudoku = Sudoku::from_str_block(sudoku_str)
-        .unwrap()
-        .solve_unique()
-        .unwrap();
-    let sudoku2 = Sudoku::from_str_line(sudoku_str2)
-        .unwrap()
-        .solve_unique()
-        .unwrap();
+    let sudoku = Sudoku::from_str_block(sudoku_str).unwrap().solution().unwrap();
+    let sudoku2 = Sudoku::from_str_line(sudoku_str2).unwrap().solution().unwrap();
     println!("{}", sudoku.display_block());
     println!("{}", sudoku.to_str_line());
     assert!(sudoku == sudoku2);
@@ -117,7 +111,7 @@ _263__5__
 fn solutionless_sudokus() {
     let sudokus = read_sudokus(include_str!("../sudokus/Lines/invalid_sudokus.txt"));
     for sudoku in sudokus {
-        assert!(sudoku.solve_one().is_none());
+        assert!(sudoku.possibly_nonunique_solution().is_none());
     }
 }
 
@@ -139,11 +133,11 @@ fn is_solved_on_solved() {
 
 #[test]
 #[should_panic]
-fn solve_unique_multiple_solutions() {
+fn solution_multiple_solutions() {
     // an empty grid
     // the ultimate sudoku with multiple solutions
     let sudoku = Sudoku::from_bytes([0; 81]).unwrap();
-    sudoku.solve_unique().unwrap();
+    sudoku.solution().unwrap();
 }
 
 #[test]
@@ -151,7 +145,7 @@ fn correct_solution_easy_sudokus() {
     let sudokus = read_sudokus(include_str!("../sudokus/Lines/easy_sudokus.txt"));
     let solved_sudokus = read_sudokus(include_str!("../sudokus/Lines/solved_easy_sudokus.txt"));
     for (i, (sudoku, solved_sudoku)) in sudokus.into_iter().zip(solved_sudokus).enumerate() {
-        let solutions = sudoku.solve_at_most(2);
+        let solutions = sudoku.solutions_at_most(2);
         match solutions.len() {
             1 => assert_eq!(solved_sudoku, solutions[0]),
             0 => panic!("Found no solution for {}. sudoku:\n{}", i, sudoku.to_str_line()),
@@ -169,7 +163,7 @@ fn correct_solution_medium_sudokus() {
     let sudokus = read_sudokus(include_str!("../sudokus/Lines/medium_sudokus.txt"));
     let solved_sudokus = read_sudokus(include_str!("../sudokus/Lines/solved_medium_sudokus.txt"));
     for (i, (sudoku, solved_sudoku)) in sudokus.into_iter().zip(solved_sudokus).enumerate() {
-        let solutions = sudoku.solve_at_most(2);
+        let solutions = sudoku.solutions_at_most(2);
         match solutions.len() {
             1 => assert_eq!(solved_sudoku, solutions[0]),
             0 => panic!("Found no solution for {}. sudoku:\n{}", i, sudoku.to_str_line()),
@@ -188,7 +182,7 @@ fn correct_solution_hard_sudokus() {
     let solved_sudokus = read_sudokus(include_str!("../sudokus/Lines/solved_hard_sudokus.txt"));
     let mut no_solution_sudokus = vec![];
     for (i, (sudoku, solved_sudoku)) in sudokus.into_iter().zip(solved_sudokus).enumerate() {
-        let solutions = sudoku.solve_at_most(2);
+        let solutions = sudoku.solutions_at_most(2);
         match solutions.len() {
             1 => assert_eq!(solved_sudoku, solutions[0]),
             0 => no_solution_sudokus.push((i, sudoku)), //panic!("Found no solution for {}. sudoku:\n{}", i, sudoku.to_str_line()),
@@ -218,7 +212,7 @@ fn unsolved_hard() {
         if !select.contains(&i) {
             continue
         }
-        let solutions = sudoku.solve_at_most(2);
+        let solutions = sudoku.solutions_at_most(2);
         match solutions.len() {
             1 => assert_eq!( solved_sudoku, solutions[0]),
             0 => no_solution_sudokus.push((i, sudoku)), //panic!("Found no solution for {}. sudoku:\n{}", i, sudoku.to_str_line()),
@@ -244,10 +238,10 @@ fn unsolved_hard() {
 // this test is probabilistic in nature
 // if an error occurs, note down the sudoku that it generated
 #[test]
-fn generate_filled_sudoku_correctness() {
+fn generate_solved_sudoku_correctness() {
     for _ in 0..1000 {
-        let sudoku = Sudoku::generate_filled();
-        let solved_sudoku = sudoku.solve_one();
+        let sudoku = Sudoku::generate_solved();
+        let solved_sudoku = sudoku.possibly_nonunique_solution();
         if solved_sudoku.is_none() {
             panic!(
                 "Randomly generated an invalid sudoku. Please save the sudoku for debugging:\n{}",
@@ -260,10 +254,10 @@ fn generate_filled_sudoku_correctness() {
 // this test is probabilistic in nature
 // if an error occurs, note down the sudoku that it generated
 #[test]
-fn generate_unique_sudoku_uniqueness() {
+fn generate_sudoku_uniqueness() {
     for _ in 0..100 {
-        let sudoku = Sudoku::generate_unique();
-        let solved_sudoku = sudoku.solve_unique();
+        let sudoku = Sudoku::generate();
+        let solved_sudoku = sudoku.solution();
         if solved_sudoku.is_none() {
             panic!(
                 "Randomly generated a non-proper sudoku. Please save the sudoku for debugging:\n{}",
@@ -277,7 +271,7 @@ fn generate_unique_sudoku_uniqueness() {
 // if an error occurs, note down the sudoku that it generated
 #[test]
 fn shuffle_unsolved() {
-    let sudoku = Sudoku::generate_unique();
+    let sudoku = Sudoku::generate();
     test_shuffle_sudoku(sudoku);
 }
 
@@ -285,7 +279,7 @@ fn shuffle_unsolved() {
 // if an error occurs, note down the sudoku that it generated
 #[test]
 fn shuffle_solved() {
-    let sudoku = Sudoku::generate_filled();
+    let sudoku = Sudoku::generate_solved();
     test_shuffle_sudoku(sudoku);
 }
 
@@ -373,7 +367,7 @@ fn parse_permissive() {
 
 #[test]
 fn canonicalize() {
-    let mut sudoku = Sudoku::generate_filled();
+    let mut sudoku = Sudoku::generate_solved();
     let (canonical, _) = sudoku.canonicalized().unwrap();
 
     for i in 0..1_000 {
@@ -388,7 +382,7 @@ fn canonicalize() {
 #[test]
 fn canonicalize_idempotency() {
     for _ in 0..1_000 {
-        let (sudoku, _) = Sudoku::generate_filled().canonicalized().unwrap();
+        let (sudoku, _) = Sudoku::generate_solved().canonicalized().unwrap();
         let (recanonicalized, _) = sudoku.canonicalized().unwrap();
         if sudoku != recanonicalized {
             panic!(

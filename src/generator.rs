@@ -261,7 +261,7 @@ impl SudokuGenerator {
         }
     }
 
-    pub fn generate_filled() -> Sudoku {
+    pub fn generate_solved() -> Sudoku {
         // fill first row with a permutation of 1...9
         // not necessary, but ~15% faster
         let mut stack = Vec::with_capacity(N_CELLS);

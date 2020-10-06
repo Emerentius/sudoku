@@ -463,7 +463,7 @@ fn transformation_from_struct() {
     let sudokus = read_sudokus(include_str!("../../sudokus/Lines/easy_sudokus.txt"));
 
     for sudoku in sudokus {
-        let mut solved_sudoku = sudoku.solve_unique().unwrap();
+        let mut solved_sudoku = sudoku.solution().unwrap();
         let (canonical_sudoku, transformation, _) = find_canonical_sudoku_and_transformation(solved_sudoku);
         transformation.apply(&mut solved_sudoku);
         assert_eq!(

@@ -31,7 +31,7 @@
 //! let sudoku = Sudoku::from_str_line(sudoku_line).unwrap();
 //!
 //! // Solve, print or convert the sudoku to another format
-//! if let Some(solution) = sudoku.solve_unique() {
+//! if let Some(solution) = sudoku.solution() {
 //!     // print the solution in line format
 //!     println!("{}", solution);
 //!

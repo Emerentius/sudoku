@@ -88,3 +88,14 @@ Unreleased
   - Mutant Jellyfish
 * Print textual representation of sudoku board with remaining candidates for unsolved cells.
 * Generation of symmetrical sudokus. The desired symmetry can be chosen via the `Symmetry` enum.
+* Rename many of `Sudoku`'s methods
+  - `solve_unique` -> `solution`
+  - `solve_one` -> `possibly_nonunique_solution`
+  - `count_at_most` -> `solutions_count_at_most`
+  - `solve_at_most` -> `solutions_at_most`
+  - `solve_at_most_buffer` -> `solutions_at_most_buffer`
+  - `generate_filled` -> `generate_solved`
+  - `generate_unique` -> `generate`
+  - `generate_unique_with_symmetry` -> `generate_with_symmetry`
+  - `generate_unique_from` -> `generate_from`
+  - `generate_unique_with_symmetry_from` -> `generate_with_symmetry_from`

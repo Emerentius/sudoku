@@ -15,7 +15,7 @@ fn main() {
         .map(Sudoku::from_str_block_permissive)
         .map(Result::unwrap)
     {
-        let array = sudoku.solve_one().unwrap().to_bytes();
+        let array = sudoku.possibly_nonunique_solution().unwrap().to_bytes();
         sum += array[..3].iter().fold(0, |acc, &num| acc * 10 + num as u32);
     }
     println!("{}", sum);

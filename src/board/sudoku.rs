@@ -248,21 +248,26 @@ impl Sudoku {
     /// Creates a sudoku from a byte slice.
     /// All numbers must be below 10. Empty cells are denoted by 0, clues by the numbers 1-9.
     /// The slice must be of length 81.
-    pub fn from_bytes_slice(bytes: &[u8]) -> Result<Sudoku, ()> {
+    pub fn from_bytes_slice(bytes: &[u8]) -> Result<Sudoku, crate::errors::FromBytesSliceError> {
         use std::convert::TryInto;
-        Self::_from_bytes(bytes.try_into().map_err(drop)?)
+        Self::_from_bytes(
+            bytes
+                .try_into()
+                .map_err(|_| crate::errors::FromBytesSliceError::WrongLength(bytes.len()))?,
+        )
+        .map_err(crate::errors::FromBytesSliceError::FromBytesError)
     }
 
     /// Creates a sudoku from a byte array.
     /// All numbers must be below 10. Empty cells are denoted by 0, clues by the numbers 1-9.
-    pub fn from_bytes(bytes: SudokuArray) -> Result<Sudoku, ()> {
+    pub fn from_bytes(bytes: SudokuArray) -> Result<Sudoku, crate::errors::FromBytesError> {
         Self::_from_bytes(&bytes)
     }
 
-    fn _from_bytes(bytes: &SudokuArray) -> Result<Sudoku, ()> {
+    fn _from_bytes(bytes: &SudokuArray) -> Result<Sudoku, crate::errors::FromBytesError> {
         match bytes.iter().fold(true, |valid, &byte| valid & (byte <= 9)) {
             true => Ok(Sudoku(*bytes)),
-            false => Err(()),
+            false => Err(crate::errors::FromBytesError(())),
         }
     }
 
@@ -356,7 +361,7 @@ impl Sudoku {
         });
 
         match valid_ending {
-            true => Sudoku::from_bytes(grid),
+            true => Sudoku::from_bytes(grid).map_err(drop),
             false => Err(()),
         }
     }
@@ -790,9 +795,9 @@ impl fmt::Display for Sudoku {
 }
 
 impl TryFrom<SudokuArray> for Sudoku {
-    type Error = ();
+    type Error = crate::errors::FromBytesError;
 
-    fn try_from(bytes: SudokuArray) -> Result<Self, ()> {
+    fn try_from(bytes: SudokuArray) -> Result<Self, Self::Error> {
         Self::from_bytes(bytes)
     }
 }

@@ -1,8 +1,9 @@
 //! Errors that may be encountered when reading a sudoku from a string
 use crate::board::{block, col, row};
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, thiserror::Error)]
 /// An invalid sudoku entry encountered during parsing.
+#[error("cell {cell} contains invalid character '{ch}'")]
 pub struct InvalidEntry {
     /// Cell number goes from 0..=80, 0..=8 for first line, 9..=17 for 2nd and so on
     pub cell: u8,
@@ -30,60 +31,49 @@ impl InvalidEntry {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-use std::fmt;
-
 /// Error for lax block format parsing. Contains the number of rows found.
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, thiserror::Error)]
+#[error("input ended after {0} valid rows")]
 pub struct NotEnoughRows(pub u8);
 
 /// A structure representing an error caused when parsing the sudoku
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, thiserror::Error)]
 pub enum BlockParseError {
     /// Non-digit, non-placeholder encountered. Field delimiters chars in unexpected places also cause this
+    #[error(transparent)]
     InvalidEntry(InvalidEntry),
     /// Line contains (>9 valid entries) or (<9 and no invalids)
     /// Returns index of row (0-8)
+    #[error("a sudoku line should have 9 entries, found {0}")]
     InvalidLineLength(u8),
     /// Input ends with less than 9 rows. Returns number of rows encountered.
+    #[error("a sudoku should have 9 rows, found only {0}")]
     NotEnoughRows(u8),
     /// If field delimiter is in place after 3rd number in 1st row
     /// all other horizontal and vertical field delimiters must be present or this is emitted
+    #[error("inconsistent field delimiters")]
     IncorrectFieldDelimiter,
     /// More than 9 lines are supplied and the 10th line is not pure whitespace
+    #[error("a sudoku should have 9 rows, found a 10th")]
     TooManyRows,
     /// Non-digit, non-placeholder after completed line encountered but without space
+    #[error("missing comment delimiter in line {0}")]
     MissingCommentDelimiter(u8),
 }
 
 /// A structure representing an error caused when parsing the sudoku
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, thiserror::Error)]
 pub enum LineParseError {
     /// Accepted values are numbers 1...9 and '0', '.' or '_' for empty cells
+    #[error(transparent)]
     InvalidEntry(InvalidEntry),
     /// Returns number of cells supplied
+    #[error("sudoku contains {0} cells instead of required 81")]
     NotEnoughCells(u8),
     /// Returned if >=82 valid cell positions are supplied
+    #[error("sudoku contains more than 81 cells or is missing comment delimiter")]
     TooManyCells,
     /// Comments must be delimited by a space or tab.
+    #[error("missing comment delimiter")]
     MissingCommentDelimiter,
-}
-
-impl fmt::Display for LineParseError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        use self::LineParseError as Error;
-
-        match *self {
-            Error::InvalidEntry(InvalidEntry { cell, ch }) => {
-                write!(f, "cell {} contains invalid character '{}'", cell, ch)
-            }
-            Error::NotEnoughCells(cells) => {
-                write!(f, "sudoku contains {} cells instead of required 81", cells)
-            }
-            Error::TooManyCells => write!(
-                f,
-                "sudoku contains more than 81 cells or is missing comment delimiter"
-            ),
-            Error::MissingCommentDelimiter => write!(f, "missing comment delimiter"),
-        }
-    }
 }

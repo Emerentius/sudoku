@@ -13,6 +13,7 @@ edition = "2018"
 rand = "0.5.5"
 serde = { version = "1.0.80", optional = true }
 crunchy = "0.2.1"
+thiserror = "1.0.21"
 
 [features]
 # The solver does enough indexing that the performance impact can be significant

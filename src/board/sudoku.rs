@@ -9,9 +9,7 @@ use crate::solver::SudokuSolver;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use std::{
     convert::{From, TryFrom},
-    fmt, iter,
-    ops::{self, Deref},
-    slice, str,
+    fmt, iter, ops, slice, str,
 };
 
 /// The 9x9 sudoku board represented as an array of length 81
@@ -787,7 +785,7 @@ fn num_to_opt(num: &u8) -> Option<u8> {
 
 impl fmt::Display for Sudoku {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.to_str_line())
+        fmt::Display::fmt(&self.to_str_line(), f)
     }
 }
 
@@ -824,7 +822,7 @@ impl std::hash::Hash for SudokuLine {
 
 impl fmt::Debug for SudokuLine {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        self.0.fmt(fmt)
+        <str as fmt::Debug>::fmt(self, fmt)
     }
 }
 
@@ -837,7 +835,7 @@ impl ops::Deref for SudokuLine {
 
 impl fmt::Display for SudokuLine {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.deref())
+        <str as fmt::Display>::fmt(self, f)
     }
 }
 

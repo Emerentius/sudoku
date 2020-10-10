@@ -291,25 +291,19 @@ impl Sudoku {
     /// All numbers must be below 10. Empty cells are denoted by 0, clues by the numbers 1-9.
     /// The slice must be of length 81.
     pub fn from_bytes_slice(bytes: &[u8]) -> Result<Sudoku, ()> {
-        if bytes.len() != N_CELLS {
-            return Err(());
-        }
-        let mut sudoku = Sudoku([0; N_CELLS]);
-
-        match bytes.iter().all(|&byte| byte <= 9) {
-            true => {
-                sudoku.0.copy_from_slice(bytes);
-                Ok(sudoku)
-            }
-            false => Err(()),
-        }
+        use std::convert::TryInto;
+        Self::_from_bytes(bytes.try_into().map_err(drop)?)
     }
 
     /// Creates a sudoku from a byte array.
     /// All numbers must be below 10. Empty cells are denoted by 0, clues by the numbers 1-9.
     pub fn from_bytes(bytes: SudokuArray) -> Result<Sudoku, ()> {
+        Self::_from_bytes(&bytes)
+    }
+
+    fn _from_bytes(bytes: &SudokuArray) -> Result<Sudoku, ()> {
         match bytes.iter().fold(true, |valid, &byte| valid & (byte <= 9)) {
-            true => Ok(Sudoku(bytes)),
+            true => Ok(Sudoku(*bytes)),
             false => Err(()),
         }
     }

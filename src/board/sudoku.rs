@@ -8,9 +8,8 @@ use crate::solver::SudokuSolver;
 #[cfg(feature = "serde")]
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use std::{
-    cmp,
     convert::{From, TryFrom},
-    fmt, hash, iter,
+    fmt, iter,
     ops::{self, Deref},
     slice, str,
 };
@@ -22,7 +21,7 @@ type SudokuArray = [u8; N_CELLS];
 ///
 /// `Sudoku`s can generated, constructed from arrays or parsed from `&str`s
 /// in either the line or block format.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Debug, Hash)]
 pub struct Sudoku(pub(crate) SudokuArray);
 
 #[cfg(feature = "serde")]
@@ -88,45 +87,6 @@ impl<'de> Deserialize<'de> for Sudoku {
         } else {
             deserializer.deserialize_bytes(ByteSudoku)
         }
-    }
-}
-
-impl PartialEq for Sudoku {
-    fn eq(&self, other: &Sudoku) -> bool {
-        self.0[..] == other.0[..]
-    }
-}
-
-/// The ordering is lexicographical in the cells of the sudoku
-/// going from left to right, top to bottom
-impl PartialOrd for Sudoku {
-    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-        // deref into &str and cmp
-        self.0.partial_cmp(&other.0)
-    }
-}
-
-impl Ord for Sudoku {
-    fn cmp(&self, other: &Self) -> cmp::Ordering {
-        // deref into &str and cmp
-        self.0.cmp(&other.0)
-    }
-}
-
-impl hash::Hash for Sudoku {
-    fn hash<H>(&self, state: &mut H)
-    where
-        H: hash::Hasher,
-    {
-        self.0.hash(state)
-    }
-}
-
-impl Eq for Sudoku {}
-
-impl fmt::Debug for Sudoku {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        self.0.fmt(fmt)
     }
 }
 
@@ -847,43 +807,20 @@ impl From<Sudoku> for SudokuArray {
 
 /// Container for the &str representation of a sudoku
 // MUST ALWAYS contain valid utf8
-#[derive(Copy, Clone)]
+//
+// the bytes representation uses b'.' for empty cells, which is below `0` and therefore
+// this orders just like the regular sudoku would.
+#[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq)]
 pub struct SudokuLine(SudokuArray);
 
-/// The ordering is lexicographical in the cells of the sudoku
-/// going from left to right, top to bottom
-impl PartialOrd for SudokuLine {
-    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-        // the &str representation uses '.', which is below '0' and therefore
-        // this orders just like the regular sudoku would.
-        // deref into &str and cmp
-        (**self).partial_cmp(other)
-    }
-}
-
-impl Ord for SudokuLine {
-    fn cmp(&self, other: &Self) -> cmp::Ordering {
-        // deref into &str and cmp
-        (**self).cmp(other)
-    }
-}
-
-impl hash::Hash for SudokuLine {
+impl std::hash::Hash for SudokuLine {
     fn hash<H>(&self, state: &mut H)
     where
-        H: hash::Hasher,
+        H: std::hash::Hasher,
     {
-        (**self).hash(state)
+        <str as std::hash::Hash>::hash(self, state)
     }
 }
-
-impl PartialEq for SudokuLine {
-    fn eq(&self, other: &SudokuLine) -> bool {
-        self.0[..] == other.0[..]
-    }
-}
-
-impl Eq for SudokuLine {}
 
 impl fmt::Debug for SudokuLine {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
@@ -906,45 +843,8 @@ impl fmt::Display for SudokuLine {
 
 /// Sudoku that will be printed in block format.
 /// This exists primarily for debugging.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialOrd, Ord, Hash, PartialEq, Eq, Debug)]
 pub struct SudokuBlock(SudokuArray);
-
-/// The ordering is lexicographical in the cells of the sudoku
-/// going from left to right, top to bottom
-impl PartialOrd for SudokuBlock {
-    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-        self.0[..].partial_cmp(&other.0[..])
-    }
-}
-
-impl Ord for SudokuBlock {
-    fn cmp(&self, other: &Self) -> cmp::Ordering {
-        self.0[..].cmp(&other.0[..])
-    }
-}
-
-impl hash::Hash for SudokuBlock {
-    fn hash<H>(&self, state: &mut H)
-    where
-        H: hash::Hasher,
-    {
-        self.0[..].hash(state)
-    }
-}
-
-impl PartialEq for SudokuBlock {
-    fn eq(&self, other: &SudokuBlock) -> bool {
-        self.0[..] == other.0[..]
-    }
-}
-
-impl Eq for SudokuBlock {}
-
-impl fmt::Debug for SudokuBlock {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        self.0.fmt(fmt)
-    }
-}
 
 impl fmt::Display for SudokuBlock {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

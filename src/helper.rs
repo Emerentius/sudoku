@@ -3,20 +3,13 @@
 
 use crate::board::{Cell, Digit, House};
 use crate::consts::N_CELLS;
-use std::fmt;
 use std::ops::{Deref, DerefMut, Index, IndexMut};
 
 #[derive(Debug)]
 pub(crate) struct Unsolvable;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub(crate) struct CellArray<T>(pub [T; N_CELLS]);
-
-impl<T: fmt::Debug> fmt::Debug for CellArray<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
-        (&self.0[..]).fmt(f)
-    }
-}
 
 impl<T> Deref for CellArray<T> {
     type Target = [T; 81];

@@ -1,6 +1,6 @@
 Unreleased
 ==========
-* Raise minimum Rust version to 1.40
+* Raise minimum Rust version to 1.47
 * `Sudoku::canonicalized`. Maps all sudokus of an equivalence class to the same sudoku
   and counts automorphisms.
   Limited to uniquely solvable sudokus (for now).

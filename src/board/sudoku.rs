@@ -8,20 +8,22 @@ use crate::solver::SudokuSolver;
 #[cfg(feature = "serde")]
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use std::{
-    cmp, fmt, hash, iter,
+    cmp,
+    convert::{From, TryFrom},
+    fmt, hash, iter,
     ops::{self, Deref},
     slice, str,
-    convert::{From, TryFrom}
 };
 
-type SudokuMatrix = [u8; N_CELLS];
+/// The 9x9 sudoku board represented as an array of length 81
+type SudokuArray = [u8; N_CELLS];
 
 /// The main structure exposing all the functionality of the library
 ///
 /// `Sudoku`s can generated, constructed from arrays or parsed from `&str`s
 /// in either the line or block format.
 #[derive(Copy, Clone)]
-pub struct Sudoku(pub(crate) SudokuMatrix);
+pub struct Sudoku(pub(crate) SudokuArray);
 
 #[cfg(feature = "serde")]
 impl Serialize for Sudoku {
@@ -305,7 +307,7 @@ impl Sudoku {
 
     /// Creates a sudoku from a byte array.
     /// All numbers must be below 10. Empty cells are denoted by 0, clues by the numbers 1-9.
-    pub fn from_bytes(bytes: SudokuMatrix) -> Result<Sudoku, ()> {
+    pub fn from_bytes(bytes: SudokuArray) -> Result<Sudoku, ()> {
         Self::try_from(bytes)
     }
 
@@ -646,7 +648,7 @@ impl Sudoku {
     /// up to its capacity. Additional solutions will be counted but not saved.
     /// No specific ordering of solutions is promised. It can change across versions.
     /// This is primarily meant for C FFI.
-    pub fn solutions_up_to_buffer(self, target: &mut [SudokuMatrix], limit: usize) -> usize {
+    pub fn solutions_up_to_buffer(self, target: &mut [SudokuArray], limit: usize) -> usize {
         SudokuSolver::from_sudoku(self)
             .ok()
             .map_or(0, |solver| solver.solutions_up_to_buffer(target, limit))
@@ -752,7 +754,7 @@ impl Sudoku {
 
     /// Returns a byte array for the sudoku.
     /// Empty cells are denoted by 0, clues by the numbers 1-9.
-    pub fn to_bytes(self) -> SudokuMatrix {
+    pub fn to_bytes(self) -> SudokuArray {
         self.into()
     }
 
@@ -832,10 +834,10 @@ impl fmt::Display for Sudoku {
     }
 }
 
-impl TryFrom<SudokuMatrix> for Sudoku {
+impl TryFrom<SudokuArray> for Sudoku {
     type Error = ();
 
-    fn try_from(bytes: SudokuMatrix) -> Result<Self, ()> {
+    fn try_from(bytes: SudokuArray) -> Result<Self, ()> {
         match bytes.iter().fold(true, |valid, &byte| valid & (byte <= 9)) {
             true => Ok(Sudoku(bytes)),
             false => Err(()),
@@ -843,7 +845,7 @@ impl TryFrom<SudokuMatrix> for Sudoku {
     }
 }
 
-impl From<Sudoku> for SudokuMatrix {
+impl From<Sudoku> for SudokuArray {
     fn from(sudoku: Sudoku) -> Self {
         sudoku.0
     }
@@ -852,7 +854,7 @@ impl From<Sudoku> for SudokuMatrix {
 /// Container for the &str representation of a sudoku
 // MUST ALWAYS contain valid utf8
 #[derive(Copy, Clone)]
-pub struct SudokuLine(SudokuMatrix);
+pub struct SudokuLine(SudokuArray);
 
 /// The ordering is lexicographical in the cells of the sudoku
 /// going from left to right, top to bottom
@@ -911,7 +913,7 @@ impl fmt::Display for SudokuLine {
 /// Sudoku that will be printed in block format.
 /// This exists primarily for debugging.
 #[derive(Copy, Clone)]
-pub struct SudokuBlock(SudokuMatrix);
+pub struct SudokuBlock(SudokuArray);
 
 /// The ordering is lexicographical in the cells of the sudoku
 /// going from left to right, top to bottom

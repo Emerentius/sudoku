@@ -308,7 +308,10 @@ impl Sudoku {
     /// Creates a sudoku from a byte array.
     /// All numbers must be below 10. Empty cells are denoted by 0, clues by the numbers 1-9.
     pub fn from_bytes(bytes: SudokuArray) -> Result<Sudoku, ()> {
-        Self::try_from(bytes)
+        match bytes.iter().fold(true, |valid, &byte| valid & (byte <= 9)) {
+            true => Ok(Sudoku(bytes)),
+            false => Err(()),
+        }
     }
 
     /// Reads a sudoku in the line format.
@@ -755,7 +758,7 @@ impl Sudoku {
     /// Returns a byte array for the sudoku.
     /// Empty cells are denoted by 0, clues by the numbers 1-9.
     pub fn to_bytes(self) -> SudokuArray {
-        self.into()
+        self.0
     }
 
     /// Returns a representation of the sudoku in line format that can be printed
@@ -838,16 +841,13 @@ impl TryFrom<SudokuArray> for Sudoku {
     type Error = ();
 
     fn try_from(bytes: SudokuArray) -> Result<Self, ()> {
-        match bytes.iter().fold(true, |valid, &byte| valid & (byte <= 9)) {
-            true => Ok(Sudoku(bytes)),
-            false => Err(()),
-        }
+        Self::from_bytes(bytes)
     }
 }
 
 impl From<Sudoku> for SudokuArray {
     fn from(sudoku: Sudoku) -> Self {
-        sudoku.0
+        sudoku.to_bytes()
     }
 }
 

@@ -802,6 +802,14 @@ impl TryFrom<SudokuArray> for Sudoku {
     }
 }
 
+impl TryFrom<&[u8]> for Sudoku {
+    type Error = crate::errors::FromBytesSliceError;
+
+    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        Self::from_bytes_slice(value)
+    }
+}
+
 impl From<Sudoku> for SudokuArray {
     fn from(sudoku: Sudoku) -> Self {
         sudoku.to_bytes()

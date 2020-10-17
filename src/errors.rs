@@ -1,3 +1,6 @@
+#[cfg(doc)]
+use crate::Sudoku;
+
 /// Error for [`Sudoku::from_bytes`]
 #[derive(Debug, thiserror::Error)]
 #[error("byte array contains entries >9")]

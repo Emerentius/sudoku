@@ -366,7 +366,7 @@ impl Sudoku {
         }
     }
 
-    /// Reads a sudoku in the block format with or without field delimiters
+    /// Reads a sudoku in the block format with or without field delimiters.
     ///
     /// Digits must be in range of 1-9.
     /// `'_'`, `'.'` and `'0'` are accepted interchangeably as empty cells
@@ -582,7 +582,7 @@ impl Sudoku {
         }
     }
 
-    /// Counts number of solutions to sudoku up to `limit`
+    /// Counts number of solutions to sudoku up to `limit`.
     /// This solves the sudoku but does not return the solutions which allows for slightly faster execution.
     pub fn solutions_count_up_to(self, limit: usize) -> usize {
         SudokuSolver::from_sudoku(self)
@@ -657,8 +657,8 @@ impl Sudoku {
     /// - Transpose the board, i.e. mirror it along the diagonal (2 permutations)
     ///   The remaining rotations as well as mirrorings can be produced by a combination with the other transformations
     ///
-    /// This results in a total of up to 2 * 9! * 3!<sup>8</sup> = 1,218,998,108,160 permutations
-    /// Less permutations exists if the sudoku is symmetrical in respect to some combinations of the transformations
+    /// This results in a total of up to 2 * 9! * 3!<sup>8</sup> = 1,218,998,108,160 permutations.
+    /// Fewer permutations exist if the sudoku is symmetrical in respect to some combination(s) of the transformations.
     /// The vast majority of sudokus do not have any such symmetries (automorphisms). The highest number of automorphisms
     /// a sudoku can have is 648 and ~99.99% of all non-equivalent sudokus have only 1, the identity transformation.
 

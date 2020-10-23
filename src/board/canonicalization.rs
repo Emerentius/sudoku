@@ -74,7 +74,7 @@ impl Transformation {
         }
         let transpose = rng.gen();
 
-        let range = rand::distributions::Range::from(0u8..6);
+        let range = rand::distributions::Uniform::new(0u8, 6);
         let mut perm = || Permutation3::new(range.sample(rng));
 
         Transformation {

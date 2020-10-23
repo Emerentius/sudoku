@@ -1,4 +1,4 @@
-use rand::Rng;
+use rand::seq::SliceRandom;
 
 use crate::consts::*;
 use crate::generator::SudokuGenerator;
@@ -219,7 +219,7 @@ impl Sudoku {
             .iter_mut()
             .enumerate()
             .for_each(|(cell, place)| *place = cell);
-        rand::thread_rng().shuffle(&mut cell_order);
+        cell_order.shuffle(&mut rand::thread_rng());
 
         // With symmetries, many cells are equivalent.
         // If we've already visited one cell in a symmetry class, we can skip ahead

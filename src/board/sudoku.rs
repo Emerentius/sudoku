@@ -576,6 +576,7 @@ impl Sudoku {
 
         let mut solution = [[0; N_CELLS]];
         let n_solutions = self.solutions_up_to_buffer(&mut solution, 2);
+        coz::progress!("solution");
         match n_solutions == 1 {
             true => Some(Sudoku(solution[0])),
             false => None,

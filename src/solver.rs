@@ -236,6 +236,7 @@ impl SudokuSolver {
             }
         }
 
+        coz::progress!("find_naked_singles");
         Ok(single_applied)
     }
 
@@ -246,6 +247,7 @@ impl SudokuSolver {
     /// left in.
     // jczsolve equivalent: Update
     fn find_locked_candidates_and_update(&mut self) -> Result<(), Unsolvable> {
+        coz::progress!("find_locked_candidates_and_update");
         loop {
             // Repeat until nothing can be found / updated anymore.
             // This is the hottest piece of code in the solver.
@@ -266,8 +268,12 @@ impl SudokuSolver {
                         found_nothing = false;
                         self._find_locked_candidates_and_update(subband)?;
                     }
+
+                    coz::progress!("find_locked_candidates_and_update::loop_body");
                 }
             }
+
+            coz::progress!("find_locked_candidates_and_update::loop");
 
             if found_nothing {
                 return Ok(());
@@ -336,6 +342,8 @@ impl SudokuSolver {
         }
         // ----------------------- end upwcl -----------------------------------
 
+        coz::progress!("_find_locked_candidates_and_update");
+
         Ok(())
     }
 
@@ -366,6 +374,7 @@ impl SudokuSolver {
     // looking for naked singles.
     // For that reason, finding such a cell is practically just a lookup.
     fn guess_bivalue_in_cell(&mut self, limit: usize, solutions: &mut Solutions) -> Result<(), Unsolvable> {
+        coz::progress!("guess_bivalue_in_cell");
         for band in 0..3 {
             // get first bivalue cell, if it exists
             let cell_mask = match mask_iter(self.pairs[band]).next() {
@@ -451,6 +460,8 @@ impl SudokuSolver {
 
             subband += 3;
         }
+
+        coz::progress!("guess_some_cell");
     }
 
     /// Insert a candidate by cell and digit.
@@ -488,6 +499,8 @@ impl SudokuSolver {
         }
         // then, add correct digit back
         self.poss_cells[subband] |= cell_mask;
+
+        coz::progress!("insert_candidate");
         Ok(())
     }
 
@@ -509,6 +522,8 @@ impl SudokuSolver {
         let cell = band * 27 + bit_pos(mask);
 
         self.poss_cells[subband] &= nonconflicting_cells_same_band(cell);
+
+        coz::progress!("insert_candidate_by_mask");
     }
 
     /// Extract the digits of a solved sudoku from the bitmasks of the solver.

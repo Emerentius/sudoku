@@ -149,6 +149,7 @@ impl SudokuSolver {
     pub fn solutions_count_up_to(self, limit: usize) -> usize {
         let mut solutions = Solutions::Count(0);
         self._solutions_up_to(limit, &mut solutions);
+        coz::progress!("solutions_count");
         solutions.len()
     }
 
@@ -254,24 +255,24 @@ impl SudokuSolver {
             // Over 80% of time is spent in this function.
             let mut found_nothing = true;
 
-            unroll! {
-                for subband in 0..27 {
-                    // The first condition is always true,
-                    // but the optimizer doesn't understand that.
-                    // That causes it to be less aggressive in applying optimizations,
-                    // which would in this rare case cause the code to run slower.
-                    //
-                    // `test::black_box(true)` has the same effect but is unstable
-                    if (self.requirement_for_weird_optimization[0] >> subband / 3) & LOW9 != NONE
+            //unroll! {
+            for subband in 0..27 {
+                // The first condition is always true,
+                // but the optimizer doesn't understand that.
+                // That causes it to be less aggressive in applying optimizations,
+                // which would in this rare case cause the code to run slower.
+                //
+                // `test::black_box(true)` has the same effect but is unstable
+                if (self.requirement_for_weird_optimization[0] >> subband / 3) & LOW9 != NONE
                     && self.poss_cells[subband] != self.prev_poss_cells[subband]
-                    {
-                        found_nothing = false;
-                        self._find_locked_candidates_and_update(subband)?;
-                    }
-
-                    coz::progress!("find_locked_candidates_and_update::loop_body");
+                {
+                    found_nothing = false;
+                    self._find_locked_candidates_and_update(subband)?;
                 }
+
+                coz::progress!("find_locked_candidates_and_update::loop_body");
             }
+            //}
 
             coz::progress!("find_locked_candidates_and_update::loop");
 

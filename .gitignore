@@ -3,5 +3,3 @@ Cargo.lock
 bench_results
 src/main.rs
 rls
-settings.json
-launch.json

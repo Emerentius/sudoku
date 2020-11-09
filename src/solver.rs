@@ -718,7 +718,7 @@ static SHRINK_MASK: [u32; 512] = {
     while cell_mask < shrunk_mask.len() {
         let mut mini_row = 0;
         while mini_row < 3 {
-            if (cell_mask & 0b111 << 3*mini_row as u32) != 0 {
+            if (cell_mask & 0b111 << 3 * mini_row as u32) != 0 {
                 shrunk_mask[cell_mask] |= 1 << mini_row;
             }
             mini_row += 1;
@@ -826,7 +826,6 @@ const fn unshrink(minirow_mask: u32) -> u32 {
     cell_mask
 }
 
-
 const fn transpose_mask(mask: u32, n_rows: u8, n_cols: u8) -> u32 {
     let mut new_mask = 0;
     let mut row = 0;
@@ -859,7 +858,10 @@ const fn locked_candidates(minirow_mask: u32) -> Result<u32, Unsolvable> {
 }
 
 const fn _locked_candidates(minirow_mask: u32) -> Result<u32, Unsolvable> {
-    match (_claiming_locked_candidates(minirow_mask), _pointing_locked_candidates(minirow_mask)) {
+    match (
+        _claiming_locked_candidates(minirow_mask),
+        _pointing_locked_candidates(minirow_mask),
+    ) {
         (Ok(mask1), Ok(mask2)) => Ok(mask1 | mask2),
         _ => Err(Unsolvable),
     }
@@ -869,7 +871,7 @@ const fn _claiming_locked_candidates(minirow_mask: u32) -> Result<u32, Unsolvabl
     let mut locked_minirows = 0;
     let mut row = 0;
     while row < 3 {
-    //for row in 0..3 {
+        //for row in 0..3 {
         let possible_minirows_in_row = minirow_mask & 0b111 << row * 3;
         match possible_minirows_in_row.count_ones() {
             0 => return Err(Unsolvable),
@@ -886,7 +888,7 @@ const fn _claiming_locked_candidates(minirow_mask: u32) -> Result<u32, Unsolvabl
 }
 
 const fn _pointing_locked_candidates(minirow_mask: u32) -> Result<u32, Unsolvable> {
-    let transposed_mask = transpose_mask(minirow_mask, 3,3 );
+    let transposed_mask = transpose_mask(minirow_mask, 3, 3);
     match _claiming_locked_candidates(transposed_mask) {
         Ok(transposed_output_mask) => Ok(transpose_mask(transposed_output_mask, 3, 3)),
         Err(Unsolvable) => Err(Unsolvable),
@@ -898,7 +900,7 @@ static LOCKED_CANDIDATES_MASK_SAME_BAND: [u32; 512] = {
 
     let mut minirow_mask: usize = 0;
     while minirow_mask < 512 {
-    //for minirow_mask in 0..512 {
+        //for minirow_mask in 0..512 {
         let simplified_minirow_mask = possible_cells_via_locked_candidates(minirow_mask as _);
 
         // map 9 bit mask to 27 bit mask by broadcasting each bit to 3 bits
@@ -977,7 +979,6 @@ static LOCKED_CANDIDATES_MASK_NEIGHBOR_BAND: [u32; 512] = [
     0o777777777, 0o776776776, 0o775775775, 0o777777777, 0o773773773, 0o777777777, 0o777777777, 0o777777777,
 ];
 
-
 const fn _nonconflicting_cells_locked_candidates(locked_candidates: u32) -> u32 {
     let mut nonconflicting_cells = 0o777;
 
@@ -998,7 +999,6 @@ const fn _nonconflicting_cells_locked_candidates(locked_candidates: u32) -> u32 
     }
     nonconflicting_cells
 }
-
 
 #[rustfmt::skip]
 #[allow(unused)]
@@ -1036,7 +1036,6 @@ static OLD_LOCKED_MINIROWS: [u32; 512] = [
     0o000, 0o241, 0o142, 0o040, 0o000, 0o241, 0o142, 0o040, 0o000, 0o241, 0o002, 0o000, 0o214, 0o200, 0o000, 0o000,
     0o000, 0o001, 0o142, 0o000, 0o124, 0o000, 0o100, 0o000, 0o000, 0o001, 0o002, 0o000, 0o004, 0o000, 0o000, 0o000,
 ];
-
 
 static LOCKED_MINIROWS: [u32; 512] = {
     let mut locked_minirows = [0; 512];
@@ -1080,13 +1079,21 @@ fn print_masks(idx: usize, mask: u32, other_mask: u32, n_rows: u32, n_cols: u32)
         // for all the masks due to the symmetries in sudoku
         let shift = row * n_cols;
         let row_part = |mask| (mask & (row_mask << shift)) >> shift;
-        println!("{:0n_cols$b} {:0n_cols$b} {:0n_cols$b}", row_part(idx as u32), row_part(mask), row_part(other_mask), n_cols = n_cols as usize);
+        println!(
+            "{:0n_cols$b} {:0n_cols$b} {:0n_cols$b}",
+            row_part(idx as u32),
+            row_part(mask),
+            row_part(other_mask),
+            n_cols = n_cols as usize
+        );
     }
     println!();
 }
 
 fn mask_diffs(masks: &[u32], other_masks: &[u32]) -> Vec<(usize, u32, u32)> {
-    masks.iter().zip(other_masks.iter())
+    masks
+        .iter()
+        .zip(other_masks.iter())
         .enumerate()
         .map(|(idx, (&mask, &other_mask))| (idx, mask, other_mask))
         .filter(|(_, mask, other_mask)| mask != other_mask)
@@ -1142,11 +1149,10 @@ static COLUMN_SINGLE: [u32; 512] = {
             match (col_mask & 0b111 << stack * 3).count_ones() {
                 0 => {
                     minirows_with_single_column = 0;
-                    break
+                    break;
                 }
                 1 => minirows_with_single_column |= 0b001_001_001 << stack,
                 _ => (),
-
             }
 
             stack += 1;

@@ -103,24 +103,24 @@ impl Solutions<'_> {
 #[derive(Clone, Copy)]
 pub(crate) struct SudokuSolver {
     // possible_cells_in_subband = subbands[digit*3 + band]
-    poss_cells: UncheckedIndexArray27,
-    prev_poss_cells: UncheckedIndexArray27,
+    poss_cells: UncheckedIndexArray<27>,
+    prev_poss_cells: UncheckedIndexArray<27>,
     // empty_cells = unsolved_cells[band]
-    unsolved_cells: UncheckedIndexArray3,
-    requirement_for_weird_optimization: UncheckedIndexArray3,
+    unsolved_cells: UncheckedIndexArray<3>,
+    requirement_for_weird_optimization: UncheckedIndexArray<3>,
     // bivalue_cells = pairs[band]
-    pairs: UncheckedIndexArray3,
+    pairs: UncheckedIndexArray<3>,
 }
 
 impl SudokuSolver {
     // jczsolve equivalent: InitSudoku
     pub fn from_sudoku(sudoku: Sudoku) -> Result<Self, Unsolvable> {
         let mut solver = SudokuSolver {
-            poss_cells: UncheckedIndexArray27([ALL; 27]),
-            prev_poss_cells: UncheckedIndexArray27([0; 27]),
-            unsolved_cells: UncheckedIndexArray3([ALL; 3]),
-            requirement_for_weird_optimization: UncheckedIndexArray3([ALL; 3]),
-            pairs: UncheckedIndexArray3([0; 3]),
+            poss_cells: UncheckedIndexArray([ALL; 27]),
+            prev_poss_cells: UncheckedIndexArray([0; 27]),
+            unsolved_cells: UncheckedIndexArray([ALL; 3]),
+            requirement_for_weird_optimization: UncheckedIndexArray([ALL; 3]),
+            pairs: UncheckedIndexArray([0; 3]),
         };
         for (cell, num) in (0..81).zip(sudoku.iter()) {
             if let Some(num) = num {
@@ -914,31 +914,16 @@ static COLUMN_SINGLE: [u32; 512] = [
 ];
 
 #[derive(Clone, Copy)]
-struct UncheckedIndexArray3([u32; 3]);
-#[derive(Clone, Copy)]
-struct UncheckedIndexArray27([u32; 27]);
+struct UncheckedIndexArray<const N: usize>([u32; N]);
 
-impl std::ops::Index<usize> for UncheckedIndexArray3 {
+impl<const N: usize> std::ops::Index<usize> for UncheckedIndexArray<N> {
     type Output = u32;
     fn index(&self, idx: usize) -> &Self::Output {
         index(&self.0, idx)
     }
 }
 
-impl std::ops::IndexMut<usize> for UncheckedIndexArray3 {
-    fn index_mut(&mut self, idx: usize) -> &mut Self::Output {
-        index_mut(&mut self.0, idx)
-    }
-}
-
-impl std::ops::Index<usize> for UncheckedIndexArray27 {
-    type Output = u32;
-    fn index(&self, idx: usize) -> &Self::Output {
-        index(&self.0, idx)
-    }
-}
-
-impl std::ops::IndexMut<usize> for UncheckedIndexArray27 {
+impl<const N: usize> std::ops::IndexMut<usize> for UncheckedIndexArray<N> {
     fn index_mut(&mut self, idx: usize) -> &mut Self::Output {
         index_mut(&mut self.0, idx)
     }

@@ -8,8 +8,11 @@ Utilities for classical 9x9 sudokus.
 This library currently offers extremely fast sudoku solving, a basic sudoku
 generator and a prototype solver using human strategies. The fast solver is
 based on [jczsolve](http://forum.enjoysudoku.com/3-77us-solver-2-8g-cpu-testcase-17sodoku-t30470-210.html#p249309)
-which is currently and to the best knowledge of the author the world's fastest sudoku
-solver algorithm. A few modifications were made to improve the speed further.
+which is currently and to the best knowledge of the author one of the world's fastest sudoku
+solver algorithm. A few modifications were made to improve the speed further.  
+Some competing solvers are [fsss2](https://github.com/dobrichev/fsss2), [SK_BFORCE2](https://github.com/GPenet/SK_BFORCE2) and [tdoku](https://github.com/t-dillon/tdoku). The latter is particularly strong for sudokus that don't have a unique solution or that are very hard.
+See also benchmarks done by tdoku's author: [benchmarks](https://github.com/t-dillon/tdoku/tree/master/benchmarks)   ([results at time of writing](https://github.com/t-dillon/tdoku/tree/9d62b98/benchmarks)).
+
 The strategy solver is capable of applying a few simple strategies, namely naked and hidden singles, locked candidates,
 naked and hidden subsets (Pairs, Triples, Quads) and basic fish (X-Wing, Swordfish, Jellyfish). An explanation of
 these strategies and more can be found at <http://www.sudokuwiki.org/Strategy_Families>.

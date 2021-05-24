@@ -103,13 +103,13 @@ impl Solutions<'_> {
 #[derive(Clone, Copy)]
 pub(crate) struct SudokuSolver {
     // possible_cells_in_subband = subbands[digit*3 + band]
-    poss_cells: UncheckedIndexArray<27>,
-    prev_poss_cells: UncheckedIndexArray<27>,
+    poss_cells: UncheckedIndexArray<u32, 27>,
+    prev_poss_cells: UncheckedIndexArray<u32, 27>,
     // empty_cells = unsolved_cells[band]
-    unsolved_cells: UncheckedIndexArray<3>,
-    requirement_for_weird_optimization: UncheckedIndexArray<3>,
+    unsolved_cells: UncheckedIndexArray<u32, 3>,
+    requirement_for_weird_optimization: UncheckedIndexArray<u32, 3>,
     // bivalue_cells = pairs[band]
-    pairs: UncheckedIndexArray<3>,
+    pairs: UncheckedIndexArray<u32, 3>,
 }
 
 impl SudokuSolver {
@@ -514,54 +514,24 @@ impl SudokuSolver {
     /// Extract the digits of a solved sudoku from the bitmasks of the solver.
     // jczsolve equivalent: ExtractSolution
     fn extract_solution(&self) -> Sudoku {
-        let mut sudoku = [0; 81];
+        let mut sudoku = UncheckedIndexArray([0; 81]);
         for (subband, &mask) in (0..27).zip(self.poss_cells.0.iter()) {
             let digit = subband / 3;
             let base_cell_in_band = subband % 3 * 27;
             for cell_mask in mask_iter(mask) {
                 let cell_in_band = bit_pos(cell_mask);
-                *index_mut(&mut sudoku, cell_in_band + base_cell_in_band) = digit as u8 + 1;
+                sudoku[cell_in_band + base_cell_in_band] = digit as u8 + 1;
             }
         }
-        Sudoku(sudoku)
+        Sudoku(sudoku.0)
     }
 }
-
-// ----------------------------------------------------------------
-//                      solver indexing
-// ----------------------------------------------------------------
-// Functions for conditionally compiling bounds checks in arrays.
-// These functions are exclusively for use in the solver.
-// The value space for indexes is limited enough that any error
-// is likely to immediately show up in tests.
-// ----------------------------------------------------------------
-
-#[inline(always)]
-fn index<T>(slice: &[T], idx: usize) -> &T {
-    if cfg!(feature = "unchecked_indexing") {
-        debug_assert!(idx < slice.len());
-        unsafe { slice.get_unchecked(idx) }
-    } else {
-        &slice[idx]
-    }
-}
-
-#[inline(always)]
-fn index_mut<T>(slice: &mut [T], idx: usize) -> &mut T {
-    if cfg!(feature = "unchecked_indexing") {
-        debug_assert!(idx < slice.len());
-        unsafe { slice.get_unchecked_mut(idx) }
-    } else {
-        &mut slice[idx]
-    }
-}
-// ----------------------------------------------------------------
 
 // jczsolve equivalent: TblSelfMask
 #[inline]
 fn nonconflicting_cells_same_band(cell: usize) -> u32 {
     #[rustfmt::skip]
-    static SELF_MASK: [u32; 81] = [
+    static SELF_MASK: UncheckedIndexArray<u32, 81> = UncheckedIndexArray([
         0x37E3F001, 0x37E3F002, 0x37E3F004, 0x371F8E08, 0x371F8E10, 0x371F8E20, 0x30FC7E40, 0x30FC7E80, 0x30FC7F00,
         0x2FE003F8, 0x2FE005F8, 0x2FE009F8, 0x2F1C11C7, 0x2F1C21C7, 0x2F1C41C7, 0x28FC803F, 0x28FD003F, 0x28FE003F,
         0x1807F1F8, 0x180BF1F8, 0x1813F1F8, 0x18238FC7, 0x18438FC7, 0x18838FC7, 0x19007E3F, 0x1A007E3F, 0x1C007E3F,
@@ -571,8 +541,8 @@ fn nonconflicting_cells_same_band(cell: usize) -> u32 {
         0x37E3F001, 0x37E3F002, 0x37E3F004, 0x371F8E08, 0x371F8E10, 0x371F8E20, 0x30FC7E40, 0x30FC7E80, 0x30FC7F00,
         0x2FE003F8, 0x2FE005F8, 0x2FE009F8, 0x2F1C11C7, 0x2F1C21C7, 0x2F1C41C7, 0x28FC803F, 0x28FD003F, 0x28FE003F,
         0x1807F1F8, 0x180BF1F8, 0x1813F1F8, 0x18238FC7, 0x18438FC7, 0x18838FC7, 0x19007E3F, 0x1A007E3F, 0x1C007E3F,
-    ];
-    *index(&SELF_MASK, cell)
+    ]);
+    SELF_MASK[cell]
 }
 
 // jczsolve equivalent: TblOtherfMask
@@ -592,7 +562,7 @@ fn nonconflicting_cells_neighbor_bands(cell: u8) -> u32 {
 //                      TblRowUniq was replaced by shrink_mask here
 #[inline]
 fn shrink_mask(cell_mask: u32) -> u32 {
-    *index(&SHRINK_MASK, (cell_mask) as usize) as u32
+    SHRINK_MASK[cell_mask as usize] as u32
 }
 
 // Returns mask of cells that are compatible with locked candidates
@@ -602,14 +572,14 @@ fn shrink_mask(cell_mask: u32) -> u32 {
 // jczsolve equivalent: TblComplexMask
 #[inline]
 fn nonconflicting_cells_same_band_by_locked_candidates(shrink: u32) -> u32 {
-    *index(&LOCKED_CANDIDATES_MASK_SAME_BAND, shrink as usize)
+    LOCKED_CANDIDATES_MASK_SAME_BAND[shrink as usize]
 }
 
 // Like the function above but for the other 2 bands
 // jczsolve equivalent: TblMaskSingle
 #[inline]
 fn nonconflicting_cells_neighbor_bands_by_locked_candidates(row_shrink: u32) -> u32 {
-    *index(&LOCKED_CANDIDATES_MASK_NEIGHBOR_BAND, row_shrink as usize)
+    LOCKED_CANDIDATES_MASK_NEIGHBOR_BAND[row_shrink as usize]
 }
 
 /// Returns mask of minirows that belong to a block where a digit can only be in one
@@ -634,7 +604,7 @@ fn nonconflicting_cells_neighbor_bands_by_locked_candidates(row_shrink: u32) -> 
 // jczsolve equivalent: TblColumnSingle
 #[inline]
 fn column_single(row_shrink: u32) -> u32 {
-    *index(&COLUMN_SINGLE, row_shrink as usize) as u32
+    COLUMN_SINGLE[row_shrink as usize] as u32
 }
 
 /// Maps a mask of possible minirows to the mask of locked minirows (locked candidates).
@@ -644,7 +614,7 @@ fn column_single(row_shrink: u32) -> u32 {
 // jczsolve equivalent: TblShrinkSingle
 #[inline]
 fn locked_minirows(shrink: u32) -> u32 {
-    *index(&LOCKED_MINIROWS, shrink as usize)
+    LOCKED_MINIROWS[shrink as usize]
 }
 
 /// Expands the mask of rows in a band to a mask of cells in a band.
@@ -652,11 +622,11 @@ fn locked_minirows(shrink: u32) -> u32 {
 #[inline]
 fn row_mask(row_mask: u32) -> u32 {
     #[rustfmt::skip]
-    static ROW_MASK: [u32; 8] = [ // rows where single  found _000 to 111
+    static ROW_MASK: UncheckedIndexArray<u32, 8> = UncheckedIndexArray([ // rows where single  found _000 to 111
         0o000000000, 0o000000777, 0o000777000, 0o000777777,
         0o777000000, 0o777000777, 0o777777000, 0o777777777,
-    ];
-    *index(&ROW_MASK, row_mask as usize)
+    ]);
+    ROW_MASK[row_mask as usize]
     //(thing & 0b1) * 511 + (thing & 0b10) * 130816 + (thing & 0b100) * 33488896
 }
 
@@ -665,7 +635,7 @@ fn row_mask(row_mask: u32) -> u32 {
 #[inline]
 fn neighbor_subbands(subband: usize) -> (usize, usize) {
     #[rustfmt::skip]
-    static NEIGHBOR_SUBBANDS: [(usize, usize); 27] = [
+    static NEIGHBOR_SUBBANDS: UncheckedIndexArray<(usize, usize), 27> = UncheckedIndexArray([
         (1, 2), (2, 0), (0, 1),
         (4, 5), (5, 3), (3, 4),
         (7, 8), (8, 6), (6, 7),
@@ -675,8 +645,8 @@ fn neighbor_subbands(subband: usize) -> (usize, usize) {
         (19, 20), (20, 18), (18, 19),
         (22, 23), (23, 21), (21, 22),
         (25, 26), (26, 24), (24, 25),
-    ];
-    *index(&NEIGHBOR_SUBBANDS, subband)
+    ]);
+    NEIGHBOR_SUBBANDS[subband]
 }
 
 // jczsolve equivalent: BitPos
@@ -686,7 +656,7 @@ fn bit_pos(mask: u32) -> usize {
 }
 
 #[rustfmt::skip]
-static SHRINK_MASK: [u32; 512] = [
+static SHRINK_MASK: UncheckedIndexArray<u32, 512> = UncheckedIndexArray([
     0, 1, 1, 1, 1, 1, 1, 1, 2, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3,
     2, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 3, 3,
     4, 5, 5, 5, 5, 5, 5, 5, 6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7,
@@ -703,10 +673,10 @@ static SHRINK_MASK: [u32; 512] = [
     6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7,
     4, 5, 5, 5, 5, 5, 5, 5, 6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7,
     6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7, 6, 7, 7, 7, 7, 7, 7, 7,
-];
+]);
 
 #[rustfmt::skip]
-static LOCKED_CANDIDATES_MASK_SAME_BAND: [u32; 512] = [
+static LOCKED_CANDIDATES_MASK_SAME_BAND: UncheckedIndexArray<u32, 512> = UncheckedIndexArray([
     0o000000000, 0o000000000, 0o000000000, 0o000000000, 0o000000000, 0o000000000, 0o000000000, 0o000000000,
     0o000000000, 0o000000000, 0o000000000, 0o000000000, 0o000000000, 0o000000000, 0o000000000, 0o000000000,
     0o000000000, 0o000000000, 0o000000000, 0o000000000, 0o000000000, 0o000000000, 0o000000000, 0o000000000,
@@ -771,10 +741,10 @@ static LOCKED_CANDIDATES_MASK_SAME_BAND: [u32; 512] = [
     0o000000000, 0o070770777, 0o707707777, 0o777777777, 0o070077777, 0o070777777, 0o777777777, 0o777777777,
     0o000000000, 0o770770777, 0o007707777, 0o777777777, 0o007077777, 0o777777777, 0o007777777, 0o777777777,
     0o000000000, 0o770770777, 0o707707777, 0o777777777, 0o077077777, 0o777777777, 0o777777777, 0o777777777,
-];
+]);
 
 #[rustfmt::skip]
-static LOCKED_CANDIDATES_MASK_NEIGHBOR_BAND: [u32; 512] = [
+static LOCKED_CANDIDATES_MASK_NEIGHBOR_BAND: UncheckedIndexArray<u32, 512> = UncheckedIndexArray([
     0o777777777, 0o776776776, 0o775775775, 0o777777777, 0o773773773, 0o777777777, 0o777777777, 0o777777777,
     0o767767767, 0o766766766, 0o765765765, 0o767767767, 0o763763763, 0o767767767, 0o767767767, 0o767767767,
     0o757757757, 0o756756756, 0o755755755, 0o757757757, 0o753753753, 0o757757757, 0o757757757, 0o757757757,
@@ -839,10 +809,10 @@ static LOCKED_CANDIDATES_MASK_NEIGHBOR_BAND: [u32; 512] = [
     0o777777777, 0o776776776, 0o775775775, 0o777777777, 0o773773773, 0o777777777, 0o777777777, 0o777777777,
     0o777777777, 0o776776776, 0o775775775, 0o777777777, 0o773773773, 0o777777777, 0o777777777, 0o777777777,
     0o777777777, 0o776776776, 0o775775775, 0o777777777, 0o773773773, 0o777777777, 0o777777777, 0o777777777,
-];
+]);
 
 #[rustfmt::skip]
-static LOCKED_MINIROWS: [u32; 512] = [
+static LOCKED_MINIROWS: UncheckedIndexArray<u32, 512> = UncheckedIndexArray([
     0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000,
     0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000,
     0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000,
@@ -875,10 +845,10 @@ static LOCKED_MINIROWS: [u32; 512] = [
     0o000, 0o421, 0o000, 0o421, 0o124, 0o020, 0o124, 0o020, 0o000, 0o421, 0o412, 0o400, 0o004, 0o000, 0o000, 0o000,
     0o000, 0o241, 0o142, 0o040, 0o000, 0o241, 0o142, 0o040, 0o000, 0o241, 0o002, 0o000, 0o214, 0o200, 0o000, 0o000,
     0o000, 0o001, 0o142, 0o000, 0o124, 0o000, 0o100, 0o000, 0o000, 0o001, 0o002, 0o000, 0o004, 0o000, 0o000, 0o000,
-];
+]);
 
 #[rustfmt::skip]
-static COLUMN_SINGLE: [u32; 512] = [
+static COLUMN_SINGLE: UncheckedIndexArray<u32, 512> = UncheckedIndexArray([
     0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000,
     0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000,
     0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000, 0o000,
@@ -911,23 +881,44 @@ static COLUMN_SINGLE: [u32; 512] = [
     0o000, 0o333, 0o333, 0o222, 0o333, 0o222, 0o222, 0o222, 0o000, 0o111, 0o111, 0o000, 0o111, 0o000, 0o000, 0o000,
     0o000, 0o333, 0o333, 0o222, 0o333, 0o222, 0o222, 0o222, 0o000, 0o111, 0o111, 0o000, 0o111, 0o000, 0o000, 0o000,
     0o000, 0o111, 0o111, 0o000, 0o111, 0o000, 0o000, 0o000, 0o000, 0o111, 0o111, 0o000, 0o111, 0o000, 0o000, 0o000,
-];
+]);
 
+// ----------------------------------------------------------------
+//                      solver indexing
+// ----------------------------------------------------------------
+// A helper type for conditionally compiling bounds checks in arrays.
+// This is exclusively for use in the solver.
+// The value space for indexes is limited enough that any error
+// is likely to immediately show up in tests.
+// ALL indexing in this module is unsafe because of this even though
+// no further unsafe {} blocks occur.
+// ----------------------------------------------------------------
 #[derive(Clone, Copy)]
-struct UncheckedIndexArray<const N: usize>([u32; N]);
+struct UncheckedIndexArray<T, const N: usize>([T; N]);
 
-impl<const N: usize> std::ops::Index<usize> for UncheckedIndexArray<N> {
-    type Output = u32;
+impl<T, const N: usize> std::ops::Index<usize> for UncheckedIndexArray<T, N> {
+    type Output = T;
     fn index(&self, idx: usize) -> &Self::Output {
-        index(&self.0, idx)
+        if cfg!(feature = "unchecked_indexing") {
+            debug_assert!(idx < self.0.len());
+            unsafe { self.0.get_unchecked(idx) }
+        } else {
+            &self.0[idx]
+        }
     }
 }
 
-impl<const N: usize> std::ops::IndexMut<usize> for UncheckedIndexArray<N> {
+impl<T, const N: usize> std::ops::IndexMut<usize> for UncheckedIndexArray<T, N> {
     fn index_mut(&mut self, idx: usize) -> &mut Self::Output {
-        index_mut(&mut self.0, idx)
+        if cfg!(feature = "unchecked_indexing") {
+            debug_assert!(idx < self.0.len());
+            unsafe { self.0.get_unchecked_mut(idx) }
+        } else {
+            &mut self.0[idx]
+        }
     }
 }
+// ----------------------------------------------------------------
 
 // for each set bit in mask, return a mask with only that bit set
 fn mask_iter(mask: u32) -> impl Iterator<Item = u32> {

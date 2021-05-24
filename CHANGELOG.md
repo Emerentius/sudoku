@@ -1,6 +1,8 @@
+<!-- * Print textual representation of sudoku board with remaining candidates for unsolved cells. -->
+
 Unreleased
 ==========
-* Raise minimum Rust version to 1.47
+* Raise minimum Rust version to 1.51
 * `Sudoku::canonicalized`. Maps all sudokus of an equivalence class to the same sudoku
   and counts automorphisms.
   Limited to uniquely solvable sudokus (for now).
@@ -9,7 +11,6 @@ Unreleased
   - XyzWing
   - Mutant Swordfish
   - Mutant Jellyfish
-* Print textual representation of sudoku board with remaining candidates for unsolved cells.
 * Generation of symmetrical sudokus. The desired symmetry can be chosen via the `Symmetry` enum.
 * Rename many of `Sudoku`'s methods
   - `solve_unique` -> `solution`
@@ -23,6 +24,9 @@ Unreleased
   - `generate_unique_from` -> `generate_from`
   - `generate_unique_with_symmetry_from` -> `generate_with_symmetry_from`
 * Add `Sudoku::shuffled`.
+* Improved errors for `Sudoku` methods.
+  Errors now implement `std::error::Error` and none of them return `Result<T, ()>` anymore.
+  Moved `parse_errors` module to `errors`.
 
 Version 0.7.0 (2018-08-19)
 ==========================

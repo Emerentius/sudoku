@@ -17,5 +17,5 @@ pub use self::{
     positions::Cell,
     candidate::Candidate,
     cell_state::CellState,
-    grid_state::GridState,
+    // grid_state::GridState,
 };

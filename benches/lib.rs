@@ -54,9 +54,9 @@ macro_rules! make_benches {
 
 make_benches!(
     "../sudokus/Lines/";
-    sudoku_solve_one_1_easy,     Sudoku::possibly_nonunique_solution, "easy_sudokus.txt";
-    sudoku_solve_one_2_medium,   Sudoku::possibly_nonunique_solution, "medium_sudokus.txt";
-    sudoku_solve_one_3_hard,     Sudoku::possibly_nonunique_solution, "hard_sudokus.txt";
+    sudoku_solve_one_1_easy,     Sudoku::some_solution, "easy_sudokus.txt";
+    sudoku_solve_one_2_medium,   Sudoku::some_solution, "medium_sudokus.txt";
+    sudoku_solve_one_3_hard,     Sudoku::some_solution, "hard_sudokus.txt";
 
     sudoku_is_solvable_1_easy,   Sudoku::is_uniquely_solvable, "easy_sudokus.txt";
     sudoku_is_solvable_2_medium, Sudoku::is_uniquely_solvable, "medium_sudokus.txt";

@@ -111,7 +111,7 @@ _263__5__
 fn solutionless_sudokus() {
     let sudokus = read_sudokus(include_str!("../sudokus/Lines/invalid_sudokus.txt"));
     for sudoku in sudokus {
-        assert!(sudoku.possibly_nonunique_solution().is_none());
+        assert!(sudoku.some_solution().is_none());
     }
 }
 
@@ -241,7 +241,7 @@ fn unsolved_hard() {
 fn generate_solved_sudoku_correctness() {
     for _ in 0..1000 {
         let sudoku = Sudoku::generate_solved();
-        let solved_sudoku = sudoku.possibly_nonunique_solution();
+        let solved_sudoku = sudoku.some_solution();
         if solved_sudoku.is_none() {
             panic!(
                 "Randomly generated an invalid sudoku. Please save the sudoku for debugging:\n{}",

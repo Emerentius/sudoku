@@ -13,7 +13,7 @@ Unreleased
 * Generation of symmetrical sudokus. The desired symmetry can be chosen via the `Symmetry` enum.
 * Rename many of `Sudoku`'s methods
   - `solve_unique` -> `solution`
-  - `solve_one` -> `possibly_nonunique_solution`
+  - `solve_one` -> `some_solution`
   - `count_at_most` -> `solutions_count_up_to`
   - `solve_at_most` -> `solutions_up_to`
   - `solve_at_most_buffer` -> `solutions_up_to_buffer`

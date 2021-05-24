@@ -551,7 +551,7 @@ impl Sudoku {
     /// Find a solution to the sudoku. When a solution is found, it immediately stops searching and can therefore not guarantee uniqueness.
     /// If there is a unique solution, this will find it in, on average, half the time as [`Sudoku::solution`].
     /// Return `None` if no solution exists.
-    pub fn possibly_nonunique_solution(self) -> Option<Sudoku> {
+    pub fn some_solution(self) -> Option<Sudoku> {
         let mut buf = [[0; N_CELLS]];
         match self.solutions_up_to_buffer(&mut buf, 1) == 1 {
             true => Some(Sudoku(buf[0])),

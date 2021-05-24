@@ -43,11 +43,9 @@
 pub mod bitset;
 pub mod board;
 mod consts;
-// TODO: unify with parse_errors
 pub mod errors;
 mod generator;
 mod helper;
-pub mod parse_errors;
 mod solver;
 pub mod strategy;
 

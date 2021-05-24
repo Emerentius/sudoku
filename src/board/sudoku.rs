@@ -1,8 +1,8 @@
 use rand::seq::SliceRandom;
 
 use crate::consts::*;
+use crate::errors::{BlockParseError, InvalidEntry, LineParseError, NotEnoughRows};
 use crate::generator::SudokuGenerator;
-use crate::parse_errors::{BlockParseError, InvalidEntry, LineParseError, NotEnoughRows};
 use crate::solver::SudokuSolver;
 
 #[cfg(feature = "serde")]

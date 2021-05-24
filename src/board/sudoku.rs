@@ -747,9 +747,8 @@ impl Sudoku {
         SudokuLine(chars)
     }
 
-    /// Returns a value that, prints a block representation of the sudoku
+    /// Returns a value that prints a block representation of the sudoku
     /// when formatted via the `Display` trait.
-    ///
     ///
     /// ```
     /// use sudoku::Sudoku;

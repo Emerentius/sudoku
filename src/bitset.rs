@@ -244,11 +244,18 @@ mod set_element {
     }
 }
 
+// returns a bitmask with the lowest `bitset_size` number of bits set
+const fn n_bits_set(bitset_size: u8) -> u128 {
+    (1 << bitset_size) - 1
+}
+
 macro_rules! impl_setelement {
-    ( $( $type:ty => $storage_ty:ty, $all:expr),* $(,)* ) => {
+    ( $( $type:ty => $storage_ty:ty, $bitset_size:expr),* $(,)* ) => {
         $(
             impl SetElement for $type {
-                const ALL: $storage_ty = $all;
+                // try_into() would be better to avoid silent truncation
+                // but trait methods can't be constified yet.
+                const ALL: $storage_ty = n_bits_set($bitset_size) as $storage_ty;
                 const NONE: $storage_ty = 0;
 
                 type Storage = $storage_ty;
@@ -274,26 +281,26 @@ macro_rules! impl_setelement {
 
 impl_setelement!(
     // 81 cells
-    Cell => u128, 0o777_777_777___777_777_777___777_777_777,
+    Cell => u128, 81,
     // 9 digits
-    Digit => u16, 0o777,
+    Digit => u16, 9,
 
     // 9 of each house
-    //Row => u16, 0o777,
-    //Col => u16, 0o777,
-    //Block => u16, 0o777,
-    Line => u32, 0o777_777,      // both Rows and Cols
-    House => u32, 0o777_777_777, // Rows, Cols, Blocks
+    //Row => u16, 9,
+    //Col => u16, 9,
+    //Block => u16, 9,
+    Line => u32, 18,      // both Rows and Cols
+    House => u32, 27, // Rows, Cols, Blocks
 
     // 9 positions per house
-    //Position<Row> => u16, 0o777,
-    //Position<Col> => u16, 0o777,
-    Position<Line> => u16, 0o777,
-    Position<House> => u16, 0o777,
+    //Position<Row> => u16, 9,
+    //Position<Col> => u16, 9,
+    Position<Line> => u16, 9,
+    Position<House> => u16, 9,
     // 27 positions per chute
-    //Position<Band> => u32, 0o777_777_777,
-    //Position<Stack> => u32, 0o777_777_777,
-    //Position<Chute> => u32, 0o777_777_777,
+    //Position<Band> => u32, 27,
+    //Position<Stack> => u32, 27,
+    //Position<Chute> => u32, 27,
 );
 
 macro_rules! impl_iter_for_setiter {

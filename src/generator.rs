@@ -1,3 +1,6 @@
+//! Generate random, fully solved sudokus.
+//! This is done via randomized solving of empty grids. The solver is based on a simpler approach than
+//! the main sudoku solver.
 use rand::seq::SliceRandom;
 use rand::Rng;
 
@@ -8,21 +11,23 @@ use crate::consts::*;
 use crate::helper::{CellArray, HouseArray, Unsolvable};
 use crate::Sudoku;
 
-// Sudoku generation is done via randomized solving of empty grids
-// the solver is based on jsolve
+pub(crate) fn generate_solved() -> Sudoku {
+    SudokuGenerator::generate_solved()
+}
+
 // Helper struct for recursive solving
 #[derive(Clone, Debug)]
-pub(crate) struct SudokuGenerator {
-    pub grid: Sudoku,
-    pub n_solved_cells: u8,
-    pub cell_poss_digits: CellArray<Set<Digit>>,
-    pub house_solved_digits: HouseArray<Set<Digit>>,
-    pub last_cell: u8, // last cell checked in guess routine
+struct SudokuGenerator {
+    grid: Sudoku,
+    n_solved_cells: u8,
+    cell_poss_digits: CellArray<Set<Digit>>,
+    house_solved_digits: HouseArray<Set<Digit>>,
+    last_cell: u8, // last cell checked in guess routine
 }
 
 impl SudokuGenerator {
     #[inline]
-    pub fn new() -> SudokuGenerator {
+    fn new() -> SudokuGenerator {
         SudokuGenerator {
             grid: Sudoku([0; N_CELLS]),
             n_solved_cells: 0,
@@ -85,7 +90,7 @@ impl SudokuGenerator {
         Ok(())
     }
 
-    pub fn batch_insert_entries(&mut self, stack: &mut Vec<Candidate>) -> Result<(), Unsolvable> {
+    fn batch_insert_entries(&mut self, stack: &mut Vec<Candidate>) -> Result<(), Unsolvable> {
         for entry in stack.drain(..) {
             // cell already solved from previous entry in stack, skip
             if self.cell_poss_digits[entry.cell].is_empty() {
@@ -126,7 +131,7 @@ impl SudokuGenerator {
     }
 
     #[inline]
-    pub fn is_solved(&self) -> bool {
+    fn is_solved(&self) -> bool {
         self.n_solved_cells == N_CELLS as u8
     }
 
@@ -262,7 +267,7 @@ impl SudokuGenerator {
         }
     }
 
-    pub fn generate_solved() -> Sudoku {
+    fn generate_solved() -> Sudoku {
         // fill first row with a permutation of 1...9
         // not necessary, but ~15% faster
         let mut stack = Vec::with_capacity(N_CELLS);

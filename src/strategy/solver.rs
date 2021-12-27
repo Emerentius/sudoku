@@ -36,31 +36,32 @@ type _Deduction = Deduction<EliminationsRange>;
 // 1st one can also contain references to the 2nd but not vice versa.
 #[derive(Debug, Clone)]
 pub struct StrategySolver {
-    pub(crate) deductions: Vec<_Deduction>,
-    pub(crate) deduced_entries: Vec<Candidate>,
-    pub(crate) eliminated_entries: Vec<Candidate>,
-    pub(crate) n_solved: u8, // deduced_entries can contain duplicates so a separate counter is necessary
+    deductions: Vec<_Deduction>,
+    deduced_entries: Vec<Candidate>,
+    eliminated_entries: Vec<Candidate>,
+    n_solved: u8, // deduced_entries can contain duplicates so a separate counter is necessary
 
     // optimization hints for strategies
-    pub(crate) hidden_singles_last_house: u8,
+    hidden_singles_last_house: u8,
 
     // The initial state of a sudoku given as a puzzle.
     // If the solution is unique, this can be used for the strategy of
     // AvoidableRectangles
     // We can't assume that this struct is created only from clues nor that the information about them
     // will always be present for the caller
-    pub(crate) clues: Option<Sudoku>,
+    #[allow(unused)]
+    clues: Option<Sudoku>,
     // current state of the sudoku
     // for when it's faster to recompute from the end state
     // than update through the new entries
-    pub(crate) grid: State<Sudoku>,
+    grid: State<Sudoku>,
     // TODO: combine states that are updated together
     // Mask of possible numbers in cell
-    pub(crate) cell_poss_digits: State<CellArray<Set<Digit>>>,
+    cell_poss_digits: State<CellArray<Set<Digit>>>,
     // Mask of solved digits in house
-    pub(crate) house_solved_digits: State<HouseArray<Set<Digit>>>,
+    house_solved_digits: State<HouseArray<Set<Digit>>>,
     // Mask of possible positions for a house and number
-    pub(crate) house_poss_positions: State<HouseArray<DigitArray<Set<Position<House>>>>>,
+    house_poss_positions: State<HouseArray<DigitArray<Set<Position<House>>>>>,
 }
 
 impl StrategySolver {
@@ -1147,7 +1148,7 @@ impl std::fmt::Display for StrategySolver {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct State<T> {
+struct State<T> {
     next_deduced: u16,
     last_eliminated: u16, // probably doesn't exceed 2^8, but can't prove it
     state: T,

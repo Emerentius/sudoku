@@ -114,7 +114,7 @@ pub(crate) struct SudokuSolver {
 
 impl SudokuSolver {
     // jczsolve equivalent: InitSudoku
-    pub fn from_sudoku(sudoku: Sudoku) -> Result<Self, Unsolvable> {
+    pub(crate) fn from_sudoku(sudoku: Sudoku) -> Result<Self, Unsolvable> {
         let mut solver = SudokuSolver {
             poss_cells: UncheckedIndexArray([ALL; 27]),
             prev_poss_cells: UncheckedIndexArray([0; 27]),
@@ -131,7 +131,7 @@ impl SudokuSolver {
     }
 
     /// Find and return up to `limit` solutions
-    pub fn solutions_up_to(self, limit: usize) -> Vec<Sudoku> {
+    pub(crate) fn solutions_up_to(self, limit: usize) -> Vec<Sudoku> {
         let mut solutions = vec![];
         self._solutions_up_to(limit, &mut Solutions::Vector(&mut solutions));
         solutions
@@ -139,14 +139,14 @@ impl SudokuSolver {
 
     /// Count up to `limit` solutions and save up to buffer.len() of them
     /// in `buffer`. Returns number of solutions.
-    pub fn solutions_up_to_buffer(self, buffer: &mut [[u8; 81]], limit: usize) -> usize {
+    pub(crate) fn solutions_up_to_buffer(self, buffer: &mut [[u8; 81]], limit: usize) -> usize {
         let mut solutions = Solutions::Buffer(buffer, 0);
         self._solutions_up_to(limit, &mut solutions);
         solutions.len()
     }
 
     /// Find up to `limit` solutions and return count
-    pub fn solutions_count_up_to(self, limit: usize) -> usize {
+    pub(crate) fn solutions_count_up_to(self, limit: usize) -> usize {
         let mut solutions = Solutions::Count(0);
         self._solutions_up_to(limit, &mut solutions);
         solutions.len()

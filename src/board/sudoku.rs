@@ -2,7 +2,6 @@ use rand::seq::SliceRandom;
 
 use crate::consts::*;
 use crate::errors::{BlockParseError, InvalidEntry, LineParseError, NotEnoughRows};
-use crate::generator::SudokuGenerator;
 use crate::solver::SudokuSolver;
 
 #[cfg(feature = "serde")]
@@ -168,7 +167,7 @@ impl Symmetry {
 impl Sudoku {
     /// Generate a random, solved sudoku
     pub fn generate_solved() -> Self {
-        SudokuGenerator::generate_solved()
+        crate::generator::generate_solved()
     }
 
     /// Generate a random, uniquely solvable sudoku with 180° rotational symmetry.

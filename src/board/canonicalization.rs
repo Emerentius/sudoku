@@ -21,7 +21,7 @@ struct ChuteLinePermutations([Permutation3; 3]);
 /// the minlex sudoku. This cuts the search space considerably when searching
 /// the canonical transformation.
 #[derive(PartialOrd, Ord, PartialEq, Eq)]
-pub(crate) struct MinBandTransformation {
+struct MinBandTransformation {
     band: u8,
     transposed: bool,
     row_permutation: Permutation3,
@@ -175,7 +175,7 @@ pub(crate) fn find_canonical_sudoku_and_transformation(sudoku: Sudoku) -> (Sudok
 /// and returns the transformation required to get there.
 /// `band_minimum` is the lowest band seen so far. If no transformation results in a lower valued band,
 /// then no transformation is returned.
-pub(crate) fn find_minlex_band_transformation(
+fn find_minlex_band_transformation(
     sudoku: Sudoku,
     band_nr: u8,
     transposed: bool,

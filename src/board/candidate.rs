@@ -32,13 +32,13 @@ impl Candidate {
         self.cell.row()
     }
 
-    /// Returns the columns of this candidate's cell
+    /// Returns the column of this candidate's cell
     #[inline]
     pub fn col(self) -> Col {
         self.cell.col()
     }
 
-    /// Returns the field (box) of this candidate's cell
+    /// Returns the block (also called box or field) of this candidate's cell
     #[inline]
     pub fn block(self) -> Block {
         self.cell.block()

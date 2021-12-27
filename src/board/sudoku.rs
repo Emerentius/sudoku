@@ -660,10 +660,6 @@ impl Sudoku {
     /// Fewer permutations exist if the sudoku is symmetrical in respect to some combination(s) of the transformations.
     /// The vast majority of sudokus do not have any such symmetries (automorphisms). The highest number of automorphisms
     /// a sudoku can have is 648 and ~99.99% of all non-equivalent sudokus have only 1, the identity transformation.
-
-    // TODO: Deduplicate the shuffle_*lines_or_chutes* functions
-    //       for some reason the shuffle_bands and shuffle_stacks functions work faster in their current form
-    //       rather than with a generic function abstracting over both.
     pub fn shuffle(&mut self) {
         let transformation = crate::board::canonicalization::Transformation::random();
         transformation.apply(self);

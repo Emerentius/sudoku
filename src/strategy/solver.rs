@@ -11,6 +11,23 @@ use crate::Sudoku;
 type EliminationsRange = std::ops::Range<usize>;
 type _Deduction = Deduction<EliminationsRange>;
 
+/// Stores the current state of the sudoku
+/// along with all deductions, cell entries and eliminated possibilities.
+#[derive(Debug, Clone)]
+struct Record {
+    /// All deductions that have been made so far. Contains references to eliminated_entries.
+    deductions: Vec<_Deduction>,
+    /// All cell entries that have been made in order of insertion.
+    entries: Vec<Candidate>,
+    /// Candidates that have been shown to be impossible as result of some deduction.
+    /// This does NOT contain all impossible candidates as every candidate conflicting with an entry
+    /// in `entries` is not entered here.
+    eliminated_entries: Vec<Candidate>,
+    /// Current state of the sudoku. This is fully redundant with `entries` but sometimes
+    /// the more convenient representation.
+    grid: Sudoku,
+}
+
 /// The `StrategySolver` is the struct for solving sudokus with
 /// strategies that humans commonly apply.
 ///
@@ -36,10 +53,7 @@ type _Deduction = Deduction<EliminationsRange>;
 // 1st one can also contain references to the 2nd but not vice versa.
 #[derive(Debug, Clone)]
 pub struct StrategySolver {
-    deductions: Vec<_Deduction>,
-    entries: Vec<Candidate>,
-    eliminated_entries: Vec<Candidate>,
-
+    record: Record,
     // optimization hints for strategies
     hidden_singles_last_house: u8,
 
@@ -50,10 +64,6 @@ pub struct StrategySolver {
     // will always be present for the caller
     #[allow(unused)]
     clues: Option<Sudoku>,
-    // current state of the sudoku
-    // for when it's faster to recompute from the end state
-    // than update through the new entries
-    grid: Sudoku,
     // TODO: combine states that are updated together
     // Mask of possible numbers in cell
     cell_poss_digits: State<CellArray<Set<Digit>>>,
@@ -66,12 +76,14 @@ pub struct StrategySolver {
 impl StrategySolver {
     fn empty() -> StrategySolver {
         StrategySolver {
-            deductions: vec![],
-            entries: vec![],
-            eliminated_entries: vec![],
+            record: Record {
+                deductions: vec![],
+                entries: vec![],
+                eliminated_entries: vec![],
+                grid: Sudoku([0; 81]),
+            },
             hidden_singles_last_house: 0,
             clues: None,
-            grid: Sudoku([0; 81]),
             cell_poss_digits: State::from(CellArray([Set::ALL; 81])),
             house_solved_digits: State::from(HouseArray([Set::NONE; 27])),
             house_poss_positions: State::from(HouseArray([DigitArray([Set::ALL; 9]); 27])),
@@ -87,8 +99,12 @@ impl StrategySolver {
             .collect();
 
         StrategySolver {
-            entries,
-            grid: sudoku,
+            record: Record {
+                entries,
+                grid: sudoku,
+                deductions: vec![],
+                eliminated_entries: vec![],
+            },
             ..StrategySolver::empty()
         }
     }
@@ -126,9 +142,12 @@ impl StrategySolver {
         }
 
         StrategySolver {
-            entries,
-            eliminated_entries: eliminated_candidates,
-            grid: Sudoku(sudoku),
+            record: Record {
+                entries,
+                eliminated_entries: eliminated_candidates,
+                grid: Sudoku(sudoku),
+                deductions: vec![],
+            },
             ..StrategySolver::empty()
         }
     }
@@ -164,7 +183,7 @@ impl StrategySolver {
 
     /// Returns the current state of the Sudoku
     pub fn to_sudoku(&mut self) -> Sudoku {
-        self.grid
+        self.record.grid
     }
 
     /// Returns the current state of the Sudoku including potential candidates
@@ -179,7 +198,14 @@ impl StrategySolver {
         for (cell, &digits) in solver.cell_poss_digits.state.iter().enumerate() {
             grid[cell] = CellState::Candidates(digits);
         }
-        for (cell, &digit) in solver.grid.0.iter().enumerate().filter(|(_, &digit)| digit != 0) {
+        for (cell, &digit) in solver
+            .record
+            .grid
+            .0
+            .iter()
+            .enumerate()
+            .filter(|(_, &digit)| digit != 0)
+        {
             grid[cell] = CellState::Digit(Digit::new(digit));
         }
         grid
@@ -189,7 +215,7 @@ impl StrategySolver {
     pub fn cell_state(&mut self, cell: Cell) -> CellState {
         let _ = self._update_cell_poss_house_solved(false, false);
 
-        let digit = self.grid.0[cell.as_index()];
+        let digit = self.record.grid.0[cell.as_index()];
         if digit != 0 {
             CellState::Digit(Digit::new(digit))
         } else {
@@ -201,22 +227,22 @@ impl StrategySolver {
     /// Try to insert the given candidate. Fails, if the cell already contains a digit.
     pub fn insert_candidate(&mut self, candidate: Candidate) -> Result<(), ()> {
         Self::push_new_candidate(
-            &mut self.grid,
-            &mut self.entries,
+            &mut self.record.grid,
+            &mut self.record.entries,
             candidate,
-            &mut self.deductions,
+            &mut self.record.deductions,
             Deduction::NakedSingles(candidate),
         )
         .map_err(|Unsolvable| ())?;
         // TODO: remove the initial strategy insertion
-        self.deductions.pop();
+        self.record.deductions.pop();
 
         Ok(())
     }
 
     #[rustfmt::skip]
     fn into_deductions(self) -> Deductions {
-        let Self { deductions, eliminated_entries, .. } = self;
+        let Self { record: Record { deductions, eliminated_entries, ..}, .. } = self;
         Deductions { deductions, eliminated_entries }
     }
 
@@ -225,8 +251,8 @@ impl StrategySolver {
     pub fn solve(mut self, strategies: &[Strategy]) -> Result<(Sudoku, Deductions), (Sudoku, Deductions)> {
         self.try_solve(strategies);
         match self.is_solved() {
-            true => Ok((self.grid, self.into_deductions())),
-            false => Err((self.grid, self.into_deductions())),
+            true => Ok((self.record.grid, self.into_deductions())),
+            false => Err((self.record.grid, self.into_deductions())),
         }
     }
 
@@ -239,18 +265,18 @@ impl StrategySolver {
             // no chance without strategies
             None => return false,
         };
-        let lens = (self.entries.len(), self.eliminated_entries.len());
+        let lens = (self.record.entries.len(), self.record.eliminated_entries.len());
         'outer: loop {
             if self.is_solved() {
                 break;
             }
 
-            let n_deductions = self.entries.len();
-            let n_eliminated = self.eliminated_entries.len();
+            let n_deductions = self.record.entries.len();
+            let n_eliminated = self.record.eliminated_entries.len();
             if first.deduce_all(self, true).is_err() {
                 break;
             };
-            if self.entries.len() > n_deductions {
+            if self.record.entries.len() > n_deductions {
                 continue 'outer;
             }
 
@@ -258,18 +284,20 @@ impl StrategySolver {
                 if strategy.deduce_one(self).is_err() {
                     break;
                 };
-                if self.entries.len() > n_deductions || self.eliminated_entries.len() > n_eliminated {
+                if self.record.entries.len() > n_deductions
+                    || self.record.eliminated_entries.len() > n_eliminated
+                {
                     continue 'outer;
                 }
             }
             break;
         }
-        lens < (self.entries.len(), self.eliminated_entries.len())
+        lens < (self.record.entries.len(), self.record.eliminated_entries.len())
     }
 
     /// Check whether the sudoku has been completely solved.
     pub fn is_solved(&self) -> bool {
-        self.grid.is_solved()
+        self.record.grid.is_solved()
     }
 
     fn update_cell_poss_house_solved(&mut self) -> Result<(), Unsolvable> {
@@ -284,27 +312,27 @@ impl StrategySolver {
         let new_eliminations;
         {
             let (_, le_cp, cell_poss) = self.cell_poss_digits.get_mut();
-            new_eliminations = *le_cp as usize > self.eliminated_entries.len();
+            new_eliminations = *le_cp as usize > self.record.eliminated_entries.len();
 
-            for &candidate in &self.eliminated_entries[*le_cp as _..] {
+            for &candidate in &self.record.eliminated_entries[*le_cp as _..] {
                 let impossibles = candidate.digit_set();
 
                 // deductions made here may conflict with entries already in the queue
                 // in the queue. In that case the sudoku is impossible.
                 let res = Self::remove_impossibilities(
-                    &mut self.grid,
+                    &mut self.record.grid,
                     cell_poss,
                     candidate.cell,
                     impossibles,
-                    &mut self.entries,
-                    &mut self.deductions,
+                    &mut self.record.entries,
+                    &mut self.record.deductions,
                     find_naked_singles,
                 );
                 if early_return_on_error {
                     res?;
                 }
             }
-            *le_cp = self.eliminated_entries.len() as _;
+            *le_cp = self.record.eliminated_entries.len() as _;
         }
 
         self.insert_entries(find_naked_singles, new_eliminations)
@@ -316,7 +344,7 @@ impl StrategySolver {
 
         let (ld, le, house_poss_positions) = self.house_poss_positions.get_mut();
         // remove now impossible positions from list
-        for candidate in &self.eliminated_entries[*le as usize..] {
+        for candidate in &self.record.eliminated_entries[*le as usize..] {
             let cell = candidate.cell;
             let row_pos = cell.row_pos();
             let col_pos = cell.col_pos();
@@ -328,9 +356,9 @@ impl StrategySolver {
             house_poss_positions[cell.col()][digit].remove(col_pos.as_set());
             house_poss_positions[cell.block()][digit].remove(block_pos.as_set());
         }
-        *le = self.eliminated_entries.len() as _;
+        *le = self.record.eliminated_entries.len() as _;
 
-        for candidate in &self.entries[*ld as usize..] {
+        for candidate in &self.record.entries[*ld as usize..] {
             let cell = candidate.cell;
             let digit = candidate.digit;
 
@@ -363,7 +391,7 @@ impl StrategySolver {
             house_poss_positions[col][digit] = Set::NONE;
             house_poss_positions[block][digit] = Set::NONE;
         }
-        *ld = self.entries.len() as _;
+        *ld = self.record.entries.len() as _;
         Ok(())
     }
 
@@ -379,7 +407,7 @@ impl StrategySolver {
             self.batch_insert_entries(find_naked_singles)?;
         }
         loop {
-            match self.entries.len() - self.cell_poss_digits.next_deduced as usize {
+            match self.record.entries.len() - self.cell_poss_digits.next_deduced as usize {
                 0 => break Ok(()),
                 1..=4 => self.insert_entries_singly(find_naked_singles)?,
                 _ => self.batch_insert_entries(find_naked_singles)?,
@@ -396,10 +424,10 @@ impl StrategySolver {
         let (ld_zs, _, house_solved_digits) = self.house_solved_digits.get_mut();
 
         loop {
-            if self.entries.len() <= *ld_cp as usize {
+            if self.record.entries.len() <= *ld_cp as usize {
                 break;
             }
-            let candidate = self.entries[*ld_cp as usize];
+            let candidate = self.record.entries[*ld_cp as usize];
             *ld_cp += 1;
             *ld_zs += 1;
             let candidate_mask = candidate.digit_set();
@@ -417,19 +445,19 @@ impl StrategySolver {
             for cell in candidate.cell.neighbors() {
                 if candidate_mask.overlaps(cell_poss_digits[cell]) {
                     Self::remove_impossibilities(
-                        &mut self.grid,
+                        &mut self.record.grid,
                         cell_poss_digits,
                         cell,
                         candidate_mask,
-                        &mut self.entries,
-                        &mut self.deductions,
+                        &mut self.record.entries,
+                        &mut self.record.deductions,
                         find_naked_singles,
                     )?;
                 };
             }
 
             // found a lot of naked singles, switch to batch insertion
-            if self.entries.len() - *ld_cp as usize > 4 {
+            if self.record.entries.len() - *ld_cp as usize > 4 {
                 return Ok(());
             }
         }
@@ -458,8 +486,8 @@ impl StrategySolver {
     fn _batch_insert_entries(&mut self) -> Result<(), Unsolvable> {
         let (ld_cp, _, cell_poss_digits) = self.cell_poss_digits.get_mut();
         let (ld_zs, _, house_solved_digits) = self.house_solved_digits.get_mut();
-        while self.entries.len() > *ld_cp as usize {
-            let candidate = self.entries[*ld_cp as usize];
+        while self.record.entries.len() > *ld_cp as usize {
+            let candidate = self.record.entries[*ld_cp as usize];
             *ld_cp += 1;
             *ld_zs += 1;
             // cell already solved from previous candidate in stack, skip
@@ -497,12 +525,12 @@ impl StrategySolver {
                 | house_solved_digits[cell.block()];
 
             Self::remove_impossibilities(
-                &mut self.grid,
+                &mut self.record.grid,
                 cell_poss_digits,
                 cell,
                 houses_mask,
-                &mut self.entries,
-                &mut self.deductions,
+                &mut self.record.entries,
+                &mut self.record.deductions,
                 find_naked_singles,
             )?;
         }
@@ -517,7 +545,7 @@ impl StrategySolver {
         // if the sudoku is impossible, the above will have stopped early.
         // Remove conflicts with all entered candidates
         //
-        // Note: This won't suffice if two different digits for the same cell are in self.entries.
+        // Note: This won't suffice if two different digits for the same cell are in self.record.entries.
         // In that case, _batch_insert_entries() will still short circuit.
         self._batch_remove_conflicts_no_check();
     }
@@ -632,9 +660,9 @@ impl StrategySolver {
 
         {
             let cell_poss_digits = &self.cell_poss_digits.state;
-            let grid = &mut self.grid;
-            let entries = &mut self.entries;
-            let deductions = &mut self.deductions;
+            let grid = &mut self.record.grid;
+            let entries = &mut self.record.entries;
+            let deductions = &mut self.record.deductions;
 
             naked_singles::find_naked_singles(cell_poss_digits, stop_after_first, |candidate| {
                 Self::push_new_candidate(
@@ -657,9 +685,9 @@ impl StrategySolver {
         {
             let cell_poss_digits = &self.cell_poss_digits.state;
             let house_solved_digits = &self.house_solved_digits.state;
-            let grid = &mut self.grid;
-            let entries = &mut self.entries;
-            let deductions = &mut self.deductions;
+            let grid = &mut self.record.grid;
+            let entries = &mut self.record.entries;
+            let deductions = &mut self.record.deductions;
 
             hidden_singles::find_hidden_singles(
                 &mut self.hidden_singles_last_house,
@@ -682,8 +710,8 @@ impl StrategySolver {
     pub(crate) fn find_locked_candidates(&mut self, stop_after_first: bool) -> Result<(), Unsolvable> {
         self.update_cell_poss_house_solved()?;
         let (_, _, cell_poss_digits) = self.cell_poss_digits.get_mut();
-        let eliminated_entries = &mut self.eliminated_entries;
-        let deductions = &mut self.deductions;
+        let eliminated_entries = &mut self.record.eliminated_entries;
+        let deductions = &mut self.record.deductions;
 
         locked_candidates::find_locked_candidates(
             &cell_poss_digits,
@@ -718,8 +746,8 @@ impl StrategySolver {
         self.update_cell_poss_house_solved()?;
         let (_, _, cell_poss_digits) = self.cell_poss_digits.get_mut();
         let house_solved_digits = &mut self.house_solved_digits.state;
-        let eliminated_entries = &mut self.eliminated_entries;
-        let deductions = &mut self.deductions;
+        let eliminated_entries = &mut self.record.eliminated_entries;
+        let deductions = &mut self.record.deductions;
 
         naked_subsets::find_naked_subsets(
             cell_poss_digits,
@@ -756,8 +784,8 @@ impl StrategySolver {
         self.update_house_poss_positions()?;
         let house_poss_positions = &self.house_poss_positions.state;
         let house_solved_digits = &self.house_solved_digits.state;
-        let eliminated_entries = &mut self.eliminated_entries;
-        let deductions = &mut self.deductions;
+        let eliminated_entries = &mut self.record.eliminated_entries;
+        let deductions = &mut self.record.deductions;
 
         hidden_subsets::find_hidden_subsets(
             house_solved_digits,
@@ -804,8 +832,8 @@ impl StrategySolver {
         self.update_cell_poss_house_solved()?;
 
         let cell_poss_digits = &self.cell_poss_digits.state;
-        let eliminated_entries = &mut self.eliminated_entries;
-        let deductions = &mut self.deductions;
+        let eliminated_entries = &mut self.record.eliminated_entries;
+        let deductions = &mut self.record.deductions;
         let house_poss_positions = &self.house_poss_positions.state;
 
         basic_fish::find_fish(
@@ -841,8 +869,8 @@ impl StrategySolver {
         self.update_cell_poss_house_solved()?;
 
         let cell_poss_digits = &self.cell_poss_digits.state;
-        let eliminated_entries = &mut self.eliminated_entries;
-        let deductions = &mut self.deductions;
+        let eliminated_entries = &mut self.record.eliminated_entries;
+        let deductions = &mut self.record.deductions;
         let house_poss_positions = &self.house_poss_positions.state;
 
         mutant_fish::find_mutant_fish(
@@ -877,8 +905,8 @@ impl StrategySolver {
     pub(crate) fn find_xy_wing(&mut self, stop_after_first: bool) -> Result<(), Unsolvable> {
         self.update_cell_poss_house_solved()?;
         let cell_poss_digits = &self.cell_poss_digits.state;
-        let eliminated_entries = &mut self.eliminated_entries;
-        let deductions = &mut self.deductions;
+        let eliminated_entries = &mut self.record.eliminated_entries;
+        let deductions = &mut self.record.deductions;
 
         xy_wing::find_xy_wing(
             cell_poss_digits,
@@ -911,8 +939,8 @@ impl StrategySolver {
     pub(crate) fn find_xyz_wing(&mut self, stop_after_first: bool) -> Result<(), Unsolvable> {
         self.update_cell_poss_house_solved()?;
         let cell_poss_digits = &self.cell_poss_digits.state;
-        let eliminated_entries = &mut self.eliminated_entries;
-        let deductions = &mut self.deductions;
+        let eliminated_entries = &mut self.record.eliminated_entries;
+        let deductions = &mut self.record.deductions;
 
         xyz_wing::find_xyz_wing(
             cell_poss_digits,
@@ -1044,7 +1072,7 @@ impl StrategySolver {
                         (false, true) => impossible_color = Color::B,
                         (false, false) => continue,
                     };
-                    mark_impossible(digit, link_nr, impossible_color, cell_color, cell_linked, &mut self.eliminated_entries);
+                    mark_impossible(digit, link_nr, impossible_color, cell_color, cell_linked, &mut self.record.eliminated_entries);
                     // chain handled, go to next
                     // note: as this eagerly marks a color impossible as soon as a double in any color is found
                     //       a case of two doubles in some later house will not always be found
@@ -1065,12 +1093,12 @@ impl StrategySolver {
                             if cell_color == Some(Color::A) && !sees_a {
                                 cell_sees_color[neighbor_cell].0 = true;
                                 if sees_b {
-                                    self.eliminated_entries.push( Candidate{ cell: neighbor_cell, digit })
+                                    self.record.eliminated_entries.push( Candidate{ cell: neighbor_cell, digit })
                                 }
                             } else if cell_color == Some(Color::B) && !sees_b {
                                 cell_sees_color[neighbor_cell].1 = true;
                                 if sees_a {
-                                    self.eliminated_entries.push( Candidate{ cell: neighbor_cell, digit })
+                                    self.record.eliminated_entries.push( Candidate{ cell: neighbor_cell, digit })
                                 }
                             }
                         }

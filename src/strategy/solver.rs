@@ -37,7 +37,7 @@ type _Deduction = Deduction<EliminationsRange>;
 #[derive(Debug, Clone)]
 pub struct StrategySolver {
     deductions: Vec<_Deduction>,
-    deduced_entries: Vec<Candidate>,
+    entries: Vec<Candidate>,
     eliminated_entries: Vec<Candidate>,
 
     // optimization hints for strategies
@@ -67,7 +67,7 @@ impl StrategySolver {
     fn empty() -> StrategySolver {
         StrategySolver {
             deductions: vec![],
-            deduced_entries: vec![],
+            entries: vec![],
             eliminated_entries: vec![],
             hidden_singles_last_house: 0,
             clues: None,
@@ -80,14 +80,14 @@ impl StrategySolver {
 
     /// Construct a new StrategySolver
     pub fn from_sudoku(sudoku: Sudoku) -> StrategySolver {
-        let deduced_entries = sudoku
+        let entries = sudoku
             .iter()
             .enumerate()
             .filter_map(|(cell, opt_num)| opt_num.map(|digit| Candidate::new(cell as u8, digit)))
             .collect();
 
         StrategySolver {
-            deduced_entries,
+            entries,
             grid: sudoku,
             ..StrategySolver::empty()
         }
@@ -126,7 +126,7 @@ impl StrategySolver {
         }
 
         StrategySolver {
-            deduced_entries: entries,
+            entries,
             eliminated_entries: eliminated_candidates,
             grid: Sudoku(sudoku),
             ..StrategySolver::empty()
@@ -202,7 +202,7 @@ impl StrategySolver {
     pub fn insert_candidate(&mut self, candidate: Candidate) -> Result<(), ()> {
         Self::push_new_candidate(
             &mut self.grid,
-            &mut self.deduced_entries,
+            &mut self.entries,
             candidate,
             &mut self.deductions,
             Deduction::NakedSingles(candidate),
@@ -216,8 +216,8 @@ impl StrategySolver {
 
     #[rustfmt::skip]
     fn into_deductions(self) -> Deductions {
-        let Self { deductions, deduced_entries, eliminated_entries, .. } = self;
-        Deductions { deductions, deduced_entries, eliminated_entries }
+        let Self { deductions, eliminated_entries, .. } = self;
+        Deductions { deductions, eliminated_entries }
     }
 
     /// Try to solve the sudoku using the given `strategies`. Returns a `Result` of the sudoku and a struct containing the series of deductions.
@@ -239,18 +239,18 @@ impl StrategySolver {
             // no chance without strategies
             None => return false,
         };
-        let lens = (self.deduced_entries.len(), self.eliminated_entries.len());
+        let lens = (self.entries.len(), self.eliminated_entries.len());
         'outer: loop {
             if self.is_solved() {
                 break;
             }
 
-            let n_deductions = self.deduced_entries.len();
+            let n_deductions = self.entries.len();
             let n_eliminated = self.eliminated_entries.len();
             if first.deduce_all(self, true).is_err() {
                 break;
             };
-            if self.deduced_entries.len() > n_deductions {
+            if self.entries.len() > n_deductions {
                 continue 'outer;
             }
 
@@ -258,13 +258,13 @@ impl StrategySolver {
                 if strategy.deduce_one(self).is_err() {
                     break;
                 };
-                if self.deduced_entries.len() > n_deductions || self.eliminated_entries.len() > n_eliminated {
+                if self.entries.len() > n_deductions || self.eliminated_entries.len() > n_eliminated {
                     continue 'outer;
                 }
             }
             break;
         }
-        lens < (self.deduced_entries.len(), self.eliminated_entries.len())
+        lens < (self.entries.len(), self.eliminated_entries.len())
     }
 
     /// Check whether the sudoku has been completely solved.
@@ -296,7 +296,7 @@ impl StrategySolver {
                     cell_poss,
                     candidate.cell,
                     impossibles,
-                    &mut self.deduced_entries,
+                    &mut self.entries,
                     &mut self.deductions,
                     find_naked_singles,
                 );
@@ -330,7 +330,7 @@ impl StrategySolver {
         }
         *le = self.eliminated_entries.len() as _;
 
-        for candidate in &self.deduced_entries[*ld as usize..] {
+        for candidate in &self.entries[*ld as usize..] {
             let cell = candidate.cell;
             let digit = candidate.digit;
 
@@ -363,7 +363,7 @@ impl StrategySolver {
             house_poss_positions[col][digit] = Set::NONE;
             house_poss_positions[block][digit] = Set::NONE;
         }
-        *ld = self.deduced_entries.len() as _;
+        *ld = self.entries.len() as _;
         Ok(())
     }
 
@@ -379,7 +379,7 @@ impl StrategySolver {
             self.batch_insert_entries(find_naked_singles)?;
         }
         loop {
-            match self.deduced_entries.len() - self.cell_poss_digits.next_deduced as usize {
+            match self.entries.len() - self.cell_poss_digits.next_deduced as usize {
                 0 => break Ok(()),
                 1..=4 => self.insert_entries_singly(find_naked_singles)?,
                 _ => self.batch_insert_entries(find_naked_singles)?,
@@ -396,10 +396,10 @@ impl StrategySolver {
         let (ld_zs, _, house_solved_digits) = self.house_solved_digits.get_mut();
 
         loop {
-            if self.deduced_entries.len() <= *ld_cp as usize {
+            if self.entries.len() <= *ld_cp as usize {
                 break;
             }
-            let candidate = self.deduced_entries[*ld_cp as usize];
+            let candidate = self.entries[*ld_cp as usize];
             *ld_cp += 1;
             *ld_zs += 1;
             let candidate_mask = candidate.digit_set();
@@ -421,7 +421,7 @@ impl StrategySolver {
                         cell_poss_digits,
                         cell,
                         candidate_mask,
-                        &mut self.deduced_entries,
+                        &mut self.entries,
                         &mut self.deductions,
                         find_naked_singles,
                     )?;
@@ -429,7 +429,7 @@ impl StrategySolver {
             }
 
             // found a lot of naked singles, switch to batch insertion
-            if self.deduced_entries.len() - *ld_cp as usize > 4 {
+            if self.entries.len() - *ld_cp as usize > 4 {
                 return Ok(());
             }
         }
@@ -458,8 +458,8 @@ impl StrategySolver {
     fn _batch_insert_entries(&mut self) -> Result<(), Unsolvable> {
         let (ld_cp, _, cell_poss_digits) = self.cell_poss_digits.get_mut();
         let (ld_zs, _, house_solved_digits) = self.house_solved_digits.get_mut();
-        while self.deduced_entries.len() > *ld_cp as usize {
-            let candidate = self.deduced_entries[*ld_cp as usize];
+        while self.entries.len() > *ld_cp as usize {
+            let candidate = self.entries[*ld_cp as usize];
             *ld_cp += 1;
             *ld_zs += 1;
             // cell already solved from previous candidate in stack, skip
@@ -501,7 +501,7 @@ impl StrategySolver {
                 cell_poss_digits,
                 cell,
                 houses_mask,
-                &mut self.deduced_entries,
+                &mut self.entries,
                 &mut self.deductions,
                 find_naked_singles,
             )?;
@@ -517,7 +517,7 @@ impl StrategySolver {
         // if the sudoku is impossible, the above will have stopped early.
         // Remove conflicts with all entered candidates
         //
-        // Note: This won't suffice if two different digits for the same cell are in self.deduced_entries.
+        // Note: This won't suffice if two different digits for the same cell are in self.entries.
         // In that case, _batch_insert_entries() will still short circuit.
         self._batch_remove_conflicts_no_check();
     }
@@ -548,7 +548,7 @@ impl StrategySolver {
         cell_poss_digits: &mut CellArray<Set<Digit>>,
         cell: Cell,
         impossible: Set<Digit>,
-        deduced_entries: &mut Vec<Candidate>,
+        entries: &mut Vec<Candidate>,
         deductions: &mut Vec<_Deduction>,
         find_naked_singles: bool,
     ) -> Result<(), Unsolvable> {
@@ -560,7 +560,7 @@ impl StrategySolver {
                 let candidate = Candidate { cell, digit };
                 Self::push_new_candidate(
                     sudoku,
-                    deduced_entries,
+                    entries,
                     candidate,
                     deductions,
                     Deduction::NakedSingles(candidate),
@@ -574,7 +574,7 @@ impl StrategySolver {
 
     fn push_new_candidate(
         sudoku: &mut Sudoku,
-        deduced_entries: &mut Vec<Candidate>,
+        entries: &mut Vec<Candidate>,
         candidate: Candidate,
         deductions: &mut Vec<_Deduction>,
         strategy: _Deduction, // either a user-given or naked or hidden singles
@@ -595,7 +595,7 @@ impl StrategySolver {
             _ => return Err(Unsolvable),                      // conflict
         }
         *old_num = candidate.digit.get();
-        deduced_entries.push(candidate);
+        entries.push(candidate);
         deductions.push(strategy);
         Ok(())
     }
@@ -633,13 +633,13 @@ impl StrategySolver {
         {
             let cell_poss_digits = &self.cell_poss_digits.state;
             let grid = &mut self.grid;
-            let deduced_entries = &mut self.deduced_entries;
+            let entries = &mut self.entries;
             let deductions = &mut self.deductions;
 
             naked_singles::find_naked_singles(cell_poss_digits, stop_after_first, |candidate| {
                 Self::push_new_candidate(
                     grid,
-                    deduced_entries,
+                    entries,
                     candidate,
                     deductions,
                     Deduction::NakedSingles(candidate),
@@ -658,7 +658,7 @@ impl StrategySolver {
             let cell_poss_digits = &self.cell_poss_digits.state;
             let house_solved_digits = &self.house_solved_digits.state;
             let grid = &mut self.grid;
-            let deduced_entries = &mut self.deduced_entries;
+            let entries = &mut self.entries;
             let deductions = &mut self.deductions;
 
             hidden_singles::find_hidden_singles(
@@ -668,7 +668,7 @@ impl StrategySolver {
                 stop_after_first,
                 |candidate, house| {
                     let deduction = Deduction::HiddenSingles(candidate, house.categorize());
-                    Self::push_new_candidate(grid, deduced_entries, candidate, deductions, deduction)
+                    Self::push_new_candidate(grid, entries, candidate, deductions, deduction)
                 },
             )?;
         }

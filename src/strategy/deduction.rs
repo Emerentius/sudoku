@@ -12,7 +12,7 @@ type _Deduction = Deduction<DeductionRange>;
 /// Contains the sequence of deductions made to solve / partially solve the sudoku
 pub struct Deductions {
     pub(crate) deductions: Vec<_Deduction>,
-    pub(crate) deduced_entries: Vec<Candidate>,
+    //pub(crate) entries: Vec<Candidate>,
     pub(crate) eliminated_entries: Vec<Candidate>,
 }
 

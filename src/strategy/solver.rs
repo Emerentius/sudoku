@@ -73,6 +73,57 @@ pub struct StrategySolver {
     house_poss_positions: State<HouseArray<DigitArray<Set<Position<House>>>>>,
 }
 
+impl Record {
+    fn push_new_candidate(
+        &mut self,
+        candidate: Candidate,
+        strategy: _Deduction, // either a user-given or naked or hidden singles
+    ) -> Result<(), Unsolvable> {
+        #[cfg(debug_assertions)]
+        {
+            use self::Deduction::*;
+            match strategy {
+                NakedSingles(..) | HiddenSingles(..) => (),
+                _ => panic!("Internal error: Called push_new_candidate with wrong strategy type"),
+            };
+        }
+
+        let old_num = &mut self.grid.0[candidate.cell.as_index()];
+        match *old_num {
+            n if n == candidate.digit.get() => return Ok(()), // previously solved
+            0 => (),                                          // not solved
+            _ => return Err(Unsolvable),                      // conflict
+        }
+        *old_num = candidate.digit.get();
+        self.entries.push(candidate);
+        self.deductions.push(strategy);
+        Ok(())
+    }
+
+    // Enter iterator of new impossible candidates.
+    // If there are any, enter deduction and return true, else false.
+    fn enter_conflicts(
+        &mut self,
+        conflicts: impl IntoIterator<Item = Candidate>,
+        deduction: impl FnOnce(EliminationsRange) -> Deduction<EliminationsRange>,
+    ) -> bool {
+        let eliminated = &mut self.eliminated_entries;
+        let len_before = eliminated.len();
+        eliminated.extend(conflicts);
+        let conflicts_rg = len_before..eliminated.len();
+
+        // there are 2 conflicting .is_empty() methods
+        // one is not stable (inherent on range), the other is not in scope (ExactSizeIterator)
+        #[allow(clippy::len_zero)]
+        let has_conflicts = conflicts_rg.len() > 0;
+
+        if has_conflicts {
+            self.deductions.push(deduction(conflicts_rg));
+        }
+        has_conflicts
+    }
+}
+
 impl StrategySolver {
     fn empty() -> StrategySolver {
         StrategySolver {
@@ -226,14 +277,9 @@ impl StrategySolver {
 
     /// Try to insert the given candidate. Fails, if the cell already contains a digit.
     pub fn insert_candidate(&mut self, candidate: Candidate) -> Result<(), ()> {
-        Self::push_new_candidate(
-            &mut self.record.grid,
-            &mut self.record.entries,
-            candidate,
-            &mut self.record.deductions,
-            Deduction::NakedSingles(candidate),
-        )
-        .map_err(|Unsolvable| ())?;
+        self.record
+            .push_new_candidate(candidate, Deduction::NakedSingles(candidate))
+            .map_err(|Unsolvable| ())?;
         // TODO: remove the initial strategy insertion
         self.record.deductions.pop();
 
@@ -314,18 +360,17 @@ impl StrategySolver {
             let (_, le_cp, cell_poss) = self.cell_poss_digits.get_mut();
             new_eliminations = *le_cp as usize > self.record.eliminated_entries.len();
 
-            for &candidate in &self.record.eliminated_entries[*le_cp as _..] {
+            for i in *le_cp as _..self.record.eliminated_entries.len() {
+                let candidate = self.record.eliminated_entries[i];
                 let impossibles = candidate.digit_set();
 
                 // deductions made here may conflict with entries already in the queue
                 // in the queue. In that case the sudoku is impossible.
                 let res = Self::remove_impossibilities(
-                    &mut self.record.grid,
+                    &mut self.record,
                     cell_poss,
                     candidate.cell,
                     impossibles,
-                    &mut self.record.entries,
-                    &mut self.record.deductions,
                     find_naked_singles,
                 );
                 if early_return_on_error {
@@ -445,12 +490,10 @@ impl StrategySolver {
             for cell in candidate.cell.neighbors() {
                 if candidate_mask.overlaps(cell_poss_digits[cell]) {
                     Self::remove_impossibilities(
-                        &mut self.record.grid,
+                        &mut self.record,
                         cell_poss_digits,
                         cell,
                         candidate_mask,
-                        &mut self.record.entries,
-                        &mut self.record.deductions,
                         find_naked_singles,
                     )?;
                 };
@@ -525,12 +568,10 @@ impl StrategySolver {
                 | house_solved_digits[cell.block()];
 
             Self::remove_impossibilities(
-                &mut self.record.grid,
+                &mut self.record,
                 cell_poss_digits,
                 cell,
                 houses_mask,
-                &mut self.record.entries,
-                &mut self.record.deductions,
                 find_naked_singles,
             )?;
         }
@@ -572,12 +613,10 @@ impl StrategySolver {
     // remove impossible digits from masks for given cell
     // also check for naked singles and impossibility of sudoku
     fn remove_impossibilities(
-        sudoku: &mut Sudoku,
+        record: &mut Record,
         cell_poss_digits: &mut CellArray<Set<Digit>>,
         cell: Cell,
         impossible: Set<Digit>,
-        entries: &mut Vec<Candidate>,
-        deductions: &mut Vec<_Deduction>,
         find_naked_singles: bool,
     ) -> Result<(), Unsolvable> {
         let cell_mask = &mut cell_poss_digits[cell];
@@ -586,71 +625,13 @@ impl StrategySolver {
         if find_naked_singles {
             if let Some(digit) = cell_mask.unique()? {
                 let candidate = Candidate { cell, digit };
-                Self::push_new_candidate(
-                    sudoku,
-                    entries,
-                    candidate,
-                    deductions,
-                    Deduction::NakedSingles(candidate),
-                )?;
+                record.push_new_candidate(candidate, Deduction::NakedSingles(candidate))?;
             }
         } else if cell_mask.is_empty() {
             return Err(Unsolvable);
         }
         Ok(())
     }
-
-    fn push_new_candidate(
-        sudoku: &mut Sudoku,
-        entries: &mut Vec<Candidate>,
-        candidate: Candidate,
-        deductions: &mut Vec<_Deduction>,
-        strategy: _Deduction, // either a user-given or naked or hidden singles
-    ) -> Result<(), Unsolvable> {
-        #[cfg(debug_assertions)]
-        {
-            use self::Deduction::*;
-            match strategy {
-                NakedSingles(..) | HiddenSingles(..) => (),
-                _ => panic!("Internal error: Called push_new_candidate with wrong strategy type"),
-            };
-        }
-
-        let old_num = &mut sudoku.0[candidate.cell.as_index()];
-        match *old_num {
-            n if n == candidate.digit.get() => return Ok(()), // previously solved
-            0 => (),                                          // not solved
-            _ => return Err(Unsolvable),                      // conflict
-        }
-        *old_num = candidate.digit.get();
-        entries.push(candidate);
-        deductions.push(strategy);
-        Ok(())
-    }
-
-    // Enter iterator of new impossible candidates.
-    // If there are any, enter deduction and return true, else false.
-    fn enter_conflicts(
-        eliminated: &mut Vec<Candidate>,
-        deductions: &mut Vec<Deduction<EliminationsRange>>,
-        conflicts: impl IntoIterator<Item = Candidate>,
-        deduction: impl FnOnce(EliminationsRange) -> Deduction<EliminationsRange>,
-    ) -> bool {
-        let len_before = eliminated.len();
-        eliminated.extend(conflicts);
-        let conflicts_rg = len_before..eliminated.len();
-
-        // there are 2 conflicting .is_empty() methods
-        // one is not stable (inherent on range), the other is not in scope (ExactSizeIterator)
-        #[allow(clippy::len_zero)]
-        let has_conflicts = conflicts_rg.len() > 0;
-
-        if has_conflicts {
-            deductions.push(deduction(conflicts_rg));
-        }
-        has_conflicts
-    }
-
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     ////////      Strategies
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -660,18 +641,9 @@ impl StrategySolver {
 
         {
             let cell_poss_digits = &self.cell_poss_digits.state;
-            let grid = &mut self.record.grid;
-            let entries = &mut self.record.entries;
-            let deductions = &mut self.record.deductions;
-
             naked_singles::find_naked_singles(cell_poss_digits, stop_after_first, |candidate| {
-                Self::push_new_candidate(
-                    grid,
-                    entries,
-                    candidate,
-                    deductions,
-                    Deduction::NakedSingles(candidate),
-                )
+                self.record
+                    .push_new_candidate(candidate, Deduction::NakedSingles(candidate))
             })?;
         }
 
@@ -685,9 +657,6 @@ impl StrategySolver {
         {
             let cell_poss_digits = &self.cell_poss_digits.state;
             let house_solved_digits = &self.house_solved_digits.state;
-            let grid = &mut self.record.grid;
-            let entries = &mut self.record.entries;
-            let deductions = &mut self.record.deductions;
 
             hidden_singles::find_hidden_singles(
                 &mut self.hidden_singles_last_house,
@@ -696,7 +665,7 @@ impl StrategySolver {
                 stop_after_first,
                 |candidate, house| {
                     let deduction = Deduction::HiddenSingles(candidate, house.categorize());
-                    Self::push_new_candidate(grid, entries, candidate, deductions, deduction)
+                    self.record.push_new_candidate(candidate, deduction)
                 },
             )?;
         }
@@ -710,8 +679,6 @@ impl StrategySolver {
     pub(crate) fn find_locked_candidates(&mut self, stop_after_first: bool) -> Result<(), Unsolvable> {
         self.update_cell_poss_house_solved()?;
         let (_, _, cell_poss_digits) = self.cell_poss_digits.get_mut();
-        let eliminated_entries = &mut self.record.eliminated_entries;
-        let deductions = &mut self.record.deductions;
 
         locked_candidates::find_locked_candidates(
             &cell_poss_digits,
@@ -733,7 +700,7 @@ impl StrategySolver {
                     is_pointing,
                     conflicts,
                 };
-                Self::enter_conflicts(eliminated_entries, deductions, conflicts, on_locked)
+                self.record.enter_conflicts(conflicts, on_locked)
             },
         )
     }
@@ -746,8 +713,6 @@ impl StrategySolver {
         self.update_cell_poss_house_solved()?;
         let (_, _, cell_poss_digits) = self.cell_poss_digits.get_mut();
         let house_solved_digits = &mut self.house_solved_digits.state;
-        let eliminated_entries = &mut self.record.eliminated_entries;
-        let deductions = &mut self.record.deductions;
 
         naked_subsets::find_naked_subsets(
             cell_poss_digits,
@@ -770,7 +735,7 @@ impl StrategySolver {
                     conflicts,
                 };
 
-                Self::enter_conflicts(eliminated_entries, deductions, conflicts, on_conflict)
+                self.record.enter_conflicts(conflicts, on_conflict)
             },
         )
     }
@@ -784,8 +749,6 @@ impl StrategySolver {
         self.update_house_poss_positions()?;
         let house_poss_positions = &self.house_poss_positions.state;
         let house_solved_digits = &self.house_solved_digits.state;
-        let eliminated_entries = &mut self.record.eliminated_entries;
-        let deductions = &mut self.record.deductions;
 
         hidden_subsets::find_hidden_subsets(
             house_solved_digits,
@@ -810,7 +773,7 @@ impl StrategySolver {
                     conflicts,
                 };
 
-                Self::enter_conflicts(eliminated_entries, deductions, conflicts, on_conflict)
+                self.record.enter_conflicts(conflicts, on_conflict)
             },
         )
     }
@@ -832,8 +795,6 @@ impl StrategySolver {
         self.update_cell_poss_house_solved()?;
 
         let cell_poss_digits = &self.cell_poss_digits.state;
-        let eliminated_entries = &mut self.record.eliminated_entries;
-        let deductions = &mut self.record.deductions;
         let house_poss_positions = &self.house_poss_positions.state;
 
         basic_fish::find_fish(
@@ -855,7 +816,7 @@ impl StrategySolver {
                     positions: positions_in_line,
                 };
 
-                Self::enter_conflicts(eliminated_entries, deductions, conflicts, on_conflict)
+                self.record.enter_conflicts(conflicts, on_conflict)
             },
         )
     }
@@ -869,8 +830,6 @@ impl StrategySolver {
         self.update_cell_poss_house_solved()?;
 
         let cell_poss_digits = &self.cell_poss_digits.state;
-        let eliminated_entries = &mut self.record.eliminated_entries;
-        let deductions = &mut self.record.deductions;
         let house_poss_positions = &self.house_poss_positions.state;
 
         mutant_fish::find_mutant_fish(
@@ -897,7 +856,7 @@ impl StrategySolver {
                     conflicts,
                 };
 
-                Self::enter_conflicts(eliminated_entries, deductions, conflicts, on_conflict)
+                self.record.enter_conflicts(conflicts, on_conflict)
             },
         )
     }
@@ -905,8 +864,6 @@ impl StrategySolver {
     pub(crate) fn find_xy_wing(&mut self, stop_after_first: bool) -> Result<(), Unsolvable> {
         self.update_cell_poss_house_solved()?;
         let cell_poss_digits = &self.cell_poss_digits.state;
-        let eliminated_entries = &mut self.record.eliminated_entries;
-        let deductions = &mut self.record.deductions;
 
         xy_wing::find_xy_wing(
             cell_poss_digits,
@@ -931,7 +888,7 @@ impl StrategySolver {
                     conflicts,
                 };
 
-                Self::enter_conflicts(eliminated_entries, deductions, conflicts, on_conflict)
+                self.record.enter_conflicts(conflicts, on_conflict)
             },
         )
     }
@@ -939,8 +896,6 @@ impl StrategySolver {
     pub(crate) fn find_xyz_wing(&mut self, stop_after_first: bool) -> Result<(), Unsolvable> {
         self.update_cell_poss_house_solved()?;
         let cell_poss_digits = &self.cell_poss_digits.state;
-        let eliminated_entries = &mut self.record.eliminated_entries;
-        let deductions = &mut self.record.deductions;
 
         xyz_wing::find_xyz_wing(
             cell_poss_digits,
@@ -968,7 +923,7 @@ impl StrategySolver {
                     conflicts,
                 };
 
-                Self::enter_conflicts(eliminated_entries, deductions, conflicts, on_conflict)
+                self.record.enter_conflicts(conflicts, on_conflict)
             },
         )
     }

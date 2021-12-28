@@ -39,7 +39,6 @@ pub struct StrategySolver {
     deductions: Vec<_Deduction>,
     deduced_entries: Vec<Candidate>,
     eliminated_entries: Vec<Candidate>,
-    n_solved: u8, // deduced_entries can contain duplicates so a separate counter is necessary
 
     // optimization hints for strategies
     hidden_singles_last_house: u8,
@@ -70,7 +69,6 @@ impl StrategySolver {
             deductions: vec![],
             deduced_entries: vec![],
             eliminated_entries: vec![],
-            n_solved: 0,
             hidden_singles_last_house: 0,
             clues: None,
             grid: Sudoku([0; 81]),
@@ -271,7 +269,7 @@ impl StrategySolver {
 
     /// Check whether the sudoku has been completely solved.
     pub fn is_solved(&self) -> bool {
-        self.n_solved == 81
+        self.grid.is_solved()
     }
 
     fn update_cell_poss_house_solved(&mut self) -> Result<(), Unsolvable> {
@@ -415,12 +413,7 @@ impl StrategySolver {
                 return Err(Unsolvable);
             }
 
-            Self::_insert_candidate_cp_zs(
-                candidate,
-                &mut self.n_solved,
-                cell_poss_digits,
-                house_solved_digits,
-            );
+            Self::_insert_candidate_cp_zs(candidate, cell_poss_digits, house_solved_digits);
             for cell in candidate.cell.neighbors() {
                 if candidate_mask.overlaps(cell_poss_digits[cell]) {
                     Self::remove_impossibilities(
@@ -446,11 +439,9 @@ impl StrategySolver {
     #[inline]
     fn _insert_candidate_cp_zs(
         candidate: Candidate,
-        n_solved: &mut u8,
         cell_poss_digits: &mut CellArray<Set<Digit>>,
         house_solved_digits: &mut HouseArray<Set<Digit>>,
     ) {
-        *n_solved += 1;
         cell_poss_digits[candidate.cell] = Set::NONE;
         house_solved_digits[candidate.row()] |= candidate.digit_set();
         house_solved_digits[candidate.col()] |= candidate.digit_set();
@@ -488,12 +479,7 @@ impl StrategySolver {
                 return Err(Unsolvable);
             }
 
-            Self::_insert_candidate_cp_zs(
-                candidate,
-                &mut self.n_solved,
-                cell_poss_digits,
-                house_solved_digits,
-            );
+            Self::_insert_candidate_cp_zs(candidate, cell_poss_digits, house_solved_digits);
         }
         Ok(())
     }

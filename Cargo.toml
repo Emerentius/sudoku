@@ -7,7 +7,7 @@ documentation = "https://docs.rs/sudoku"
 readme = "readme.md"
 version = "0.7.0"
 authors = ["Emerentius"]
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 rand = "0.7.3"

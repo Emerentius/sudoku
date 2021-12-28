@@ -248,7 +248,6 @@ impl Sudoku {
     /// All numbers must be below 10. Empty cells are denoted by 0, clues by the numbers 1-9.
     /// The slice must be of length 81.
     pub fn from_bytes_slice(bytes: &[u8]) -> Result<Sudoku, crate::errors::FromBytesSliceError> {
-        use std::convert::TryInto;
         Self::_from_bytes(
             bytes
                 .try_into()

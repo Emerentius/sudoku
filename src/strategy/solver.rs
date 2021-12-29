@@ -64,13 +64,286 @@ pub struct StrategySolver {
     // will always be present for the caller
     #[allow(unused)]
     clues: Option<Sudoku>,
-    // TODO: combine states that are updated together
-    // Mask of possible numbers in cell
-    cell_poss_digits: State<CellArray<Set<Digit>>>,
-    // Mask of solved digits in house
-    house_solved_digits: State<HouseArray<Set<Digit>>>,
+    // Mask of possible numbers in cell & mask of solved digits in house.
+    // These are updated together.
+    cell_poss_and_house_solved_digits: State<(CellPoss, HouseSolvedDigits)>,
     // Mask of possible positions for a house and number
-    house_poss_positions: State<HouseArray<DigitArray<Set<Position<House>>>>>,
+    house_poss_positions: State<HousePossPositions>,
+}
+
+type CellPoss = CellArray<Set<Digit>>;
+type HouseSolvedDigits = HouseArray<Set<Digit>>;
+type HousePossPositions = HouseArray<DigitArray<Set<Position<House>>>>;
+
+impl State<HousePossPositions> {
+    fn update(&mut self, record: &Record) -> Result<&HousePossPositions, Unsolvable> {
+        // TODO: this has to do massive amounts of work
+        //       may just be easier to recompute from full grid every time
+
+        let (ld, le, house_poss_positions) = self.get_mut();
+        // remove now impossible positions from list
+        for candidate in &record.eliminated_entries[*le as usize..] {
+            let cell = candidate.cell;
+            let row_pos = cell.row_pos();
+            let col_pos = cell.col_pos();
+            let block_pos = cell.block_pos();
+            // just 1 digit
+            let digit = candidate.digit;
+
+            house_poss_positions[cell.row()][digit].remove(row_pos.as_set());
+            house_poss_positions[cell.col()][digit].remove(col_pos.as_set());
+            house_poss_positions[cell.block()][digit].remove(block_pos.as_set());
+        }
+        *le = record.eliminated_entries.len() as _;
+
+        for candidate in &record.entries[*ld as usize..] {
+            let cell = candidate.cell;
+            let digit = candidate.digit;
+
+            // remove digit from every house pos in all neighboring cells
+            for cell in cell.neighbors() {
+                let row_pos = cell.row_pos();
+                let col_pos = cell.col_pos();
+                let block_pos = cell.block_pos();
+                house_poss_positions[cell.row()][digit].remove(row_pos.as_set());
+                house_poss_positions[cell.col()][digit].remove(col_pos.as_set());
+                house_poss_positions[cell.block()][digit].remove(block_pos.as_set());
+            }
+
+            let row = cell.row();
+            let col = cell.col();
+            let block = cell.block();
+            let row_pos = cell.row_pos();
+            let col_pos = cell.col_pos();
+            let block_pos = cell.block_pos();
+
+            // remove candidate pos as possible place for all nums
+            for digit in Digit::all() {
+                house_poss_positions[row][digit].remove(row_pos.as_set());
+                house_poss_positions[col][digit].remove(col_pos.as_set());
+                house_poss_positions[block][digit].remove(block_pos.as_set());
+            }
+
+            // remove all pos as possible place for candidate digit
+            house_poss_positions[row][digit] = Set::NONE;
+            house_poss_positions[col][digit] = Set::NONE;
+            house_poss_positions[block][digit] = Set::NONE;
+        }
+        *ld = record.entries.len() as _;
+        Ok(house_poss_positions)
+    }
+}
+
+impl State<(CellPoss, HouseSolvedDigits)> {
+    fn update(&mut self, record: &mut Record) -> Result<(&CellPoss, &HouseSolvedDigits), Unsolvable> {
+        self._update(record, false, true)
+    }
+
+    fn _update(
+        &mut self,
+        record: &mut Record,
+        find_naked_singles: bool,
+        early_return_on_error: bool,
+    ) -> Result<(&CellPoss, &HouseSolvedDigits), Unsolvable> {
+        let new_eliminations;
+        {
+            let (_, le_cp, (cell_poss, _)) = self.get_mut();
+            new_eliminations = *le_cp as usize > record.eliminated_entries.len();
+
+            for i in *le_cp as _..record.eliminated_entries.len() {
+                let candidate = record.eliminated_entries[i];
+                let impossibles = candidate.digit_set();
+
+                // deductions made here may conflict with entries already in the queue
+                // in the queue. In that case the sudoku is impossible.
+                let res = StrategySolver::remove_impossibilities(
+                    record,
+                    cell_poss,
+                    candidate.cell,
+                    impossibles,
+                    find_naked_singles,
+                );
+                if early_return_on_error {
+                    res?;
+                }
+            }
+            *le_cp = record.eliminated_entries.len() as _;
+        }
+
+        self.insert_entries(record, find_naked_singles, new_eliminations)?;
+        let (cell_poss, house_solved_digits) = &self.state;
+        Ok((cell_poss, house_solved_digits))
+    }
+
+    #[inline(always)]
+    fn insert_entries(
+        &mut self,
+        record: &mut Record,
+        find_naked_singles: bool,
+        new_eliminations: bool,
+    ) -> Result<(), Unsolvable> {
+        // code hereafter depends on this
+        // but it's not necessary in general
+        //assert!(self.cell_poss_digits.next_deduced == self.house_solved_digits.next_deduced);
+
+        if new_eliminations {
+            // start off with batch insertion so every cell is visited at least once
+            // because other strategies may have touched their possibilities which singly_insertion may miss
+            self.batch_insert_entries(record, find_naked_singles)?;
+        }
+        loop {
+            match record.entries.len() - self.next_deduced as usize {
+                0 => break Ok(()),
+                1..=4 => self.insert_entries_singly(record, find_naked_singles)?,
+                _ => self.batch_insert_entries(record, find_naked_singles)?,
+            }
+        }
+    }
+
+    // for each candidate in the stack, insert it (if cell is unsolved)
+    // and then remove possibility from each cell neighboring it in all
+    // houses (rows, cols, fields) eagerly
+    // check for naked singles and impossible cells during this check
+    fn insert_entries_singly(
+        &mut self,
+        record: &mut Record,
+        find_naked_singles: bool,
+    ) -> Result<(), Unsolvable> {
+        let (ld_cp, _, (cell_poss_digits, house_solved_digits)) = self.get_mut();
+
+        loop {
+            if record.entries.len() <= *ld_cp as usize {
+                break;
+            }
+            let candidate = record.entries[*ld_cp as usize];
+            *ld_cp += 1;
+            //*ld_zs += 1;
+            let candidate_mask = candidate.digit_set();
+            // cell already solved from previous candidate in stack, skip
+            if cell_poss_digits[candidate.cell].is_empty() {
+                continue;
+            }
+
+            // is candidate still possible?
+            if (cell_poss_digits[candidate.cell] & candidate_mask).is_empty() {
+                return Err(Unsolvable);
+            }
+
+            Self::_insert_candidate_cp_zs(candidate, cell_poss_digits, house_solved_digits);
+            for cell in candidate.cell.neighbors() {
+                if candidate_mask.overlaps(cell_poss_digits[cell]) {
+                    StrategySolver::remove_impossibilities(
+                        record,
+                        cell_poss_digits,
+                        cell,
+                        candidate_mask,
+                        find_naked_singles,
+                    )?;
+                };
+            }
+
+            // found a lot of naked singles, switch to batch insertion
+            if record.entries.len() - *ld_cp as usize > 4 {
+                return Ok(());
+            }
+        }
+        Ok(())
+    }
+
+    #[inline]
+    fn _insert_candidate_cp_zs(
+        candidate: Candidate,
+        cell_poss_digits: &mut CellArray<Set<Digit>>,
+        house_solved_digits: &mut HouseArray<Set<Digit>>,
+    ) {
+        cell_poss_digits[candidate.cell] = Set::NONE;
+        house_solved_digits[candidate.row()] |= candidate.digit_set();
+        house_solved_digits[candidate.col()] |= candidate.digit_set();
+        house_solved_digits[candidate.block()] |= candidate.digit_set();
+    }
+
+    fn batch_insert_entries(
+        &mut self,
+        record: &mut Record,
+        find_naked_singles: bool,
+    ) -> Result<(), Unsolvable> {
+        self._batch_insert_entries(record)?;
+        self._batch_remove_conflicts(record, find_naked_singles)
+    }
+
+    /// Insert all outstanding candidates without removing conflicting cells in neighboring cells.
+    /// Errors, if two different digits are candidates for the same cell.
+    fn _batch_insert_entries(&mut self, record: &mut Record) -> Result<(), Unsolvable> {
+        let (ld_cp, _, (cell_poss_digits, house_solved_digits)) = self.get_mut();
+        while record.entries.len() > *ld_cp as usize {
+            let candidate = record.entries[*ld_cp as usize];
+            *ld_cp += 1;
+            // cell already solved from previous candidate in stack, skip
+            if cell_poss_digits[candidate.cell].is_empty() {
+                continue;
+            }
+
+            let candidate_mask = candidate.digit_set();
+
+            // is candidate still possible?
+            // have to check house possibilities, because cell possibility
+            // is temporarily out of date
+            if house_solved_digits[candidate.row()].overlaps(candidate_mask)
+                || house_solved_digits[candidate.col()].overlaps(candidate_mask)
+                || house_solved_digits[candidate.block()].overlaps(candidate_mask)
+            {
+                return Err(Unsolvable);
+            }
+
+            Self::_insert_candidate_cp_zs(candidate, cell_poss_digits, house_solved_digits);
+        }
+        Ok(())
+    }
+
+    fn _batch_remove_conflicts(
+        &mut self,
+        record: &mut Record,
+        find_naked_singles: bool,
+    ) -> Result<(), Unsolvable> {
+        let (_, _, (cell_poss_digits, house_solved_digits)) = self.get_mut();
+
+        // update cell possibilities from house masks
+        for cell in Cell::all() {
+            if cell_poss_digits[cell].is_empty() {
+                continue;
+            }
+            let houses_mask = house_solved_digits[cell.row()]
+                | house_solved_digits[cell.col()]
+                | house_solved_digits[cell.block()];
+
+            StrategySolver::remove_impossibilities(
+                record,
+                cell_poss_digits,
+                cell,
+                houses_mask,
+                find_naked_singles,
+            )?;
+        }
+        Ok(())
+    }
+
+    /// Update cell possibilities and find naked singles and empty cells.
+    /// To be used after _batch_insert_entries.
+    fn _batch_remove_conflicts_no_check(&mut self) {
+        let (_, _, (cell_poss_digits, house_solved_digits)) = self.get_mut();
+        // update cell possibilities from house masks
+        for cell in Cell::all() {
+            if cell_poss_digits[cell].is_empty() {
+                continue;
+            }
+            let houses_mask = house_solved_digits[cell.row()]
+                | house_solved_digits[cell.col()]
+                | house_solved_digits[cell.block()];
+
+            let cell_mask = &mut cell_poss_digits[cell];
+            cell_mask.remove(houses_mask);
+        }
+    }
 }
 
 impl Record {
@@ -135,9 +408,11 @@ impl StrategySolver {
             },
             hidden_singles_last_house: 0,
             clues: None,
-            cell_poss_digits: State::from(CellArray([Set::ALL; 81])),
-            house_solved_digits: State::from(HouseArray([Set::NONE; 27])),
             house_poss_positions: State::from(HouseArray([DigitArray([Set::ALL; 9]); 27])),
+            cell_poss_and_house_solved_digits: State::from((
+                CellArray([Set::ALL; 81]),
+                HouseArray([Set::NONE; 27]),
+            )),
         }
     }
 
@@ -244,9 +519,12 @@ impl StrategySolver {
 
         let mut grid = [CellState::Candidates(Set::NONE); 81];
 
-        let _ = solver._update_cell_poss_house_solved(false, false);
+        let (cell_poss, _) = solver
+            .cell_poss_and_house_solved_digits
+            ._update(&mut solver.record, false, false)
+            .unwrap();
 
-        for (cell, &digits) in solver.cell_poss_digits.state.iter().enumerate() {
+        for (cell, &digits) in cell_poss.iter().enumerate() {
             grid[cell] = CellState::Candidates(digits);
         }
         for (cell, &digit) in solver
@@ -264,13 +542,16 @@ impl StrategySolver {
 
     /// Returns the current state of the given `cell`
     pub fn cell_state(&mut self, cell: Cell) -> CellState {
-        let _ = self._update_cell_poss_house_solved(false, false);
+        let (cell_poss_digits, _) = self
+            .cell_poss_and_house_solved_digits
+            ._update(&mut self.record, false, false)
+            .unwrap();
 
         let digit = self.record.grid.0[cell.as_index()];
         if digit != 0 {
             CellState::Digit(Digit::new(digit))
         } else {
-            let digits = self.cell_poss_digits.state[cell];
+            let digits = cell_poss_digits[cell];
             CellState::Candidates(digits)
         }
     }
@@ -346,238 +627,6 @@ impl StrategySolver {
         self.record.grid.is_solved()
     }
 
-    fn update_cell_poss_house_solved(&mut self) -> Result<(), Unsolvable> {
-        self._update_cell_poss_house_solved(false, true)
-    }
-
-    pub(crate) fn _update_cell_poss_house_solved(
-        &mut self,
-        find_naked_singles: bool,
-        early_return_on_error: bool,
-    ) -> Result<(), Unsolvable> {
-        let new_eliminations;
-        {
-            let (_, le_cp, cell_poss) = self.cell_poss_digits.get_mut();
-            new_eliminations = *le_cp as usize > self.record.eliminated_entries.len();
-
-            for i in *le_cp as _..self.record.eliminated_entries.len() {
-                let candidate = self.record.eliminated_entries[i];
-                let impossibles = candidate.digit_set();
-
-                // deductions made here may conflict with entries already in the queue
-                // in the queue. In that case the sudoku is impossible.
-                let res = Self::remove_impossibilities(
-                    &mut self.record,
-                    cell_poss,
-                    candidate.cell,
-                    impossibles,
-                    find_naked_singles,
-                );
-                if early_return_on_error {
-                    res?;
-                }
-            }
-            *le_cp = self.record.eliminated_entries.len() as _;
-        }
-
-        self.insert_entries(find_naked_singles, new_eliminations)
-    }
-
-    fn update_house_poss_positions(&mut self) -> Result<(), Unsolvable> {
-        // TODO: this has to do massive amounts of work
-        //       may just be easier to recompute from full grid every time
-
-        let (ld, le, house_poss_positions) = self.house_poss_positions.get_mut();
-        // remove now impossible positions from list
-        for candidate in &self.record.eliminated_entries[*le as usize..] {
-            let cell = candidate.cell;
-            let row_pos = cell.row_pos();
-            let col_pos = cell.col_pos();
-            let block_pos = cell.block_pos();
-            // just 1 digit
-            let digit = candidate.digit;
-
-            house_poss_positions[cell.row()][digit].remove(row_pos.as_set());
-            house_poss_positions[cell.col()][digit].remove(col_pos.as_set());
-            house_poss_positions[cell.block()][digit].remove(block_pos.as_set());
-        }
-        *le = self.record.eliminated_entries.len() as _;
-
-        for candidate in &self.record.entries[*ld as usize..] {
-            let cell = candidate.cell;
-            let digit = candidate.digit;
-
-            // remove digit from every house pos in all neighboring cells
-            for cell in cell.neighbors() {
-                let row_pos = cell.row_pos();
-                let col_pos = cell.col_pos();
-                let block_pos = cell.block_pos();
-                house_poss_positions[cell.row()][digit].remove(row_pos.as_set());
-                house_poss_positions[cell.col()][digit].remove(col_pos.as_set());
-                house_poss_positions[cell.block()][digit].remove(block_pos.as_set());
-            }
-
-            let row = cell.row();
-            let col = cell.col();
-            let block = cell.block();
-            let row_pos = cell.row_pos();
-            let col_pos = cell.col_pos();
-            let block_pos = cell.block_pos();
-
-            // remove candidate pos as possible place for all nums
-            for digit in Digit::all() {
-                house_poss_positions[row][digit].remove(row_pos.as_set());
-                house_poss_positions[col][digit].remove(col_pos.as_set());
-                house_poss_positions[block][digit].remove(block_pos.as_set());
-            }
-
-            // remove all pos as possible place for candidate digit
-            house_poss_positions[row][digit] = Set::NONE;
-            house_poss_positions[col][digit] = Set::NONE;
-            house_poss_positions[block][digit] = Set::NONE;
-        }
-        *ld = self.record.entries.len() as _;
-        Ok(())
-    }
-
-    #[inline(always)]
-    fn insert_entries(&mut self, find_naked_singles: bool, new_eliminations: bool) -> Result<(), Unsolvable> {
-        // code hereafter depends on this
-        // but it's not necessary in general
-        assert!(self.cell_poss_digits.next_deduced == self.house_solved_digits.next_deduced);
-
-        if new_eliminations {
-            // start off with batch insertion so every cell is visited at least once
-            // because other strategies may have touched their possibilities which singly_insertion may miss
-            self.batch_insert_entries(find_naked_singles)?;
-        }
-        loop {
-            match self.record.entries.len() - self.cell_poss_digits.next_deduced as usize {
-                0 => break Ok(()),
-                1..=4 => self.insert_entries_singly(find_naked_singles)?,
-                _ => self.batch_insert_entries(find_naked_singles)?,
-            }
-        }
-    }
-
-    // for each candidate in the stack, insert it (if cell is unsolved)
-    // and then remove possibility from each cell neighboring it in all
-    // houses (rows, cols, fields) eagerly
-    // check for naked singles and impossible cells during this check
-    fn insert_entries_singly(&mut self, find_naked_singles: bool) -> Result<(), Unsolvable> {
-        let (ld_cp, _, cell_poss_digits) = self.cell_poss_digits.get_mut();
-        let (ld_zs, _, house_solved_digits) = self.house_solved_digits.get_mut();
-
-        loop {
-            if self.record.entries.len() <= *ld_cp as usize {
-                break;
-            }
-            let candidate = self.record.entries[*ld_cp as usize];
-            *ld_cp += 1;
-            *ld_zs += 1;
-            let candidate_mask = candidate.digit_set();
-            // cell already solved from previous candidate in stack, skip
-            if cell_poss_digits[candidate.cell].is_empty() {
-                continue;
-            }
-
-            // is candidate still possible?
-            if (cell_poss_digits[candidate.cell] & candidate_mask).is_empty() {
-                return Err(Unsolvable);
-            }
-
-            Self::_insert_candidate_cp_zs(candidate, cell_poss_digits, house_solved_digits);
-            for cell in candidate.cell.neighbors() {
-                if candidate_mask.overlaps(cell_poss_digits[cell]) {
-                    Self::remove_impossibilities(
-                        &mut self.record,
-                        cell_poss_digits,
-                        cell,
-                        candidate_mask,
-                        find_naked_singles,
-                    )?;
-                };
-            }
-
-            // found a lot of naked singles, switch to batch insertion
-            if self.record.entries.len() - *ld_cp as usize > 4 {
-                return Ok(());
-            }
-        }
-        Ok(())
-    }
-
-    #[inline]
-    fn _insert_candidate_cp_zs(
-        candidate: Candidate,
-        cell_poss_digits: &mut CellArray<Set<Digit>>,
-        house_solved_digits: &mut HouseArray<Set<Digit>>,
-    ) {
-        cell_poss_digits[candidate.cell] = Set::NONE;
-        house_solved_digits[candidate.row()] |= candidate.digit_set();
-        house_solved_digits[candidate.col()] |= candidate.digit_set();
-        house_solved_digits[candidate.block()] |= candidate.digit_set();
-    }
-
-    fn batch_insert_entries(&mut self, find_naked_singles: bool) -> Result<(), Unsolvable> {
-        self._batch_insert_entries()?;
-        self._batch_remove_conflicts(find_naked_singles)
-    }
-
-    /// Insert all outstanding candidates without removing conflicting cells in neighboring cells.
-    /// Errors, if two different digits are candidates for the same cell.
-    fn _batch_insert_entries(&mut self) -> Result<(), Unsolvable> {
-        let (ld_cp, _, cell_poss_digits) = self.cell_poss_digits.get_mut();
-        let (ld_zs, _, house_solved_digits) = self.house_solved_digits.get_mut();
-        while self.record.entries.len() > *ld_cp as usize {
-            let candidate = self.record.entries[*ld_cp as usize];
-            *ld_cp += 1;
-            *ld_zs += 1;
-            // cell already solved from previous candidate in stack, skip
-            if cell_poss_digits[candidate.cell].is_empty() {
-                continue;
-            }
-
-            let candidate_mask = candidate.digit_set();
-
-            // is candidate still possible?
-            // have to check house possibilities, because cell possibility
-            // is temporarily out of date
-            if house_solved_digits[candidate.row()].overlaps(candidate_mask)
-                || house_solved_digits[candidate.col()].overlaps(candidate_mask)
-                || house_solved_digits[candidate.block()].overlaps(candidate_mask)
-            {
-                return Err(Unsolvable);
-            }
-
-            Self::_insert_candidate_cp_zs(candidate, cell_poss_digits, house_solved_digits);
-        }
-        Ok(())
-    }
-
-    fn _batch_remove_conflicts(&mut self, find_naked_singles: bool) -> Result<(), Unsolvable> {
-        let (_, _, cell_poss_digits) = self.cell_poss_digits.get_mut();
-        let (_, _, house_solved_digits) = self.house_solved_digits.get_mut();
-        // update cell possibilities from house masks
-        for cell in Cell::all() {
-            if cell_poss_digits[cell].is_empty() {
-                continue;
-            }
-            let houses_mask = house_solved_digits[cell.row()]
-                | house_solved_digits[cell.col()]
-                | house_solved_digits[cell.block()];
-
-            Self::remove_impossibilities(
-                &mut self.record,
-                cell_poss_digits,
-                cell,
-                houses_mask,
-                find_naked_singles,
-            )?;
-        }
-        Ok(())
-    }
-
     fn update_for_grid_state_str(&mut self) {
         // naked singles and solved entries aren't distinguishable in the string representation
         // so treat them as naked singles uniformly and remove all conflicting candidates
@@ -588,26 +637,8 @@ impl StrategySolver {
         //
         // Note: This won't suffice if two different digits for the same cell are in self.record.entries.
         // In that case, _batch_insert_entries() will still short circuit.
-        self._batch_remove_conflicts_no_check();
-    }
-
-    /// Update cell possibilities and find naked singles and empty cells.
-    /// To be used after _batch_insert_entries.
-    fn _batch_remove_conflicts_no_check(&mut self) {
-        let (_, _, cell_poss_digits) = self.cell_poss_digits.get_mut();
-        let (_, _, house_solved_digits) = self.house_solved_digits.get_mut();
-        // update cell possibilities from house masks
-        for cell in Cell::all() {
-            if cell_poss_digits[cell].is_empty() {
-                continue;
-            }
-            let houses_mask = house_solved_digits[cell.row()]
-                | house_solved_digits[cell.col()]
-                | house_solved_digits[cell.block()];
-
-            let cell_mask = &mut cell_poss_digits[cell];
-            cell_mask.remove(houses_mask);
-        }
+        self.cell_poss_and_house_solved_digits
+            ._batch_remove_conflicts_no_check();
     }
 
     // remove impossible digits from masks for given cell
@@ -636,11 +667,17 @@ impl StrategySolver {
     ////////      Strategies
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+    pub(crate) fn find_all_naked_singles(&mut self) -> Result<(), Unsolvable> {
+        self.cell_poss_and_house_solved_digits
+            ._update(&mut self.record, true, true)
+            .map(drop)
+    }
+
     pub(crate) fn find_naked_singles(&mut self, stop_after_first: bool) -> Result<(), Unsolvable> {
-        self.update_cell_poss_house_solved()?;
+        //self.update_cell_poss_house_solved()?;
 
         {
-            let cell_poss_digits = &self.cell_poss_digits.state;
+            let (cell_poss_digits, _) = self.cell_poss_and_house_solved_digits.update(&mut self.record)?;
             naked_singles::find_naked_singles(cell_poss_digits, stop_after_first, |candidate| {
                 self.record
                     .push_new_candidate(candidate, Deduction::NakedSingles(candidate))
@@ -648,15 +685,15 @@ impl StrategySolver {
         }
 
         // call update again so newly found entries are inserted
-        self.update_cell_poss_house_solved()
+        self.cell_poss_and_house_solved_digits
+            .update(&mut self.record)
+            .map(drop)
     }
 
     pub(crate) fn find_hidden_singles(&mut self, stop_after_first: bool) -> Result<(), Unsolvable> {
-        self.update_cell_poss_house_solved()?;
-
         {
-            let cell_poss_digits = &self.cell_poss_digits.state;
-            let house_solved_digits = &self.house_solved_digits.state;
+            let (cell_poss_digits, house_solved_digits) =
+                &self.cell_poss_and_house_solved_digits.update(&mut self.record)?;
 
             hidden_singles::find_hidden_singles(
                 &mut self.hidden_singles_last_house,
@@ -671,14 +708,15 @@ impl StrategySolver {
         }
 
         // call update again so newly found entries are inserted
-        self.update_cell_poss_house_solved()
+        self.cell_poss_and_house_solved_digits
+            .update(&mut self.record)
+            .map(drop)
     }
 
     // stop after first will only eliminate line OR field neighbors for ONE number
     // even if multiple are found at the same time
     pub(crate) fn find_locked_candidates(&mut self, stop_after_first: bool) -> Result<(), Unsolvable> {
-        self.update_cell_poss_house_solved()?;
-        let (_, _, cell_poss_digits) = self.cell_poss_digits.get_mut();
+        let (cell_poss_digits, _) = self.cell_poss_and_house_solved_digits.update(&mut self.record)?;
 
         locked_candidates::find_locked_candidates(
             &cell_poss_digits,
@@ -710,9 +748,8 @@ impl StrategySolver {
         subset_size: u8,
         stop_after_first: bool,
     ) -> Result<(), Unsolvable> {
-        self.update_cell_poss_house_solved()?;
-        let (_, _, cell_poss_digits) = self.cell_poss_digits.get_mut();
-        let house_solved_digits = &mut self.house_solved_digits.state;
+        let (cell_poss_digits, house_solved_digits) =
+            self.cell_poss_and_house_solved_digits.update(&mut self.record)?;
 
         naked_subsets::find_naked_subsets(
             cell_poss_digits,
@@ -745,10 +782,8 @@ impl StrategySolver {
         subset_size: u8,
         stop_after_first: bool,
     ) -> Result<(), Unsolvable> {
-        self.update_cell_poss_house_solved()?;
-        self.update_house_poss_positions()?;
-        let house_poss_positions = &self.house_poss_positions.state;
-        let house_solved_digits = &self.house_solved_digits.state;
+        let (_, house_solved_digits) = self.cell_poss_and_house_solved_digits.update(&mut self.record)?;
+        let house_poss_positions = self.house_poss_positions.update(&self.record)?;
 
         hidden_subsets::find_hidden_subsets(
             house_solved_digits,
@@ -791,11 +826,8 @@ impl StrategySolver {
     }
 
     fn find_fish(&mut self, target_size: u8, stop_after_first: bool) -> Result<(), Unsolvable> {
-        self.update_house_poss_positions().unwrap(); // TODO: why is there an unwrap here?
-        self.update_cell_poss_house_solved()?;
-
-        let cell_poss_digits = &self.cell_poss_digits.state;
-        let house_poss_positions = &self.house_poss_positions.state;
+        let (cell_poss_digits, _) = &self.cell_poss_and_house_solved_digits.update(&mut self.record)?;
+        let house_poss_positions = self.house_poss_positions.update(&self.record)?;
 
         basic_fish::find_fish(
             house_poss_positions,
@@ -826,11 +858,8 @@ impl StrategySolver {
         target_size: u8,
         stop_after_first: bool,
     ) -> Result<(), Unsolvable> {
-        self.update_house_poss_positions()?;
-        self.update_cell_poss_house_solved()?;
-
-        let cell_poss_digits = &self.cell_poss_digits.state;
-        let house_poss_positions = &self.house_poss_positions.state;
+        let (cell_poss_digits, _) = self.cell_poss_and_house_solved_digits.update(&mut self.record)?;
+        let house_poss_positions = self.house_poss_positions.update(&self.record)?;
 
         mutant_fish::find_mutant_fish(
             house_poss_positions,
@@ -862,8 +891,7 @@ impl StrategySolver {
     }
 
     pub(crate) fn find_xy_wing(&mut self, stop_after_first: bool) -> Result<(), Unsolvable> {
-        self.update_cell_poss_house_solved()?;
-        let cell_poss_digits = &self.cell_poss_digits.state;
+        let (cell_poss_digits, _) = self.cell_poss_and_house_solved_digits.update(&mut self.record)?;
 
         xy_wing::find_xy_wing(
             cell_poss_digits,
@@ -894,8 +922,7 @@ impl StrategySolver {
     }
 
     pub(crate) fn find_xyz_wing(&mut self, stop_after_first: bool) -> Result<(), Unsolvable> {
-        self.update_cell_poss_house_solved()?;
-        let cell_poss_digits = &self.cell_poss_digits.state;
+        let (cell_poss_digits, _) = self.cell_poss_and_house_solved_digits.update(&mut self.record)?;
 
         xyz_wing::find_xyz_wing(
             cell_poss_digits,

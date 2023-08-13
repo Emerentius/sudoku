@@ -30,7 +30,7 @@ impl std::fmt::Display for GridState {
                 })
                 .max()
                 .unwrap();
-            debug_assert!(1 <= max_width && max_width <= 9);
+            debug_assert!((1..=9).contains(&max_width));
             column_widths[col] = max_width;
         }
 

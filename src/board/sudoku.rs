@@ -529,7 +529,7 @@ impl Sudoku {
                 if ['.', '_'].contains(&ch) {
                     row_vals[nums_in_row] = 0;
                     nums_in_row += 1;
-                } else if '0' <= ch && ch <= '9' {
+                } else if ch.is_ascii_digit() {
                     row_vals[nums_in_row] = ch as u8 - b'0';
                     nums_in_row += 1;
                 }

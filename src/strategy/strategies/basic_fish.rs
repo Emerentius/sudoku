@@ -67,7 +67,7 @@ fn basic_fish_walk_combinations(
 
         // n_poss == 0 => solved row (or impossible)
         // n_poss == 1 => hidden single
-        if n_poss < 2 || new_union_poss_pos.len() > goal_depth as u8 {
+        if n_poss < 2 || new_union_poss_pos.len() > goal_depth {
             continue;
         }
 

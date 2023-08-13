@@ -562,7 +562,7 @@ fn nonconflicting_cells_neighbor_bands(cell: u8) -> u32 {
 //                      TblRowUniq was replaced by shrink_mask here
 #[inline]
 fn shrink_mask(cell_mask: u32) -> u32 {
-    SHRINK_MASK[cell_mask as usize] as u32
+    SHRINK_MASK[cell_mask as usize]
 }
 
 // Returns mask of cells that are compatible with locked candidates
@@ -604,7 +604,7 @@ fn nonconflicting_cells_neighbor_bands_by_locked_candidates(row_shrink: u32) -> 
 // jczsolve equivalent: TblColumnSingle
 #[inline]
 fn column_single(row_shrink: u32) -> u32 {
-    COLUMN_SINGLE[row_shrink as usize] as u32
+    COLUMN_SINGLE[row_shrink as usize]
 }
 
 /// Maps a mask of possible minirows to the mask of locked minirows (locked candidates).

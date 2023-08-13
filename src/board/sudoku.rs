@@ -486,12 +486,7 @@ impl Sudoku {
                 match ch {
                     '_' | '.' => grid[cell as usize] = 0,
                     '0'..='9' => grid[cell as usize] = ch as u8 - b'0',
-                    _ => {
-                        return Err(BlockParseError::InvalidEntry(InvalidEntry {
-                            cell: cell as u8,
-                            ch,
-                        }))
-                    }
+                    _ => return Err(BlockParseError::InvalidEntry(InvalidEntry { cell, ch })),
                 }
                 n_col_sud += 1;
             }

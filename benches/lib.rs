@@ -132,7 +132,7 @@ fn parse_lines(b: &mut test::Bencher) {
 fn is_solved_on_unsolved(b: &mut test::Bencher) {
     let sudokus = read_sudokus(include_str!("../sudokus/Lines/hard_sudokus.txt"));
     b.iter(|| {
-        for sudoku in sudokus.iter().cloned() {
+        for sudoku in sudokus.iter() {
             sudoku.is_solved();
         }
     })
@@ -142,7 +142,7 @@ fn is_solved_on_unsolved(b: &mut test::Bencher) {
 fn is_solved_on_solved(b: &mut test::Bencher) {
     let solved_sudokus = read_sudokus(include_str!("../sudokus/Lines/solved_hard_sudokus.txt"));
     b.iter(|| {
-        for sudoku in solved_sudokus.iter().cloned() {
+        for sudoku in solved_sudokus.iter() {
             sudoku.is_solved();
         }
     })

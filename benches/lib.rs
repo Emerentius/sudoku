@@ -155,7 +155,7 @@ fn strategy_solver_1_easy_sudokus(b: &mut test::Bencher) {
     let strategies = ALL_STRATEGIES;
     b.iter(|| {
         for sudoku in sudokus_100.iter().cloned() {
-            StrategySolver::from_sudoku(sudoku).solve(&strategies).unwrap(); //.unwrap();
+            StrategySolver::from_sudoku(sudoku).solve(strategies).unwrap(); //.unwrap();
         }
     })
 }
@@ -168,7 +168,7 @@ fn strategy_solver_2_medium_sudokus(b: &mut test::Bencher) {
     b.iter(|| {
         for sudoku in sudokus_100.iter().cloned() {
             // solution not guaranteed yet, discard error.
-            let _ = StrategySolver::from_sudoku(sudoku).solve(&strategies); //.unwrap();
+            let _ = StrategySolver::from_sudoku(sudoku).solve(strategies); //.unwrap();
         }
     })
 }

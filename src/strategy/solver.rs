@@ -712,7 +712,7 @@ impl StrategySolver {
         let deductions = &mut self.deductions;
 
         locked_candidates::find_locked_candidates(
-            &cell_poss_digits,
+            cell_poss_digits,
             stop_after_first,
             |miniline, digit, _miniline_cands, neighbors, is_pointing| {
                 let conflicts = neighbors
@@ -1193,7 +1193,7 @@ mod test {
         let mut unsolved = vec![];
         for (i, (sudoku, solved_sudoku)) in sudokus.into_iter().zip(solved_sudokus).enumerate() {
             let cache = StrategySolver::from_sudoku(sudoku);
-            match solver(cache, &strategies) {
+            match solver(cache, strategies) {
                 Ok((solution, _deductions)) => assert_eq!(solution, solved_sudoku),
                 Err((part_solved, _deductions)) => unsolved.push((i, sudoku, part_solved, solved_sudoku)),
             }

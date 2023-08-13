@@ -159,7 +159,7 @@ pub(crate) fn find_canonical_sudoku_and_transformation(sudoku: Sudoku) -> (Sudok
         .into_iter()
         .map(|trans| find_minimal_transformation_for_band(sudoku, trans))
         .min_by(|(sudoku1, _), (sudoku2, _)| {
-            let c = sudoku1.cmp(&sudoku2);
+            let c = sudoku1.cmp(sudoku2);
             match c {
                 Greater => count = 1,
                 Less => {}
@@ -325,14 +325,14 @@ fn find_minimal_transformation_for_band(
 
 /// Find minimal row order and the permutation to get there again.
 fn sort_rows_in_band_and_find_permutation(sudoku: &mut [u8], band: u8) -> Permutation3 {
-    let mut band = &mut sudoku[band as usize * 27..][..27];
+    let band = &mut sudoku[band as usize * 27..][..27];
     let first_choice = (0..3).min_by_key(|&row| &band[9 * row as usize..][..9]).unwrap();
-    swap_rows_in_band(&mut band, 0, first_choice);
+    swap_rows_in_band(band, 0, first_choice);
 
     let second_choice = (0..2)
         .min_by_key(|&row| &band[9 * (row + 1) as usize..][..9])
         .unwrap();
-    swap_rows_in_band(&mut band, 1, 1 + second_choice);
+    swap_rows_in_band(band, 1, 1 + second_choice);
     Permutation3::from_choices(first_choice, second_choice)
 }
 

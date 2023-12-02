@@ -22,6 +22,7 @@ pub struct GridState([CellState; 81]);
 impl std::fmt::Display for GridState {
     fn fmt(&self, f: &mut Formatter) -> Result<(), std::fmt::Error> {
         let mut column_widths = [0; 9];
+        #[allow(clippy::needless_range_loop)]
         for col in 0..9 {
             let max_width = (0..9)
                 .map(|row| match self.0[row * 9 + col] {

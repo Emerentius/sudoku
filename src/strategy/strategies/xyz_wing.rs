@@ -84,11 +84,11 @@ mod test {
         assert_eq!(
             deductions.get(0).unwrap(),
             crate::strategy::Deduction::Wing {
-                hinge: Cell::new(5 * 9 + 8),
+                hinge: Cell::from_coords(5, 8),
                 hinge_digits: Digit::new(1).as_set() | Digit::new(2) | Digit::new(4),
-                pincers: Cell::new(3 * 9 + 8).as_set() | Cell::new(5 * 9 + 0),
+                pincers: Cell::from_coords(3, 8).as_set() | Cell::from_coords(5, 0),
                 conflicts: &[Candidate {
-                    cell: Cell::new(5 * 9 + 6),
+                    cell: Cell::from_coords(5, 6),
                     digit: Digit::new(1),
                 }][..],
             }

@@ -77,10 +77,13 @@ mod test {
         } = deductions.get(0).unwrap()
         {
             assert_eq!(hinge.get(), 1);
-            assert_eq!(pincers, Cell::new(1 * 9 + 2).as_set() | Cell::new(8 * 9 + 1));
+            assert_eq!(
+                pincers,
+                Cell::from_coords(1, 2).as_set() | Cell::from_coords(8, 1)
+            );
 
             let conflict = Candidate {
-                cell: Cell::new(7 * 9 + 2),
+                cell: Cell::from_coords(7, 2),
                 digit: Digit::new(4),
             };
             assert_eq!(conflicts, &[conflict]);

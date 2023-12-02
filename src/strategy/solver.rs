@@ -49,6 +49,7 @@ pub struct StrategySolver {
     // AvoidableRectangles
     // We can't assume that this struct is created only from clues nor that the information about them
     // will always be present for the caller
+    #[allow(unused)]
     pub(crate) clues: Option<Sudoku>,
     // current state of the sudoku
     // for when it's faster to recompute from the end state
@@ -234,6 +235,7 @@ impl StrategySolver {
 
     /// Try to solve the sudoku using the given `strategies`. Returns a `Result` of the sudoku and a struct containing the series of deductions.
     /// If a solution was found, `Ok(..)` is returned, otherwise `Err(..)`.
+    #[allow(clippy::result_large_err)] // nonsense, Ok and Err are the same size.
     pub fn solve(mut self, strategies: &[Strategy]) -> Result<(Sudoku, Deductions), (Sudoku, Deductions)> {
         self.try_solve(strategies);
         self.update_grid();

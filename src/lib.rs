@@ -6,6 +6,7 @@
     clippy::unreadable_literal,
     clippy::wrong_self_convention,
     clippy::inconsistent_digit_grouping,
+    clippy::unusual_byte_groupings,
     clippy::too_many_arguments
 )]
 //! Utilities for classical 9x9 sudokus.

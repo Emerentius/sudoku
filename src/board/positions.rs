@@ -274,6 +274,12 @@ define_types!(
     Chute: 6,
 );
 
+impl Cell {
+    pub(crate) fn from_coords(row: u8, col: u8) -> Self {
+        Cell::new(row * 9 + col)
+    }
+}
+
 /// A [`Row`] or [`Col`]
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Hash)]
 pub enum LineType {
@@ -604,13 +610,13 @@ pub trait CellAt: Sized {
 
 impl CellAt for Row {
     fn cell_at(self, pos: Position<Row>) -> Cell {
-        Cell::new(self.0 * 9 + pos.0)
+        Cell::from_coords(self.0, pos.0)
     }
 }
 
 impl CellAt for Col {
     fn cell_at(self, pos: Position<Col>) -> Cell {
-        Cell::new(pos.0 * 9 + self.0)
+        Cell::from_coords(pos.0, self.0)
     }
 }
 
@@ -623,7 +629,7 @@ impl CellAt for Block {
         let col_in_stack = pos.0 % 3;
         let row = band * 3 + row_in_band;
         let col = stack * 3 + col_in_stack;
-        Cell::new(row * 9 + col)
+        Cell::from_coords(row, col)
     }
 }
 

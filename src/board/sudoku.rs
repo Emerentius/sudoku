@@ -583,7 +583,7 @@ impl Sudoku {
         let mut nums_contained: u16 = 0;
         // same with less than 17 clues
         let mut n_clues = 0;
-        self.iter().filter_map(|id| id).for_each(|num| {
+        self.iter().flatten().for_each(|num| {
             nums_contained |= 1 << num;
             n_clues += 1;
         });

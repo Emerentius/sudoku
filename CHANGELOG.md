@@ -23,7 +23,12 @@ Unreleased
   - `generate_unique_with_symmetry` -> `generate_with_symmetry`
   - `generate_unique_from` -> `generate_from`
   - `generate_unique_with_symmetry_from` -> `generate_with_symmetry_from`
-* Add `Sudoku::shuffled`.
+* Add new APIs:
+  * `Sudoku::shuffled`
+  * two functions for generating sudokus with a user-chosen RNG:
+    * `generate_solved_with_rng`
+    * `generate_with_symmetry_and_rng_from`
+* 
 * Improved errors for `Sudoku` methods.
   Errors now implement `std::error::Error` and none of them return `Result<T, ()>` anymore.
   Moved `parse_errors` module to `errors`.

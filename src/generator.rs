@@ -22,7 +22,7 @@ pub(crate) struct SudokuGenerator {
 
 impl SudokuGenerator {
     #[inline]
-    pub fn new() -> SudokuGenerator {
+    pub fn new() -> Self {
         SudokuGenerator {
             grid: Sudoku([0; N_CELLS]),
             n_solved_cells: 0,
@@ -208,10 +208,10 @@ impl SudokuGenerator {
     }
 
     #[inline(always)]
-    fn find_good_random_guess(&mut self) -> Candidate {
+    fn find_good_random_guess<R: Rng + ?Sized>(&mut self, rng: &mut R) -> Candidate {
         let best_cell = self.find_cell_min_poss();
         let poss_digits = self.cell_poss_digits[best_cell];
-        let choice = rand::thread_rng().gen_range(0, poss_digits.len());
+        let choice = rng.gen_range(0..poss_digits.len());
         let digit = poss_digits.into_iter().nth(choice as usize).unwrap();
         Candidate {
             digit,
@@ -236,7 +236,11 @@ impl SudokuGenerator {
     }
 
     // for generation of random, filled sudokus
-    fn randomized_solve_one(mut self, stack: &mut Vec<Candidate>) -> Result<Sudoku, Unsolvable> {
+    fn randomized_solve_one<R: Rng + ?Sized>(
+        mut self,
+        rng: &mut R,
+        stack: &mut Vec<Candidate>,
+    ) -> Result<Sudoku, Unsolvable> {
         // insert and deduce in a loop
         // do a random guess when no more deductions are found
         // backtrack on error (via recursion)
@@ -251,9 +255,9 @@ impl SudokuGenerator {
                 continue;
             }
 
-            let entry = self.find_good_random_guess();
+            let entry = self.find_good_random_guess(rng);
             stack.push(entry);
-            if let filled_sudoku @ Ok(_) = self.clone().randomized_solve_one(stack) {
+            if let filled_sudoku @ Ok(_) = self.clone().randomized_solve_one(rng, stack) {
                 return filled_sudoku;
             }
             stack.clear();
@@ -262,12 +266,12 @@ impl SudokuGenerator {
         }
     }
 
-    pub fn generate_solved() -> Sudoku {
+    pub fn generate_solved<R: Rng + ?Sized>(rng: &mut R) -> Sudoku {
         // fill first row with a permutation of 1...9
         // not necessary, but ~15% faster
         let mut stack = Vec::with_capacity(N_CELLS);
         let mut perm = [1, 2, 3, 4, 5, 6, 7, 8, 9];
-        perm.shuffle(&mut rand::thread_rng());
+        perm.shuffle(rng);
 
         stack.extend(
             (0..9)
@@ -275,6 +279,6 @@ impl SudokuGenerator {
                 .map(|(cell, &digit)| Candidate::new(cell, digit)),
         );
 
-        Self::new().randomized_solve_one(&mut stack).unwrap()
+        Self::new().randomized_solve_one(rng, &mut stack).unwrap()
     }
 }

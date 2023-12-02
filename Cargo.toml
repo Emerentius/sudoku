@@ -10,7 +10,7 @@ authors = ["Emerentius"]
 edition = "2018"
 
 [dependencies]
-rand = "0.7.3"
+rand = "0.8.5"
 serde = { version = "1.0.80", optional = true }
 crunchy = "0.2.1"
 thiserror = "1.0.21"

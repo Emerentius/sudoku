@@ -66,7 +66,7 @@ impl Transformation {
         let mut digits = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 
         // manual top-down Fisher-Yates shuffle. Needs only 1 ranged random num rather than 9
-        let mut permutation = rng.gen_range(0, 362_880u32); // 9!
+        let mut permutation = rng.gen_range(0..362_880u32); // 9!
         for n_choices in (2..10).rev() {
             let num = permutation % n_choices;
             permutation /= n_choices;

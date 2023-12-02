@@ -355,9 +355,8 @@ impl Sudoku {
             }
         }
 
-        let valid_ending = chars.get(81).map_or(true, |ch| match ch {
-            b'\t' | b' ' | b'\r' | b'\n' | b';' | b',' => true,
-            _ => false,
+        let valid_ending = chars.get(81).map_or(true, |ch| {
+            matches!(ch, b'\t' | b' ' | b'\r' | b'\n' | b';' | b',')
         });
 
         match valid_ending {
@@ -487,12 +486,7 @@ impl Sudoku {
                 match ch {
                     '_' | '.' => grid[cell as usize] = 0,
                     '0'..='9' => grid[cell as usize] = ch as u8 - b'0',
-                    _ => {
-                        return Err(BlockParseError::InvalidEntry(InvalidEntry {
-                            cell: cell as u8,
-                            ch,
-                        }))
-                    }
+                    _ => return Err(BlockParseError::InvalidEntry(InvalidEntry { cell, ch })),
                 }
                 n_col_sud += 1;
             }
@@ -529,7 +523,7 @@ impl Sudoku {
                 if ['.', '_'].contains(&ch) {
                     row_vals[nums_in_row] = 0;
                     nums_in_row += 1;
-                } else if '0' <= ch && ch <= '9' {
+                } else if ch.is_ascii_digit() {
                     row_vals[nums_in_row] = ch as u8 - b'0';
                     nums_in_row += 1;
                 }

@@ -132,7 +132,7 @@ fn parse_lines(b: &mut test::Bencher) {
 fn is_solved_on_unsolved(b: &mut test::Bencher) {
     let sudokus = read_sudokus(include_str!("../sudokus/Lines/hard_sudokus.txt"));
     b.iter(|| {
-        for sudoku in sudokus.iter().cloned() {
+        for sudoku in sudokus.iter() {
             sudoku.is_solved();
         }
     })
@@ -142,7 +142,7 @@ fn is_solved_on_unsolved(b: &mut test::Bencher) {
 fn is_solved_on_solved(b: &mut test::Bencher) {
     let solved_sudokus = read_sudokus(include_str!("../sudokus/Lines/solved_hard_sudokus.txt"));
     b.iter(|| {
-        for sudoku in solved_sudokus.iter().cloned() {
+        for sudoku in solved_sudokus.iter() {
             sudoku.is_solved();
         }
     })
@@ -155,7 +155,7 @@ fn strategy_solver_1_easy_sudokus(b: &mut test::Bencher) {
     let strategies = ALL_STRATEGIES;
     b.iter(|| {
         for sudoku in sudokus_100.iter().cloned() {
-            StrategySolver::from_sudoku(sudoku).solve(&strategies).unwrap(); //.unwrap();
+            StrategySolver::from_sudoku(sudoku).solve(strategies).unwrap(); //.unwrap();
         }
     })
 }
@@ -168,7 +168,7 @@ fn strategy_solver_2_medium_sudokus(b: &mut test::Bencher) {
     b.iter(|| {
         for sudoku in sudokus_100.iter().cloned() {
             // solution not guaranteed yet, discard error.
-            let _ = StrategySolver::from_sudoku(sudoku).solve(&strategies); //.unwrap();
+            let _ = StrategySolver::from_sudoku(sudoku).solve(strategies); //.unwrap();
         }
     })
 }

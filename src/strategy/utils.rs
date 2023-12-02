@@ -91,6 +91,6 @@ fn conflicting_house_positions(
     let houses = cell.houses().to_vec();
     houses
         .into_iter()
-        .zip(positions.into_iter())
+        .zip(positions)
         .map(move |(house, pos)| (house, house_poss_positions[house][digit] ^ pos))
 }

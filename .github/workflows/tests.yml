@@ -17,7 +17,7 @@ jobs:
         include:
           - build: pinned # don't rename
             os: ubuntu-latest
-            rust: 1.51.0
+            rust: 1.56.0
 
           - build: beta
             os: ubuntu-latest

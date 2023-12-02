@@ -1,0 +1,61 @@
+name: Tests
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - build: pinned # don't rename
+            os: ubuntu-latest
+            rust: 1.51.0
+
+          - build: beta
+            os: ubuntu-latest
+            rust: beta
+
+          - build: nightly
+            os: ubuntu-latest
+            rust: nightly
+
+    steps:
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
+        if: ${{ matrix.build }} != "pinned"
+      - name: Install Rust With Components
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
+          components: rustfmt, clippy
+        if: ${{ matrix.build }} == "pinned"
+
+      - uses: actions/checkout@v4
+
+      - name: check formatting
+        run: cargo fmt -- --check
+        if: ${{ matrix.build }} == "pinned"
+
+      - name: check code
+        run: cargo check --verbose
+
+      - name: check clippy
+        run: cargo clippy --verbose
+        if: ${{ matrix.build }} == "pinned"
+
+      - name: run tests
+        run: cargo test --verbose
+
+      - name: Interactive debug
+        uses: mxschmitt/action-tmate@v3
+        if: failure() && github.event_name == 'workflow_dispatch'

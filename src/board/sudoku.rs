@@ -817,6 +817,11 @@ impl From<Sudoku> for SudokuArray {
 #[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq)]
 pub struct SudokuLine(SudokuArray);
 
+// False positive. This lint has been changed in newer versions to only block
+// derived hash with manual partialeq. It's the opposite here.
+// Required for Rust 1.56.
+#[allow(renamed_and_removed_lints)]
+#[allow(clippy::derive_hash_xor_eq)]
 impl std::hash::Hash for SudokuLine {
     fn hash<H>(&self, state: &mut H)
     where

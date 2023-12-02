@@ -1,7 +1,8 @@
 Sudoku
 ======
 
-[![Crates.io Status](http://meritbadge.herokuapp.com/sudoku)](https://crates.io/crates/sudoku) [![Build Status](https://travis-ci.org/Emerentius/sudoku.svg?branch=master)](https://travis-ci.org/Emerentius/sudoku)
+[![Crates.io Status](https://img.shields.io/crates/v/sudoku.svg)](https://crates.io/crates/sudoku)
+[![Build Status](https://github.com/Emerentius/sudoku/actions/workflows/tests.yml/badge.svg)](https://github.com/Emerentius/sudoku/actions)
 
 Utilities for classical 9x9 sudokus.
 

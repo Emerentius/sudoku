@@ -236,7 +236,11 @@ impl SudokuGenerator {
     }
 
     // for generation of random, filled sudokus
-    fn randomized_solve_one<R: Rng + ?Sized>(mut self, rng: &mut R, stack: &mut Vec<Candidate>) -> Result<Sudoku, Unsolvable> {
+    fn randomized_solve_one<R: Rng + ?Sized>(
+        mut self,
+        rng: &mut R,
+        stack: &mut Vec<Candidate>,
+    ) -> Result<Sudoku, Unsolvable> {
         // insert and deduce in a loop
         // do a random guess when no more deductions are found
         // backtrack on error (via recursion)

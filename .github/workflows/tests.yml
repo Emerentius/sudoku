@@ -46,9 +46,6 @@ jobs:
         run: cargo fmt -- --check
         if: ${{ matrix.build }} == "pinned"
 
-      - name: check code
-        run: cargo check --verbose
-
       - name: check clippy
         run: cargo clippy --verbose
         if: ${{ matrix.build }} == "pinned"

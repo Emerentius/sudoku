@@ -17,12 +17,12 @@ pub(crate) fn find_fish(
                 house_poss_positions,
                 digit,
                 max_size,
-                Set::NONE,
-                lines.into_iter(),
                 lines,
-                Set::NONE,
                 &mut on_fish,
                 stop_after_first,
+                Set::NONE,
+                lines.into_iter(),
+                Set::NONE,
             ) {
                 return Ok(());
             };
@@ -40,12 +40,13 @@ fn basic_fish_walk_combinations(
     house_poss_positions: &HouseArray<DigitArray<Set<Position<House>>>>,
     digit: Digit,
     goal_depth: u8,
-    line_set: Set<Line>,
-    lines: SetIter<Line>,
     all_lines: Set<Line>,
-    union_poss_pos: Set<Position<Line>>,
     on_fish: &mut impl FnMut(Set<Line>, Digit, Set<Line>, Set<Position<Line>>) -> bool,
     stop_after_first: bool,
+    // non-constant args
+    line_set: Set<Line>,
+    mut lines: SetIter<Line>,
+    union_poss_pos: Set<Position<Line>>,
 ) -> bool {
     if line_set.len() == goal_depth {
         // nothing of interest found
@@ -55,11 +56,10 @@ fn basic_fish_walk_combinations(
 
         // found xwing, swordfish, or jellyfish
         if on_fish(all_lines, digit, line_set, union_poss_pos) {
-            return true;
+            return stop_after_first;
         }
     }
 
-    let mut lines = lines;
     while let Some(line) = lines.next() {
         let possible_pos = house_poss_positions[line][digit];
         let n_poss = possible_pos.len();
@@ -76,12 +76,12 @@ fn basic_fish_walk_combinations(
             house_poss_positions,
             digit,
             goal_depth,
-            new_line_set,
-            lines.clone(),
             all_lines,
-            new_union_poss_pos,
             on_fish,
             stop_after_first,
+            new_line_set,
+            lines.clone(),
+            new_union_poss_pos,
         ) {
             return true;
         };

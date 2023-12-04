@@ -44,6 +44,7 @@ macro_rules! make_benches {
                 let mut sudokus = sudokus.iter().cloned().cycle();
                 b.iter(|| {
                     for sudoku in sudokus.by_ref().take(100) {
+                        #[allow(clippy::redundant_closure_call)]
                         $f(sudoku);
                     }
                 })

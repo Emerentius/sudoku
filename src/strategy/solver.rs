@@ -205,6 +205,7 @@ impl StrategySolver {
     }
 
     /// Try to insert the given candidate. Fails, if the cell already contains a digit.
+    #[allow(clippy::result_unit_err)] // yes, it should be changed
     pub fn insert_candidate(&mut self, candidate: Candidate) -> Result<(), ()> {
         self.update_grid();
         Self::push_new_candidate(

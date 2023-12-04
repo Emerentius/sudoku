@@ -9,6 +9,7 @@ use std::ops::{Deref, DerefMut, Index, IndexMut};
 pub(crate) struct Unsolvable;
 
 #[derive(Copy, Clone, Debug)]
+/// Container with one slot for each cell.
 pub(crate) struct CellArray<T>(pub [T; N_CELLS]);
 
 impl<T> Deref for CellArray<T> {
@@ -44,6 +45,7 @@ impl<T> IndexMut<Cell> for CellArray<T> {
 
 ///////////////////////////////
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+/// Container with one slot for each row, column and block
 pub(crate) struct HouseArray<T>(pub [T; 27]);
 
 impl<T, IDX: Into<House>> Index<IDX> for HouseArray<T> {
@@ -64,6 +66,7 @@ impl<T, IDX: Into<House>> IndexMut<IDX> for HouseArray<T> {
 
 ///////////////////////////////
 #[derive(Copy, Clone, Debug)]
+/// Container with one slot for each digit.
 pub(crate) struct DigitArray<T>(pub [T; 9]);
 
 impl<T> Index<Digit> for DigitArray<T> {

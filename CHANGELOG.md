@@ -1,17 +1,25 @@
 <!-- * Print textual representation of sudoku board with remaining candidates for unsolved cells. -->
 
-Unreleased
-==========
-* Raise minimum Rust version to 1.56
+Version 0.8.0 (2023-12-04)
+==========================
+Added:
 * `Sudoku::canonicalized`. Maps all sudokus of an equivalence class to the same sudoku
-  and counts automorphisms.
-  Limited to uniquely solvable sudokus (for now).
+and counts automorphisms. Limited to uniquely solvable sudokus.
+* `Sudoku::shuffled`: Perform random symmetry transformations to get a different but equivalent sudoku.
+* Generation of symmetrical sudokus. The desired symmetry can be chosen via the `Symmetry` enum.
+  - `Sudoku::generate_with_symmetry`
+  - `Sudoku::generate_with_symmetry_from`
+* Generate sudokus with a user-chosen RNG:
+  * `generate_solved_with_rng`
+  * `generate_with_symmetry_and_rng_from`
 * New strategies:
   - XyWing
   - XyzWing
   - Mutant Swordfish
   - Mutant Jellyfish
-* Generation of symmetrical sudokus. The desired symmetry can be chosen via the `Symmetry` enum.
+
+Changed:
+* Raise minimum supported Rust version to 1.56
 * Rename many of `Sudoku`'s methods
   - `solve_unique` -> `solution`
   - `solve_one` -> `some_solution`
@@ -20,15 +28,7 @@ Unreleased
   - `solve_at_most_buffer` -> `solutions_up_to_buffer`
   - `generate_filled` -> `generate_solved`
   - `generate_unique` -> `generate`
-  - `generate_unique_with_symmetry` -> `generate_with_symmetry`
   - `generate_unique_from` -> `generate_from`
-  - `generate_unique_with_symmetry_from` -> `generate_with_symmetry_from`
-* Add new APIs:
-  * `Sudoku::shuffled`
-  * two functions for generating sudokus with a user-chosen RNG:
-    * `generate_solved_with_rng`
-    * `generate_with_symmetry_and_rng_from`
-* 
 * Improved errors for `Sudoku` methods.
   Errors now implement `std::error::Error` and none of them return `Result<T, ()>` anymore.
   Moved `parse_errors` module to `errors`.

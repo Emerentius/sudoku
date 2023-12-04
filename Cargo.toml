@@ -5,7 +5,7 @@ license = "AGPL-3.0"
 repository = "https://github.com/emerentius/sudoku"
 documentation = "https://docs.rs/sudoku"
 readme = "readme.md"
-version = "0.7.0"
+version = "0.8.0"
 authors = ["Emerentius"]
 edition = "2018"
 

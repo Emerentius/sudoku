@@ -326,7 +326,7 @@ impl StrategySolver {
         self.insert_entries(find_naked_singles, new_eliminations)
     }
 
-    fn update_house_poss_positions(&mut self) -> Result<(), Unsolvable> {
+    fn update_house_poss_positions(&mut self) {
         // TODO: this has to do massive amounts of work
         //       may just be easier to recompute from full grid every time
 
@@ -380,7 +380,6 @@ impl StrategySolver {
             house_poss_positions[block][digit] = Set::NONE;
         }
         *ld = self.deduced_entries.len() as _;
-        Ok(())
     }
 
     #[inline(always)]
@@ -782,7 +781,7 @@ impl StrategySolver {
         stop_after_first: bool,
     ) -> Result<(), Unsolvable> {
         self.update_cell_poss_house_solved()?;
-        self.update_house_poss_positions()?;
+        self.update_house_poss_positions();
         let house_poss_positions = &self.house_poss_positions.state;
         let house_solved_digits = &self.house_solved_digits.state;
         let eliminated_entries = &mut self.eliminated_entries;
@@ -829,7 +828,7 @@ impl StrategySolver {
     }
 
     fn find_fish(&mut self, target_size: u8, stop_after_first: bool) -> Result<(), Unsolvable> {
-        self.update_house_poss_positions().unwrap(); // TODO: why is there an unwrap here?
+        self.update_house_poss_positions();
         self.update_cell_poss_house_solved()?;
 
         let cell_poss_digits = &self.cell_poss_digits.state;
@@ -866,7 +865,7 @@ impl StrategySolver {
         target_size: u8,
         stop_after_first: bool,
     ) -> Result<(), Unsolvable> {
-        self.update_house_poss_positions()?;
+        self.update_house_poss_positions();
         self.update_cell_poss_house_solved()?;
 
         let cell_poss_digits = &self.cell_poss_digits.state;

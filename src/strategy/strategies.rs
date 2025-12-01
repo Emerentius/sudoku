@@ -40,7 +40,8 @@ pub enum Strategy {
     MutantSwordfish,
     MutantJellyfish,
     AvoidableRectangles,
-    //SinglesChain,
+    // SinglesChain,
+    BruteForce,
 }
 
 impl Strategy {
@@ -64,7 +65,8 @@ impl Strategy {
         Strategy::NakedQuads,       // 50
         Strategy::Jellyfish,        // 52
         Strategy::HiddenQuads,      // 54
-        //Strategy::SinglesChain,
+        // Strategy::SinglesChain,
+        Strategy::BruteForce,
     ];
 
     // is_first_strategy is an optimization hint
@@ -96,7 +98,8 @@ impl Strategy {
             XyzWing => state.find_xyz_wing(stop_after_first),
             MutantSwordfish => state.find_mutant_fish(3, stop_after_first),
             MutantJellyfish => state.find_mutant_fish(4, stop_after_first),
-            //SinglesChain => state.find_singles_chain(stop_after_first), // TODO: Implement non-eager SinglesChain
+            // SinglesChain => state.find_singles_chain(stop_after_first), // TODO: Implement non-eager SinglesChain
+            BruteForce => state.find_brute_force(stop_after_first),
             _ => unimplemented!(),
         }
     }

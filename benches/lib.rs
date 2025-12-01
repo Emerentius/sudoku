@@ -31,6 +31,7 @@ const ALL_STRATEGIES: &[Strategy] = &[
     Strategy::Jellyfish,        // 52
     Strategy::HiddenQuads,      // 54
     //Strategy::SinglesChain,
+    Strategy::BruteForce
 ];
 
 macro_rules! make_benches {

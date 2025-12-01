@@ -62,6 +62,8 @@ pub struct StrategySolver {
     pub(crate) house_solved_digits: State<HouseArray<Set<Digit>>>,
     // Mask of possible positions for a house and number
     pub(crate) house_poss_positions: State<HouseArray<DigitArray<Set<Position<House>>>>>,
+
+    pub(crate) solution: Option<Sudoku>,
 }
 
 impl StrategySolver {
@@ -77,6 +79,7 @@ impl StrategySolver {
             cell_poss_digits: State::from(CellArray([Set::ALL; 81])),
             house_solved_digits: State::from(HouseArray([Set::NONE; 27])),
             house_poss_positions: State::from(HouseArray([DigitArray([Set::ALL; 9]); 27])),
+            solution: None,
         }
     }
 
@@ -90,6 +93,7 @@ impl StrategySolver {
 
         StrategySolver {
             deduced_entries,
+            solution: sudoku.solution(),
             ..StrategySolver::empty()
         }
     }
@@ -122,11 +126,13 @@ impl StrategySolver {
             }
         }
 
-        StrategySolver {
+        let mut solver = StrategySolver {
             deduced_entries: entries,
             eliminated_entries: eliminated_candidates,
             ..StrategySolver::empty()
-        }
+        };
+        solver.solution = solver.to_sudoku().solution();
+        solver
     }
 
     /// Construct a new StrategySolver from a printout of cell candidates.
@@ -232,6 +238,13 @@ impl StrategySolver {
         for &Candidate { cell, digit } in &self.deduced_entries {
             self.grid.state.0[cell.as_index()] = digit.get();
         }
+    }
+
+    /// Try to solve the sudoku using the all support strategies. Returns a `Result` of the sudoku and a struct containing the series of deductions.
+    /// If a solution was found, `Ok(..)` is returned, otherwise `Err(..)`.
+    #[allow(clippy::result_large_err)] // nonsense, Ok and Err are the same size.
+    pub fn solve_all(self) -> Result<(Sudoku, Deductions), (Sudoku, Deductions)> {
+        self.solve(Strategy::ALL)
     }
 
     /// Try to solve the sudoku using the given `strategies`. Returns a `Result` of the sudoku and a struct containing the series of deductions.
@@ -610,7 +623,7 @@ impl StrategySolver {
         {
             use self::Deduction::*;
             match strategy {
-                NakedSingles(..) | HiddenSingles(..) => (),
+                NakedSingles(..) | HiddenSingles(..) | BruteForce(..) => (),
                 _ => panic!("Internal error: Called push_new_candidate with wrong strategy type"),
             };
         }
@@ -1109,6 +1122,57 @@ impl StrategySolver {
         Ok(())
     }
     */
+    pub(crate) fn find_brute_force(&mut self, stop_after_first: bool) -> Result<(), Unsolvable> {
+        let solution = match self.solution {
+            Some(s) => s,
+            None => return Ok(()),
+        };
+        let cell_states = self.grid_state();
+
+        let grid = &mut self.grid.state;
+        let deduced_entries = &mut self.deduced_entries;
+        let deductions = &mut self.deductions;
+
+        let mut candidates = Vec::new();
+        let mut min_len = 255;
+        let mut candidate_index = 0;
+
+        for (i, cell_state) in cell_states.iter().enumerate() {
+            if let CellState::Candidates(set) = cell_state {
+                let candidate = Candidate::new(i as u8, solution.to_bytes()[i]);
+                if set.len() < min_len {
+                    min_len = set.len();
+                    candidate_index = candidates.len();
+                }
+                candidates.push(candidate);
+            }
+        }
+        if min_len == 255 {
+            return Ok(());
+        }
+        if stop_after_first {
+            deduced_entries.push(candidates[candidate_index]);
+            Self::push_new_candidate(
+                grid,
+                deduced_entries,
+                candidates[candidate_index],
+                deductions,
+                Deduction::BruteForce(candidates[candidate_index]),
+            )?
+        } else {
+            for candidate in candidates {
+                deduced_entries.push(candidate);
+                Self::push_new_candidate(
+                    grid,
+                    deduced_entries,
+                    candidate,
+                    deductions,
+                    Deduction::BruteForce(candidate),
+                )?
+            }
+        }
+        Ok(())
+    }
 }
 
 impl std::fmt::Display for StrategySolver {

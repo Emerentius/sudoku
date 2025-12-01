@@ -378,9 +378,9 @@ impl Sudoku {
             }
         }
 
-        let valid_ending = chars.get(81).map_or(true, |ch| {
-            matches!(ch, b'\t' | b' ' | b'\r' | b'\n' | b';' | b',')
-        });
+        let valid_ending = chars
+            .get(81)
+            .is_none_or(|ch| matches!(ch, b'\t' | b' ' | b'\r' | b'\n' | b';' | b','));
 
         match valid_ending {
             true => Sudoku::from_bytes(grid).map_err(drop),

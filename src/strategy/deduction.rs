@@ -125,6 +125,7 @@ pub enum Deduction<T> {
         conflicts: T,
     },
     //SinglesChain(T),
+    BruteForce(Candidate),
 }
 
 impl Deduction<&'_ [Candidate]> {
@@ -191,6 +192,7 @@ impl Deduction<&'_ [Candidate]> {
                 3 => Strategy::XyzWing,
                 _ => unreachable!(),
             },
+            BruteForce { .. } => Strategy::BruteForce,
             AvoidableRectangle { .. } => unimplemented!(),
         }
     }
@@ -234,7 +236,7 @@ impl _Deduction {
                 conflicts
             }
             => Wing { hinge, hinge_digits, pincers, conflicts: &eliminated[conflicts] },
-
+            BruteForce(c) => BruteForce(c),
             AvoidableRectangle { .. } => unimplemented!(),
             //SinglesChain(x) => SinglesChain(&eliminated[x]),
         }
